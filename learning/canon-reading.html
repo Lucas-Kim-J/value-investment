@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>经典文本阅读清单</title>
+<style>
+:root { --bg: #faf9f7; --bg-soft: #f3f1ec; --fg: #1a1a1a; --fg-soft: #3d3d3d;
+  --muted: #767676; --accent: #b45309; --accent-soft: rgba(180,83,9,0.08);
+  --good: #4d7c0f; --border: #e5e2dc; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #16161a; --bg-soft: #1f1f24; --fg: #f0eee8; --fg-soft: #cfcdc6;
+    --muted: #8b8b85; --accent: #f59e0b; --accent-soft: rgba(245,158,11,0.12);
+    --good: #a3e635; --border: #2d2d33; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.7; color: var(--fg); background: var(--bg); font-size: 15.5px; padding: 32px 24px; }
+.container { max-width: 900px; margin: 0 auto; }
+.nav { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+.nav a { color: var(--accent); border-bottom: 1px dotted var(--accent); text-decoration: none; }
+h1 { font-size: 32px; margin: 0 0 8px; letter-spacing: -0.01em; }
+.subtitle { color: var(--fg-soft); margin-bottom: 32px; }
+.meter-box { background: var(--bg-soft); padding: 18px 22px; border-radius: 8px; margin-bottom: 28px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: var(--fg-soft); }
+.tier { margin: 40px 0; }
+.tier-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.tier-header h2 { margin: 0; font-size: 19px; }
+.tier-meta { color: var(--muted); font-size: 13px; }
+.book { background: var(--bg-soft); padding: 16px 18px; border-radius: 6px; margin: 10px 0; border-left: 3px solid var(--accent); }
+.book-row { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.book input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; flex-shrink: 0; }
+.book-title { font-weight: 600; color: var(--fg); flex: 1; font-size: 15.5px; }
+.book-stars { color: var(--accent); font-size: 13px; }
+.book-meta { color: var(--muted); font-size: 13px; margin: 4px 0 0 30px; }
+.book-meta strong { color: var(--fg-soft); font-weight: 500; }
+.book-link { font-size: 12.5px; color: var(--accent); margin-left: 8px; border-bottom: 1px dotted var(--accent); text-decoration: none; }
+.book input:checked ~ .book-content .book-title { color: var(--muted); text-decoration: line-through; }
+.book input:checked { accent-color: var(--good); }
+.notes-input { width: 100%; margin-top: 8px; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--fg); font-family: inherit; font-size: 13px; min-height: 32px; resize: vertical; }
+.section-meta { color: var(--muted); font-size: 13px; margin: -8px 0 16px; }
+.timestamp { color: var(--muted); font-size: 12px; margin-top: 24px; }
+.footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="nav"><a href="../index.html">← 方法论 v1.1</a> · <a href="../dashboard.html">Dashboard</a> · <a href="progress-tracker.html">学习追踪</a></div>
+  <h1>经典文本阅读清单</h1>
+  <p class="subtitle">"读完归档"——不是订阅。每本一旦读完，你的 baseline 升一级，不再需要持续 follow。<br>总耗时约 230h（B 轨 ~10h/周 → 6 个月并行其他活动）。</p>
+
+  <div class="meter-box">
+    <span>已完成 <strong id="doneCount">0</strong> / <strong id="totalCount">13</strong> · 累计 <strong id="totalHours">0</strong> / 230 小时</span>
+    <span id="completedPct" style="color: var(--accent);">0%</span>
+  </div>
+
+  <div class="tier">
+    <div class="tier-header"><h2>Tier 0 · 起点流派</h2><span class="tier-meta">读这两本之前不要碰别的</span></div>
+    <p class="section-meta">Pabrai 给你的实操骨架；Marks 给你的判断锚。两本读完 ≈ 30h，预计 3-4 周。</p>
+
+    <div class="book">
+      <div class="book-row">
+        <input type="checkbox" id="b1" data-hours="20" />
+        <div class="book-content" style="flex: 1;">
+          <div class="book-title">Howard Marks《The Most Important Thing》<span class="book-stars">★★★★★</span></div>
+          <div class="book-meta"><strong>类型：</strong>书 · <strong>耗时：</strong>~20h · <strong>中文译名：</strong>《投资最重要的事》</div>
+          <div class="book-meta">读后写 500 字：哪 3 个观点最颠覆你之前的认知？</div>
+        </div>
+      </div>
+      <textarea class="notes-input" placeholder="阅读笔记 / 关键摘录..." data-key="b1-notes"></textarea>
+    </div>
+
+    <div class="book">
+      <div class="book-row">
+        <input type="checkbox" id="b2" data-hours="10" />
+        <div class="book-content" style="flex: 1;">
+          <div class="book-title">Mohnish Pabrai《The Dhandho Investor》<span class="book-stars">★★★★★</span></div>
+          <div class="book-meta"><strong>类型：</strong>书 · <strong>耗时：</strong>~10h · <strong>中文译名：</strong>《憨夺型投资者》</div>
+          <div class="book-meta">读后写 500 字：Dhandho 框架在你 watchlist 里如何应用？</div>
+        </div>
+      </div>
+      <textarea class="notes-input" placeholder="阅读笔记..." data-key="b2-notes"></textarea>
+    </div>
+  </div>
+
+  <div class="tier">
+    <div class="tier-header"><h2>Tier 1 · 必读核心</h2><span class="tier-meta">Tier 0 完成后 90 天内读完</span></div>
+
+    <div class="book">
+      <div class="book-row">
+        <input type="checkbox" id="b3" data-hours="40" />
+        <div class="book-content" style="flex: 1;">
+          <div class="book-title">Oaktree Memos 精选 30 篇<span class="book-stars">★★★★★</span></div>
+          <div class="book-meta"><strong>类型：</strong>历史 archive · <strong>耗时：</strong>~40h · <strong>渠道：</strong><a href="https://www.oaktreecapital.com/insights/memos" class="book-link" target="_blank">oaktreecapital.com/insights/memos</a></div>
+          <div class="book-meta">必读 starter pack: "Sea Change" / "You Bet!" / "On Bubble Watch" / "It's All a Big Mistake" / "Risk Revisited Again" / "You Can't Predict, You Can Prepare" / "We're Not in 1999 Anymore"</div>
+        </div>
+      </div>
+      <textarea class="notes-input" placeholder="按篇记录核心观点 + 一句话总结..." data-key="b3-notes"></textarea>
+    </div>
+
+    <div class="book">
+      <div class="book-row">
+        <input type="checkbox" id="b4" data-hours="15" />
+        <div class="book-content" style="flex: 1;">
+          <div class="book-title">Buffett Partnership Letters (1957-1969)<span class="book-stars">★★★★★</span></div>
+          <div class="book-meta"><strong>类型：</strong>历史 · <strong>耗时：</strong>~15h · <strong>渠道：</strong>网上有完整 PDF 合集</div>
+          <div class="book-meta">这是 Buffett 还在用"格雷厄姆 + 个人合伙制"运作的时期，比 Berkshire letter 更接近"小资金实操"</div>
+        </div>
+      </div>
+      <textarea class="notes-input" placeholder="..." data-key="b4-notes"></textarea>
+    </div>
+
+    <div class="book">
+      <div class="book-row">
+        <input type="checkbox" id="b5" data-hours="25" />
+        <div class="book-content" style="flex: 1;">
+          <div class="book-title">Buffett Berkshire Letters 精读 10 封 (1977-2024)<span class="book-stars">★★★★★</span></div>
+          <div class="book-meta"><strong>类型：</strong>历史 · <strong>耗时：</strong>~25h · <strong>渠道：</strong><a href="https://www.berkshirehathaway.com/letters/letters.html" class="book-link" target="_blank">berkshirehathaway.com/letters</a></div>
+          <div class="book-meta">推荐精读：1977 (Owner Earnings 概念) / 1989 (Mistakes I Made) / 1996 (本质上的投资) / 2008 (危机视角) / 2010 (See's Candy 故事) / 2014 (50 周年回顾) / 2017 / 2020 (Covid) / 2023 / 2024 (Buffett 最后一封)</div>
+        </div>
+      </div>
+      <textarea class="notes-input" placeholder="..." data-key="b5-notes"></textarea>
+    </div>
+
+    <div class="book">
+      <div class="book-row">
+        <input type="checkbox" id="b6" data-hours="30" />
+        <div class="book-content" style="flex: 1;">
+          <div class="book-title">Charlie Munger《Poor Charlie's Almanack》<span class="book-stars">★★★★★</span></div>
+          <div class="book-meta"><strong>类型：</strong>书 · <strong>耗时：</strong>~30h · <strong>中文译名：</strong>《穷查理宝典》</div>
+          <div class="book-meta">特别精读："The Psychology of Human Misjudgment"（25 种心理误判）—— 这是行为金融的最佳入门</div>
+        </div>
+      </div>
+      <textarea class="notes-input" placeholder="..." data-key="b6-notes"></textarea>
+    </div>
+
+    <div class="book">
+      <div class="book-row">
+        <input type="checkbox" id="b7" data-hours="20" />
+        <div class="book-content" style="flex: 1;">
+          <div class="book-title">Nick Sleep & Qais Zakaria · Nomad Letters (2001-2014)<span class="book-stars">★★★★★</span></div>
+          <div class="book-meta"><strong>类型：</strong>历史 archive · <strong>耗时：</strong>~20h · <strong>渠道：</strong>网上有完整 PDF 合集（搜 "Nomad Investment Partnership letters"）</div>
+          <div class="book-meta">"Scaled Economies Shared"（规模经济共享）概念诞生地，长期主义实操典范。Costco / Amazon thesis 的源头</div>
+        </div>
+      </div>
+      <textarea class="notes-input" placeholder="..." data-key="b7-notes"></textarea>
+    </div>
+  </div>
+
+  <div class="tier">
+    <div class="tier-header"><h2>Tier 2 · 选读拓展</h2><span class="tier-meta">Tier 1 完成后 180 天内</span></div>
+
+    <div class="book">
+      <div class="book-row">
+        <input type="checkbox" id="b8" data-hours="15" />
+        <div class="book-content" style="flex: 1;">
+          <div class="book-title">Howard Marks《Mastering the Market Cycle》<span class="book-stars">★★★★</span></div>
+          <div class="book-meta"><strong>类型：</strong>书 · <strong>耗时：</strong>~15h · <strong>中文译名：</strong>《周期》</div>
+        </div>
+      </div>
+      <textarea class="notes-input" placeholder="..." data-key="b8-notes"></textarea>
+    </div>
+
+    <div class="book">
+      <div class="book-row">
+        <input type="checkbox" id="b9" data-hours="15" />
+        <div class="book-content" style="flex: 1;">
+          <div class="book-title">段永平雪球历史精华 (2010-2018)<span class="book-stars">★★★★</span></div>
+          <div class="book-meta"><strong>类型：</strong>历史 · <strong>耗时：</strong>~15h · <strong>渠道：</strong>网上有"大道无形我有型"历年问答整理 PDF</div>
+          <div class="book-meta">A 股市场仅有的"巴菲特式实操者"。重点看"本分 / 平常心 / 不懂不做"三条</div>
+        </div>
+      </div>
+      <textarea class="notes-input" placeholder="..." data-key="b9-notes"></textarea>
+    </div>
+
+    <div class="book">
+      <div class="book-row">
+        <input type="checkbox" id="b10" data-hours="20" />
+        <div class="book-content" style="flex: 1;">
+          <div class="book-title">Seth Klarman《Margin of Safety》<span class="book-stars">★★★★</span></div>
+          <div class="book-meta"><strong>类型：</strong>书（绝版，旧版 PDF 流传）· <strong>耗时：</strong>~20h</div>
+          <div class="book-meta">"绝版玄学"的源头。读它是为了理解一种极端保守的世界观，不是为了照搬</div>
+        </div>
+      </div>
+      <textarea class="notes-input" placeholder="..." data-key="b10-notes"></textarea>
+    </div>
+
+    <div class="book">
+      <div class="book-row">
+        <input type="checkbox" id="b11" data-hours="10" />
+        <div class="book-content" style="flex: 1;">
+          <div class="book-title">Guy Spier《The Education of a Value Investor》<span class="book-stars">★★★</span></div>
+          <div class="book-meta"><strong>类型：</strong>书 · <strong>耗时：</strong>~10h · <strong>中文译名：</strong>《与巴菲特共进午餐改变了我的人生》</div>
+          <div class="book-meta">价值投资者的"个人转型记"，关于"如何让自己不犯傻"</div>
+        </div>
+      </div>
+      <textarea class="notes-input" placeholder="..." data-key="b11-notes"></textarea>
+    </div>
+
+    <div class="book">
+      <div class="book-row">
+        <input type="checkbox" id="b12" data-hours="10" />
+        <div class="book-content" style="flex: 1;">
+          <div class="book-title">Phil Fisher《Common Stocks and Uncommon Profits》<span class="book-stars">★★★</span></div>
+          <div class="book-meta"><strong>类型：</strong>书 · <strong>耗时：</strong>~10h · <strong>中文译名：</strong>《怎样选择成长股》</div>
+          <div class="book-meta">"Scuttlebutt"（小道消息调研法）概念诞生地。15 条选股清单</div>
+        </div>
+      </div>
+      <textarea class="notes-input" placeholder="..." data-key="b12-notes"></textarea>
+    </div>
+  </div>
+
+  <div class="tier">
+    <div class="tier-header"><h2>Tier 3 · 工具书（按需查阅）</h2><span class="tier-meta">180 天后引入 DCF 时再用</span></div>
+
+    <div class="book">
+      <div class="book-row">
+        <input type="checkbox" id="b13" data-hours="20" />
+        <div class="book-content" style="flex: 1;">
+          <div class="book-title">Aswath Damodaran《Damodaran on Valuation》<span class="book-stars">★★★</span></div>
+          <div class="book-meta"><strong>类型：</strong>工具书 · <strong>耗时：</strong>查阅式 ~20h · <strong>渠道：</strong>NYU Stern 主页有大量免费配套资源</div>
+          <div class="book-meta">不要从头读到尾。等你做第一个 DCF 时（Day 180+），按章节查</div>
+        </div>
+      </div>
+      <textarea class="notes-input" placeholder="..." data-key="b13-notes"></textarea>
+    </div>
+  </div>
+
+  <div class="timestamp" id="timestamp">最后更新：—</div>
+
+  <div class="footer">
+    <p><strong>阅读顺序刚性建议</strong>：Tier 0 → Tier 1（按表格顺序）→ Tier 2（任意）→ Tier 3（需要时）。</p>
+    <p><strong>不要边读边跳</strong>。一本书一旦开始，2-3 周内读完；超过 3 周中断的，归档不再硬塞。</p>
+    <p>本清单 v1.1 · 关联 <a href="../index.html#canon">方法论 §10 经典文本</a></p>
+  </div>
+</div>
+
+<script>
+function updateMeter() {
+  const boxes = document.querySelectorAll('input[type="checkbox"]');
+  let done = 0, totalHours = 0;
+  boxes.forEach(b => { if (b.checked) { done++; totalHours += parseInt(b.dataset.hours) || 0; } });
+  const total = boxes.length;
+  const pct = Math.round(done / total * 100);
+  document.getElementById('doneCount').textContent = done;
+  document.getElementById('totalCount').textContent = total;
+  document.getElementById('totalHours').textContent = totalHours;
+  document.getElementById('completedPct').textContent = pct + '%';
+  document.getElementById('timestamp').textContent = '最后更新：' + new Date().toLocaleString('zh-CN');
+}
+
+document.querySelectorAll('input[type="checkbox"]').forEach(box => {
+  const saved = localStorage.getItem('canon_' + box.id);
+  if (saved === '1') box.checked = true;
+  box.addEventListener('change', () => {
+    localStorage.setItem('canon_' + box.id, box.checked ? '1' : '0');
+    updateMeter();
+  });
+});
+
+document.querySelectorAll('.notes-input').forEach(input => {
+  const key = input.dataset.key;
+  const saved = localStorage.getItem('canon_' + key);
+  if (saved) input.value = saved;
+  input.addEventListener('input', () => {
+    localStorage.setItem('canon_' + key, input.value);
+  });
+});
+
+updateMeter();
+</script>
+</body>
+</html>

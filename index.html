@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>价值投资方法论 v1.1</title>
+<style>
+:root {
+  --bg: #faf9f7;
+  --bg-soft: #f3f1ec;
+  --fg: #1a1a1a;
+  --fg-soft: #3d3d3d;
+  --muted: #767676;
+  --accent: #b45309;
+  --accent-soft: rgba(180,83,9,0.08);
+  --warn: #c0421a;
+  --warn-soft: rgba(220,80,40,0.08);
+  --good: #4d7c0f;
+  --good-soft: rgba(77,124,15,0.08);
+  --border: #e5e2dc;
+  --code-bg: #f0ede6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16161a;
+    --bg-soft: #1f1f24;
+    --fg: #f0eee8;
+    --fg-soft: #cfcdc6;
+    --muted: #8b8b85;
+    --accent: #f59e0b;
+    --accent-soft: rgba(245,158,11,0.12);
+    --warn: #fb7185;
+    --warn-soft: rgba(251,113,133,0.12);
+    --good: #a3e635;
+    --good-soft: rgba(163,230,53,0.10);
+    --border: #2d2d33;
+    --code-bg: #232328;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  line-height: 1.75;
+  color: var(--fg);
+  background: var(--bg);
+  font-size: 15.5px;
+  -webkit-font-smoothing: antialiased;
+}
+.layout { display: grid; grid-template-columns: 248px 1fr; max-width: 1200px; margin: 0 auto; gap: 56px; padding: 48px 28px; }
+.sidebar { position: sticky; top: 24px; align-self: flex-start; font-size: 13.5px; max-height: calc(100vh - 48px); overflow-y: auto; padding-right: 8px; }
+.sidebar h4 { font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.12em; margin: 22px 0 8px; font-weight: 600; }
+.sidebar h4:first-child { margin-top: 0; }
+.sidebar ul { list-style: none; padding: 0; margin: 0; }
+.sidebar li { margin: 4px 0; }
+.sidebar a { color: var(--fg-soft); text-decoration: none; display: block; padding: 3px 0; }
+.sidebar a:hover { color: var(--accent); }
+.main { min-width: 0; max-width: 760px; }
+.eyebrow { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 12px; font-weight: 600; }
+h1 { font-size: 36px; line-height: 1.25; margin: 0 0 16px; letter-spacing: -0.012em; }
+.lead { color: var(--fg-soft); font-size: 17px; margin: 16px 0 24px; line-height: 1.65; }
+.section-meta { color: var(--muted); font-size: 13.5px; margin: -4px 0 24px; }
+h2 { font-size: 23px; margin: 64px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); letter-spacing: -0.005em; }
+h3 { font-size: 17px; margin: 32px 0 12px; color: var(--fg); }
+h4 { font-size: 14.5px; margin: 22px 0 8px; color: var(--accent); font-weight: 600; }
+p { margin: 12px 0; color: var(--fg-soft); }
+strong { color: var(--fg); font-weight: 600; }
+em { color: var(--fg-soft); font-style: italic; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent); }
+a:hover { border-bottom-style: solid; }
+code { background: var(--code-bg); padding: 1px 6px; border-radius: 3px; font-family: "SF Mono", Menlo, Monaco, monospace; font-size: 0.88em; color: var(--fg); }
+pre { background: var(--bg-soft); padding: 16px 18px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.6; border: 1px solid var(--border); }
+blockquote { border-left: 3px solid var(--accent); margin: 18px 0; padding: 8px 18px; color: var(--fg-soft); background: var(--accent-soft); border-radius: 0 4px 4px 0; font-style: italic; }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13.8px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; background: var(--bg-soft); }
+tr:hover td { background: var(--bg-soft); }
+ul, ol { padding-left: 22px; color: var(--fg-soft); }
+li { margin: 6px 0; }
+li > strong { color: var(--fg); }
+.callout { background: var(--accent-soft); border-left: 3px solid var(--accent); padding: 14px 18px; margin: 20px 0; border-radius: 0 6px 6px 0; }
+.callout strong { color: var(--accent); }
+.warn { background: var(--warn-soft); border-left: 3px solid var(--warn); padding: 14px 18px; margin: 20px 0; border-radius: 0 6px 6px 0; }
+.warn strong { color: var(--warn); }
+.good { background: var(--good-soft); border-left: 3px solid var(--good); padding: 14px 18px; margin: 20px 0; border-radius: 0 6px 6px 0; }
+.good strong { color: var(--good); }
+.tag { display: inline-block; background: var(--bg-soft); color: var(--muted); padding: 1px 8px; border-radius: 10px; font-size: 11.5px; margin: 0 4px 4px 0; border: 1px solid var(--border); }
+.tag-accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.tag-warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.tag-good { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.kbd { background: var(--bg-soft); border: 1px solid var(--border); padding: 1px 6px; border-radius: 3px; font-size: 12.5px; font-family: monospace; color: var(--fg); }
+.footer { margin-top: 80px; padding-top: 28px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+.routine-time { color: var(--accent); font-weight: 600; font-family: "SF Mono", Menlo, monospace; font-size: 13px; }
+.changelog-removed { text-decoration: line-through; color: var(--muted); }
+@media (max-width: 880px) {
+  .layout { grid-template-columns: 1fr; gap: 24px; padding: 24px 18px; }
+  .sidebar { position: static; max-height: none; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+  h1 { font-size: 28px; }
+  h2 { font-size: 20px; margin-top: 48px; }
+  table { font-size: 13px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <h4>首页</h4>
+    <ul>
+      <li><a href="dashboard.html">🏠 Dashboard</a></li>
+      <li><a href="WAKE-UP.md">📝 起步指南</a></li>
+      <li><a href="TODO-v1.2.md">📋 v1.2 TODO</a></li>
+    </ul>
+    <h4>心法</h4>
+    <ul>
+      <li><a href="#prereq">0. 开始之前</a></li>
+      <li><a href="#intro">1. 缘起 &amp; 轨道</a></li>
+      <li><a href="#school">2. 选派：Pabrai + Marks</a></li>
+    </ul>
+    <h4>框架</h4>
+    <ul>
+      <li><a href="#valuation">3. 估值工具</a></li>
+      <li><a href="#workflow">4. 投资流程</a></li>
+      <li><a href="#markets">5. 市场适配</a></li>
+      <li><a href="#traps">6. 价值陷阱</a></li>
+      <li><a href="#failures">7. 失败案例研究</a></li>
+      <li><a href="#psychology">8. 心理与卖出</a></li>
+      <li><a href="#tax-fx">9. 税务 / 外汇 / 政策</a></li>
+    </ul>
+    <h4>信息栈</h4>
+    <ul>
+      <li><a href="#canon">10. 经典文本</a></li>
+      <li><a href="#us-flow">11. 美股信号流</a></li>
+      <li><a href="#cn-flow">12. A股信号流</a></li>
+      <li><a href="#crypto">13. 加密：非对称配置</a></li>
+      <li><a href="#podcasts">14. 播客（精简）</a></li>
+    </ul>
+    <h4>执行 · B 轨</h4>
+    <ul>
+      <li><a href="#routine">15. Routine 节奏</a></li>
+      <li><a href="#tools">16. 工具栈</a></li>
+      <li><a href="#automation">17. 自动化路线</a></li>
+      <li><a href="#learning">18. 学习路径</a></li>
+    </ul>
+    <h4>记录</h4>
+    <ul>
+      <li><a href="#preferences">19. 用户偏好</a></li>
+      <li><a href="#changelog">20. v1.0 → v1.1 变更</a></li>
+      <li><a href="#next">21. 下一步</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+    <div class="eyebrow">价值投资方法论 · v1.1</div>
+    <h1>从清单到 SOP：<br>把方法论砍到难看但管用</h1>
+    <p class="lead">为 lucas（在校 + 实习，约 10h/周可投入）设计的 B 轨方法论。覆盖美股、A股、加密三个市场（重心 US 50% / A-share 30% / 加密 20% 上限 5% 仓位）。v1.1 吸收了批判性 review 的 18 条修订，砍掉伪科学（前 180 天禁 DCF、不用 S2F、不用 30 分钟 daily 仪式），加上四个新章节（开始之前 / 失败案例 / 心理与卖出 / 税务外汇）。</p>
+    <p class="section-meta">v1.1 · 2026-06 · 上一版本：v1.0（同日早些时候）· 文件 <code>value-investment/index.html</code></p>
+
+    <div class="callout">
+      <strong>核心原则（v1.1 重申）：</strong> 真正级别的大佬绝大多数不靠 X 输出。一手内容是 <strong>letter / AGM / 13F / 季报 / 演讲</strong>。但更重要的是：<strong>把"经典文本"和"持续信号流"分开</strong>——前者一次性学完进入档案，后者订阅 + 定期消费。把考古和现役混在一起会让 routine 变成仪式表演。
+    </div>
+
+    <h2 id="prereq">0. 开始之前</h2>
+    <p>未完成下面任一项的人，<strong>不应该</strong>开始这套方法论。价值投资在错误的财务前置条件下 = 灾难放大器。</p>
+    <ul>
+      <li><strong>3 个月生活费的现金缓冲</strong>（货基 / 高息活期）。没有缓冲的人在熊市底部会被迫割肉——而熊市底部恰好是失业 / 实习中断的高发期。</li>
+      <li><strong>收入稳定预期</strong>（实习/工作 12 个月内不被打断的合理预期）。</li>
+    </ul>
+    <div class="warn"><strong>反向检查：</strong>如果上面任何一条没勾掉，先解决这些再回来。这不是耽误，是基础建设。</div>
+
+    <h2 id="intro">1. 缘起 &amp; 轨道选择</h2>
+    <p>价值投资的本质：<strong>以低于价值的价格买入未来能持续创造价值的资产</strong>。但对一个时间有限的学习者，真正决定结果的不是"知道多少流派"，而是"持续做什么"。</p>
+
+    <h3>轨道说明</h3>
+    <table>
+      <thead><tr><th>轨道</th><th>时间</th><th>仓位 / 组合</th><th>自动化定位</th></tr></thead>
+      <tbody>
+        <tr><td>A 轨</td><td>3-5h/周</td><td>仓位 &lt; 20% 净资产，主要 ETF + 少量精选</td><td>偏监控</td></tr>
+        <tr><td><strong>B 轨（你的）</strong></td><td><strong>10h+ /周</strong></td><td><strong>5-10 只个股 + 季度深度研究</strong></td><td><strong>signals + 半自动下单</strong></td></tr>
+        <tr><td>C 轨</td><td>20+ h/周</td><td>类专业</td><td>全栈自建</td></tr>
+      </tbody>
+    </table>
+    <p>你的 10h+ 大致分布：<span class="tag">工作日 1-2h（早晨 15 min 扫读 + 晚 45-90 min 阅读）</span> <span class="tag">周末 4-6h（深度研究 + 周复盘）</span>。具体见 §15 Routine。</p>
+
+    <blockquote>"Risk comes from not knowing what you're doing." — Warren Buffett</blockquote>
+
+    <h2 id="school">2. 选派：先精通 Pabrai + Marks（3 年）</h2>
+    <p>七大流派看似互补，实则路线之争（Graham 烟蒂 vs Buffett 优质 / Munger "宁要伟大公司贵一点" vs Marks "价格决定一切" / Damodaran "万物可 DCF" vs Buffett "我从不算 DCF"）。新手并列学会风格漂移——这家按 Munger 买，那家按 Marks 嫌贵，没有任何一种被坚持到产生统计意义。</p>
+    <p><strong>v1.1 决定起点：Pabrai + Marks</strong>。理由：资金少、时间少、防御性强、避错优先，最适合 B 轨学习者。</p>
+
+    <h3>Pabrai 给你的实操骨架</h3>
+    <ul>
+      <li><strong>Dhandho</strong>：Heads I win big, tails I don't lose much（低风险 + 高不确定性下的非对称下注）</li>
+      <li><strong>克隆大佬</strong>：Dataroma / 13F 跟踪 5 位 super-investor，但只用来产生 watchlist，不直接 clone</li>
+      <li><strong>凯利公式半数</strong>：单仓位上限 10%，集中后期可到 20%（B 轨建议先守 10%）</li>
+      <li><strong>少而精</strong>：60 年 20-30 个真正 bet 就够。研究上瘾是变相恐惧</li>
+    </ul>
+
+    <h3>Marks 给你的判断锚</h3>
+    <ul>
+      <li><strong>风险 = 永久性资本损失的概率</strong>，不是波动率</li>
+      <li><strong>市场周期是钟摆</strong>，永远在两端徘徊；现在处于钟摆哪一端？</li>
+      <li><strong>第二层思维</strong>：所有人都看好时，你看到了什么别人没看到？</li>
+      <li><strong>Oaktree Memos</strong>（月度免费）是全球投资读物 ROI 第一</li>
+    </ul>
+
+    <p>3 年后再吸收 Buffett（护城河 + 资本配置）、Damodaran（估值工具）、Munger（多元思维）。Graham 的烟蒂法在 2026 年的全球化 + 无形资产时代效用衰减，可不学。</p>
+
+    <h2 id="valuation">3. 估值工具（前 180 天禁用 DCF）</h2>
+    <div class="warn"><strong>v1.1 重要修订：</strong>新手前 180 天 <strong>不要</strong> 用 DCF。DCF 对增长率、折现率、永续率极度敏感，新手凭感觉填入三个猜想数字，得到看起来精确的猜想，然后带着虚假自信加仓。Buffett 本人公开说他不用 spreadsheet 算 DCF —— "如果你需要算到第三位小数才能判断便宜，那就不够便宜"。</div>
+
+    <h3>前 180 天默认工具栈（够用且不假装精确）</h3>
+    <table>
+      <thead><tr><th>工具</th><th>用法</th><th>解读</th></tr></thead>
+      <tbody>
+        <tr><td><strong>反向 DCF</strong></td><td>当前价格隐含的未来增长率是多少？</td><td>对比 GDP / 行业增长 / 历史增长，判断隐含假设是否合理</td></tr>
+        <tr><td><strong>历史 P/E 百分位</strong></td><td>当前 P/E 在过去 10 年的位置</td><td>底部 25% 分位 = 值得看；顶部 25% = 需要 thesis 解释为何更贵</td></tr>
+        <tr><td><strong>EV/EBIT 同行对比</strong></td><td>跨资本结构、跨折旧政策更公允</td><td>同行最便宜 30% + 质量更好 = 候选</td></tr>
+        <tr><td><strong>Owner Earnings Yield vs 10Y</strong></td><td>(净利+折旧-维持性 capex) / EV，对比 10 年美债收益率</td><td>差额 &gt; 4% 是合理 hurdle</td></tr>
+      </tbody>
+    </table>
+
+    <h3>替换"三档情景概率加权"为 Pabrai 检查清单</h3>
+    <p>不要假装算概率，问三个具体问题：</p>
+    <ol>
+      <li><strong>最坏情况我亏多少？</strong>（具体到金额）</li>
+      <li><strong>我能心理与财务上承受吗？</strong>（是 / 否）</li>
+      <li><strong>如果对了，赔率至少 2:1 吗？</strong>（潜在涨幅 / 潜在亏损）</li>
+    </ol>
+    <p>三个都是 yes 才下注。180 天后再引入 DCF + 情景分析。</p>
+
+    <h2 id="workflow">4. 投资流程（7 阶段 + 卖出独立成章见 §8）</h2>
+    <ol>
+      <li><strong>筛选</strong>：Finviz / TIKR / Stockanalysis（美股）、AKShare 自写脚本 / 理杏仁（A股）。初筛条件：ROIC &gt; 15% × 5 年 + FCF 增长 &gt; 10% + 净负债/EBITDA &lt; 3。</li>
+      <li><strong>行业理解</strong>：波特五力 + 产业链地图。关键问题：增长来源？集中度？谁定价？技术变革风险？</li>
+      <li><strong>公司研究</strong>：Buffett 12 条改编（生意简单 / 历史经营 / 长期前景 / 管理层 / ROE / Owner Earnings / 利润率 / 留存价值 / 护城河 / 资本配置 / 内在价值 / 折扣）。</li>
+      <li><strong>估值</strong>：见 §3，用 4 个默认工具。</li>
+      <li><strong>仓位管理</strong>：凯利半数；单仓位 ≤ 10%（B 轨初期）；总仓位与现金管理参考 Marks 的"防御 / 进攻"切换。</li>
+      <li><strong>持有与复盘</strong>：季度复盘原始 thesis 是否仍成立。季报必读：营收质量 / 应收账款 / 存货 / 经营现金流 vs 净利润。</li>
+      <li><strong>卖出</strong>：独立成章，见 §8。</li>
+    </ol>
+
+    <h2 id="markets">5. 市场适配差异</h2>
+    <h3>美股</h3>
+    <p>信息透明（SEC EDGAR 全套 10-K / 10-Q / 8-K / DEF 14A）、估值合理、流动性好。价值投资框架原版套用。</p>
+    <h3>A股</h3>
+    <p>监管政策权重大、散户主导（情绪驱动）、估值波动剧烈。北向资金是"聪明钱"风向标。<strong>适配</strong>：放大安全边际、避高商誉/股权质押、谨慎"政策概念股"、关注分红+ROE 稳定的优质公司。一手公告看巨潮资讯网。</p>
+    <h3>加密</h3>
+    <p>见 §13——v1.1 已重定位为"非对称配置"而非价值投资延伸。</p>
+
+    <h2 id="traps">6. 价值陷阱识别</h2>
+    <ul>
+      <li><strong>低 P/E 但行业结构性衰退</strong>（柯达 / 燃油车整车 / 纸媒）</li>
+      <li><strong>高股息靠借债维持</strong>（payout &gt; 100%，FCF 不足）</li>
+      <li><strong>资产被高估</strong>：账面是过时设备 / 不良应收 / 僵尸库存</li>
+      <li><strong>公司治理</strong>：大股东掏空 / 关联交易 / 频繁换审计</li>
+      <li><strong>周期顶部低 P/E</strong>：航运 / 煤炭 / 半导体周期顶 EPS 最高，下一年腰斩</li>
+      <li><strong>会计红旗</strong>：经营现金流 &lt; 净利润 / 应收增速 &gt; 营收增速 / 商誉 &gt; 净资产 30%</li>
+    </ul>
+    <p>快速排雷：Beneish M-Score（造假）、Altman Z-Score（破产）、Piotroski F-Score（质量）。</p>
+
+    <h2 id="failures">7. 失败案例研究 <span class="tag tag-accent">NEW</span></h2>
+    <p>不读失败者的方法论永远是宣传册。下面六个 case 必须研究，每个写一份 500 字归因笔记：</p>
+    <table>
+      <thead><tr><th>案例</th><th>核心教训</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Bill Miller</strong>（Legg Mason，连续 15 年跑赢 S&amp;P 后 2008 几乎归零）</td><td>杠杆 + 价值陷阱（金融股 averaging down）+ 拒绝认错。"长期 outperformer" 的尾部风险</td></tr>
+        <tr><td><strong>David Einhorn</strong>（近 10 年跑输市场）</td><td>结构性看空 + 风格失衡 + 在成长股周期里坚持深度价值。<strong>这一条直接挑战"必追 Greenlight letters"的建议</strong></td></tr>
+        <tr><td><strong>Eddie Lampert</strong>（Sears）</td><td>用价值投资框架做企业再造 ≠ 投资；CEO 跨界陷阱</td></tr>
+        <tr><td><strong>王亚伟时代后的中国明星私募</strong>（徐翔 / 多位 2015 牛市顶峰明星）</td><td>survivorship bias 教育：被神化时刚好是高点</td></tr>
+        <tr><td><strong>LUNA / Terra</strong>（Do Kwon，2022 崩盘）</td><td>"基本面看似良好"的庞氏 + 算法稳定币的迭代风险。<strong>价值投资框架在加密的失灵案例</strong></td></tr>
+        <tr><td><strong>FTX / SBF</strong>（2022 崩盘）</td><td>"机构背书"和"治理透明"在加密里近乎为零</td></tr>
+      </tbody>
+    </table>
+    <p>每个 case 笔记结构：① 当时多数人为何看好 ② 关键事实何时该警觉 ③ 如果我当时持仓，决策点在哪里 ④ 这个教训如何修改我的清单。</p>
+
+    <h2 id="psychology">8. 心理与卖出 <span class="tag tag-accent">NEW</span></h2>
+
+    <h3>4 个必须建立的心理模型</h3>
+    <ul>
+      <li><strong>损失厌恶</strong>：亏损的痛 &gt;&gt; 收益的喜（2.5×）。会让你过早卖盈利 + 过晚卖亏损。</li>
+      <li><strong>锚定</strong>：你买入价不是市场关心的，但你的大脑会拿它做参考点。</li>
+      <li><strong>处置效应</strong>：倾向"卖盈持亏"，结果组合越来越烂。</li>
+      <li><strong>FOMO</strong>：错过 NVDA / BTC 的痛会推你在下一个泡沫顶接盘。</li>
+    </ul>
+
+    <h3>决策日志模板</h3>
+    <p>每次买入前写：</p>
+    <pre>日期：
+公司 / Ticker：
+本笔仓位占组合 %：
+买入价 + 当前估值百分位：
+Thesis 一句话：
+最坏情况我亏多少？（金额）
+赔率估算（潜在涨 / 潜在亏）：
+我此刻的情绪状态（0-10 紧张程度）：
+退出条件（thesis broken 的具体信号）：
+预计持有时间：</pre>
+    <p>买入后只回看不修改。3 个月、12 个月、24 个月分别复盘 thesis 准确度。</p>
+
+    <h3>50% 回撤心理预演</h3>
+    <p>动手算：如果你的组合现在打 5 折（50% 回撤），账户金额是多少？想象那个数字 6 个月。<strong>这不是想象，是必须做的练习。</strong>价值投资者的常态成本是 30-60% 回撤（Buffett 在 1973-74 / 1999-2000 / 2008 各经历一次）。没做过这个预演的人，第一次真实回撤会割在底部。</p>
+
+    <h3>卖出决策树</h3>
+    <pre>thesis 还成立吗？
+├─ 否 → 立即清仓（不管赚亏）
+└─ 是 → 估值还合理吗？
+       ├─ 严重高估（>fair value 50%）→ 部分减仓（保留核心仓位）
+       ├─ 合理 → 持有
+       └─ 出现明显更好的机会 → 换仓（计算税务成本）
+
+每季度一次：仓位偏离目标配置 > 20% → 再平衡</pre>
+
+    <h2 id="tax-fx">9. 税务 / 外汇 / 政策风险 <span class="tag tag-accent">NEW</span></h2>
+
+    <h3>税务（中国居民视角）</h3>
+    <ul>
+      <li><strong>美股</strong>：填 W-8BEN（中美税收协定）→ 股息预扣 10%；资本利得在中国居民身份下美国不征，回到中国境内合规申报。</li>
+      <li><strong>A股</strong>：印花税单边 0.05%；个人股票交易免所得税；分红按持有期分级（&lt; 1 月 20%、1 月 - 1 年 10%、&gt; 1 年 免）。</li>
+      <li><strong>加密</strong>：中国居民税务定性模糊（"非法币"）；如果未来作为美国 resident 则每笔交易都是 taxable event（LIFO / FIFO 选择影响巨大）。</li>
+    </ul>
+
+    <h3>外汇（USD / CNY）</h3>
+    <ul>
+      <li>2016: 6.6 → 6.95；2018: 6.3 → 6.9；2020: 7.1 → 6.4；2022: 6.3 → 7.3——<strong>美元仓位的盘面收益和人民币回算收益可以差 15%+</strong>。</li>
+      <li><strong>小资金不建议 hedge</strong>（成本吃掉 alpha）。要做的是<strong>心理准备</strong>：账户人民币计价波动会经常和盘面"看起来"严重背离。</li>
+      <li>每月 1 次记录"以 USD 计价 vs 以 CNY 计价"两条收益曲线，避免单一视角误导决策。</li>
+    </ul>
+
+    <h3>政策与监管</h3>
+    <ul>
+      <li><strong>A股</strong>：双减 / 反垄断 / 消费税传闻可以一夜让 DCF 归零（2021 教培、2021 互联网、2024 白酒预期）。任何 DCF 都要折扣"政策风险"。</li>
+      <li><strong>中概股</strong>：VIE 结构 + ADR 退市可能（2022 一度恐慌）。仓位单独限额。</li>
+      <li><strong>加密</strong>：SEC 对 ETH 的定性 / 中国全面禁止存量 / EU MiCA 二期 / 美国稳定币立法。仓位上限 5% 净资产是政策风险的天然 hedge。</li>
+    </ul>
+
+    <h2 id="canon">10. 经典文本（一次性学完）<span class="tag tag-accent">NEW 分类</span></h2>
+    <p>这些是"读完归档"的，不是订阅的。每读完一本 / 一套，你的 baseline 升一级，但不需要持续 follow。</p>
+    <table>
+      <thead><tr><th>文本</th><th>类型</th><th>优先级</th><th>预计耗时</th></tr></thead>
+      <tbody>
+        <tr><td>Marks《The Most Important Thing》</td><td>书</td><td>★★★★★（起点）</td><td>20h</td></tr>
+        <tr><td>Pabrai《The Dhandho Investor》</td><td>书</td><td>★★★★★（起点）</td><td>10h</td></tr>
+        <tr><td>Howard Marks Oaktree memos archive (1990-2024)</td><td>历史</td><td>★★★★★</td><td>精选 30 篇 ~40h</td></tr>
+        <tr><td>Buffett Partnership Letters (1957-1969)</td><td>历史</td><td>★★★★★</td><td>15h</td></tr>
+        <tr><td>Buffett Berkshire Letters (1977-2024 archive)</td><td>历史</td><td>★★★★★</td><td>精读 10 封 ~25h</td></tr>
+        <tr><td>Munger《Poor Charlie's Almanack》</td><td>书</td><td>★★★★★</td><td>30h</td></tr>
+        <tr><td>Marks《Mastering the Market Cycle》</td><td>书</td><td>★★★★</td><td>15h</td></tr>
+        <tr><td>Nick Sleep &amp; Qais Zakaria Nomad Letters (2001-2014)</td><td>历史</td><td>★★★★★</td><td>20h</td></tr>
+        <tr><td>段永平雪球历史精华 (2010-2018)</td><td>历史</td><td>★★★★</td><td>15h</td></tr>
+        <tr><td>Klarman《Margin of Safety》</td><td>书（旧版 PDF）</td><td>★★★★</td><td>20h</td></tr>
+        <tr><td>Guy Spier《The Education of a Value Investor》</td><td>书</td><td>★★★</td><td>10h</td></tr>
+        <tr><td>Damodaran《Damodaran on Valuation》</td><td>工具书</td><td>★★★（180 天后）</td><td>查阅式</td></tr>
+        <tr><td>Phil Fisher《Common Stocks and Uncommon Profits》</td><td>书</td><td>★★★</td><td>10h</td></tr>
+      </tbody>
+    </table>
+    <p>总耗时约 230 小时（B 轨 ~10h/周 → 23 周 ≈ 6 个月并行其他活动）。<strong>2025 年是 Buffett 作为 CEO 最后一封 letter，2026+ Greg Abel 时代的 letter 不再归入经典，扫一眼即可。</strong></p>
+
+    <h2 id="us-flow">11. 美股持续信号流</h2>
+    <p>订阅 + 定期消费。"必读" 限制在 5 个以内，避免清单膨胀。</p>
+
+    <h3>必读 5（每周/月扫一次）</h3>
+    <table>
+      <thead><tr><th>来源</th><th>频率</th><th>读法</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Oaktree Memos</strong>（Howard Marks）</td><td>月</td><td>全文精读，写 200 字读后感</td></tr>
+        <tr><td><strong>Pershing Square 季度 letter</strong>（Ackman）</td><td>季</td><td>注意 Ackman 是 narrator 天才，关注他怎么写亏的钱</td></tr>
+        <tr><td><strong>GMO 季度 letter</strong>（Grantham）</td><td>季</td><td>泡沫论 + 长期 7-year forecast</td></tr>
+        <tr><td><strong>JPM Eye on the Market</strong>（Cembalest）</td><td>不定期</td><td>免费，宏观图表密度第一</td></tr>
+        <tr><td><strong>13F via Dataroma</strong></td><td>季</td><td><strong>45 天时滞</strong>。用来产生 watchlist + 理解 thesis，不直接 clone</td></tr>
+      </tbody>
+    </table>
+
+    <h3>选读（半年/年）</h3>
+    <ul>
+      <li>Fundsmith 年度 letter（Terry Smith，quality 派）</li>
+      <li>Third Point 季度 letter（Loeb）</li>
+      <li>Sohn / Robin Hood Conference 年度演讲（YouTube）</li>
+      <li>Berkshire 年报<span class="tag">post-Buffett 降级</span></li>
+      <li>Greenlight 季度 letter（Einhorn）<span class="tag tag-warn">近 10 年跑输市场，读但不照搬</span></li>
+      <li>Bridgewater Daily Observations（付费，有渠道再说）</li>
+    </ul>
+
+    <h3>X 上少数派（每天扫不超过 15 分钟）</h3>
+    <ul>
+      <li><strong>@CliffordAsness</strong>（AQR，最毒舌也最准）</li>
+      <li><strong>@RayDalio</strong>（宏观 + 原则）</li>
+      <li><strong>@MohnishPabrai</strong>（你的起点流派）</li>
+      <li><strong>@LynAldenContact</strong>（独立但 track record 扎实）</li>
+      <li><strong>@profplum99</strong>（Mike Green，passive flow）</li>
+      <li><strong>@BillAckman</strong>（带政治色彩自己 filter）</li>
+      <li>教学型：<strong>@AswathDamodaran</strong>、<strong>@10kdiver</strong></li>
+    </ul>
+    <div class="warn"><strong>降级：</strong> <strong>@michaeljburry</strong> 移出"必追"——2023 看空 SPY 后 +24%、2024 看空 NVDA 后再涨 50%。Twitter 上的 Burry 是表演性 Burry，不构成信号。归入"娱乐用途"。</div>
+
+    <h2 id="cn-flow">12. A股 / 港股持续信号流</h2>
+    <div class="callout"><strong>v1.1 reframe：</strong>中国市场没有 Buffett，只有<strong>周期性 outperformer</strong>。跟踪他们的目的是<strong>理解中国市场结构</strong>（消费 / 医药 / 制造的轮动、政策影响、北向资金行为），<strong>不是 clone holdings</strong>。下面所有"过往明星"都带客观回撤数据。</div>
+
+    <table>
+      <thead><tr><th>来源</th><th>渠道</th><th>客观状态</th></tr></thead>
+      <tbody>
+        <tr><td><strong>段永平</strong></td><td>雪球「大道无形我有型」</td><td>唯一官方；2022 年后更新频率显著下降。<strong>历史发言进入经典文本</strong>，雪球账号"偶尔扫一眼"即可</td></tr>
+        <tr><td><strong>张坤</strong></td><td>易方达官网季报</td><td>2021 顶峰至今易方达蓝筹精选回撤 ~40%+；规模缩水。<strong>读季报是为了理解中国消费/医药市场结构</strong></td></tr>
+        <tr><td><strong>陈光明</strong></td><td>睿远基金季报 + 路演视频</td><td>style 最接近 Marks（cycle-aware），仍较稳健</td></tr>
+        <tr><td><strong>朱少醒</strong></td><td>富国天惠季报</td><td>持仓最稳的"长期主义"代表</td></tr>
+        <tr><td><strong>谢治宇</strong></td><td>兴全合宜 / 合润季报</td><td>近三年跑输沪深 300；读季报是观察"成长价值"派的当下困境</td></tr>
+        <tr><td><strong>邱国鹭</strong></td><td>高毅资产公众号 +《投资中最简单的事》</td><td>书归经典文本；公众号仍稳定输出</td></tr>
+        <tr><td><strong>冯柳</strong></td><td>高毅季度持仓公告（本人不公开发声）</td><td>"弱者体系"近年被自己的回撤打脸；持仓变化作为信号</td></tr>
+        <tr><td><strong>但斌</strong></td><td>东方港湾季报 + 微博</td><td>2022 清仓 A 股、2024 转向 Tesla。操作明显"看天气"。作"另一面"听</td></tr>
+        <tr><td><strong>景林资产</strong></td><td>蒋锦志季度 letter + 半年信</td><td>偏港股 + 中概</td></tr>
+        <tr><td><strong>高瓴 HHLR</strong></td><td>港股 13F + 偶发演讲</td><td>近年表现也并不出众，光环效应需 discount</td></tr>
+        <tr><td><strong>Michael Pettis</strong></td><td>@MichaelXPettis（北大光华）</td><td>中文圈最重要的英文宏观锚</td></tr>
+      </tbody>
+    </table>
+
+    <h3>聚合渠道</h3>
+    <ul>
+      <li><strong>聪明投资者</strong>（公众号，季报精华最全）</li>
+      <li><strong>远川研究所</strong>（行业深度）</li>
+      <li><strong>巨潮资讯网</strong>（一手公告，决策前 cross-check）</li>
+      <li>Choice / Wind 终端"基金经理观点"专题</li>
+    </ul>
+
+    <div class="warn"><strong>X 上注意：</strong>段永平、林园、冯柳、高瓴张磊在 X 上<strong>均无认证本人账号</strong>。任何冠名账号都是讨论 / 翻译 / 冒名。</div>
+
+    <h2 id="crypto">13. 加密：非对称配置（非价值投资延伸）</h2>
+    <div class="warn"><strong>v1.1 重定位：</strong>加密<strong>不是</strong>价值投资框架的延伸。BTC/ETH 没有现金流，估值锚不稳。S2F 模型已被实际数据证伪（2021 预测 BTC $100K 实际 $46K；2024 预测 $150K+ 实际 60-70K 震荡）。<strong>把加密塞进 DCF 是糖衣的赌博</strong>。</div>
+
+    <h3>正确定位：非对称下注</h3>
+    <ul>
+      <li><strong>仓位上限：5% 净资产</strong>（凯利公式视角，不是估值视角）</li>
+      <li><strong>配置逻辑</strong>：BTC = 长期持有抗通胀实验；ETH = 网络费收入跟踪 + 生态实验；DeFi 协议 = 用 P/S 但仓位极小</li>
+      <li><strong>不用</strong>：S2F、"四年减半周期"线性外推、"机构必将采纳" narrative</li>
+      <li><strong>用</strong>：链上指标作风险提示（exchange net flow、稳定币增发、ETF 资金流）</li>
+    </ul>
+
+    <h3>数据 / 链上工具</h3>
+    <ul>
+      <li>Token Terminal — 协议收入数据</li>
+      <li>DefiLlama — DeFi TVL</li>
+      <li>Glassnode 免费层 — 链上指标</li>
+      <li>Messari — 协议研究</li>
+      <li>Dune — 自定义链上 query</li>
+    </ul>
+
+    <h3>少数高信号 X 账号（思考型，非交易型）</h3>
+    <ul>
+      <li>@hasufl, @0xPrismatic, @SpencerNoon, @adam3us</li>
+      <li>VC 视角：@RyanSAdams（Bankless）— 但他是 ETH 多头本位</li>
+    </ul>
+
+    <h2 id="podcasts">14. 播客（v1.1 砍 70%）</h2>
+    <div class="callout"><strong>v1.1 修订：</strong>播客最大的风险是<strong>让人觉得自己在学习</strong>。Acquired 单集 4 小时听完，对要不要买 TSM 的决策质量提升约等于零（节目从不讨论估值时点）。播客分两类——计入投研时间 vs 通勤娱乐。</div>
+
+    <h3>第一类：计入投研时间（每周 ~1.5h）</h3>
+    <ol>
+      <li>⭐ <strong>The Memo by Howard Marks</strong> — Marks 朗读最新 memo（月度）。信号密度最高。</li>
+      <li>⭐ <strong>Odd Lots</strong>（Bloomberg）— 每集挖一个细分宏观/市场话题。主菜。</li>
+      <li>⭐ <strong>In Good Company</strong>（Nicolai Tangen，NBIM CIO）— 精选 1-2 集 / 月。最高密度 CEO/投资人访谈。</li>
+    </ol>
+
+    <h3>第二类：通勤娱乐 + 长期 taste（不计入投研时间）</h3>
+    <ul>
+      <li>Acquired / Founders / Capital Allocators / Invest Like the Best — 看心情</li>
+      <li>张小珺商业访谈录 / The Wanderers / 非共识 20 分钟（你已订阅）</li>
+      <li>硅谷 101 / OnBoard! / 得意忘形 / 商业就是这样</li>
+    </ul>
+    <p class="section-meta">v1.0 推荐的 Patrick Boyle / Macro Hive / Excess Returns / The Acquirers Podcast / Forward Guidance / Goldman Sachs Exchanges / 此话当真 / 晚点聊 / 山行资本 / 屠龙之术 / 面基 — 都从"必听"砍掉，需要时再回来。</p>
+
+    <h2 id="routine">15. Routine 节奏（B 轨 ~10h+ /周）<span class="tag tag-accent">REDESIGNED</span></h2>
+    <div class="warn"><strong>取消 v1.0 的 30 分钟 daily 仪式</strong>。北京时间 07:30 美股已收盘 3.5h、A股未开、加密只是过夜数据——三个市场信号最稀薄的时刻。价值投资本来就不需要实时。</div>
+
+    <h3>工作日早晨 · 15 min × 5</h3>
+    <table>
+      <thead><tr><th>时间</th><th>动作</th></tr></thead>
+      <tbody>
+        <tr><td><span class="routine-time">5 min</span></td><td>雪球 App / 东方财富看 A 股集合竞价 + 北向资金（仅 09:15-09:30 时段）</td></tr>
+        <tr><td><span class="routine-time">5 min</span></td><td>看自动推送的美股隔夜收盘 + 持仓异动（Telegram bot，见 §17）</td></tr>
+        <tr><td><span class="routine-time">5 min</span></td><td>Journal 三句话：昨日动作 / 今日 thesis 是否变化 / 风险点</td></tr>
+      </tbody>
+    </table>
+
+    <h3>工作日晚 · 45-90 min × 5</h3>
+    <ul>
+      <li>当前正在研究的公司：下一节 10-K / 一段季报（30-60 min）</li>
+      <li>一篇 Oaktree memo / 一封 Pershing letter / 经典文本一章（15-30 min）</li>
+      <li>财报周可加：当周持仓公司财报扫读（30 min）</li>
+    </ul>
+
+    <h3>周末</h3>
+    <ul>
+      <li><strong>周六 3-4h</strong>：公司深度研究 chunk（竞品对比 / 行业地图 / 估值刷新）+ 写 thesis 一段</li>
+      <li><strong>周日 1.5-2h</strong>：周复盘（journal 串起来 / 归因 / watchlist 调整 / 下周计划）</li>
+    </ul>
+
+    <h3>每月 1 次（4h，月末周日替代周复盘）</h3>
+    <ul>
+      <li>月度归因：跑赢/跑输的原因，归因到"运气 vs 能力"</li>
+      <li>行为日志统计：情绪驱动 vs thesis 驱动决策的占比</li>
+      <li>读 1 个失败案例（§7 名单），写 500 字归因笔记</li>
+    </ul>
+
+    <h3>每季 1 次（8h，季末周末）</h3>
+    <ul>
+      <li>持仓重审：每个仓位重新论证 thesis</li>
+      <li>季度 letters 阅读：Pershing / GMO / 中国基金经理季报 / Damodaran 季度 update</li>
+      <li>13F diff（Dataroma），更新 watchlist</li>
+    </ul>
+
+    <p><strong>总计</strong>：早 1.25h + 晚 5h + 周末 5h ≈ 11h/周 + 月度 4h × 1/4 ≈ 1h/周 摊销 + 季度 8h × 1/13 ≈ 0.6h/周 摊销 ≈ <strong>~12.5h/周</strong>。符合 B 轨设计。</p>
+
+    <h2 id="tools">16. 工具栈（基于开源调研）<span class="tag tag-accent">NEW</span></h2>
+
+    <h3>数据层（B 轨"装好就够用"组合）</h3>
+    <ul>
+      <li><strong>AKShare</strong>（A 股 + 港股，免费）— 几乎必装</li>
+      <li><strong>yfinance</strong>（美股初筛，免费）— 数据偶有错误，决策前必须 cross-check</li>
+      <li><strong>edgartools</strong>（13F / 10-K 一行代码）— 比 sec-edgar-downloader 更现代</li>
+      <li><strong>FinanceToolkit</strong>（150+ 财务比率，免费）— 文档极佳，<strong>中文圈被严重低估</strong></li>
+      <li><strong>ccxt</strong>（加密统一接口）— 加密仅在 §13 框架内用</li>
+    </ul>
+
+    <h3>Cross-check 一手数据（决策前必做）</h3>
+    <ul>
+      <li>美股：<strong>SEC EDGAR</strong> 原文 — yfinance 数据有疑问时回到这里</li>
+      <li>A 股：<strong>巨潮资讯网</strong> — AKShare 字段不全或可疑时回到这里</li>
+    </ul>
+
+    <h3>回测（学习中后期，3 个月+ 后启用）</h3>
+    <ul>
+      <li><strong>Qlib</strong>（Microsoft 出品，A 股 universe 原生支持）— 中文圈低估；产线可用</li>
+      <li>不推荐：vectorbtpro（已闭源商业化）、backtrader（原作者停更）</li>
+    </ul>
+
+    <h3>避坑提示</h3>
+    <ul>
+      <li>vectorbtpro 已闭源，新版本不再开源</li>
+      <li>backtrader 原作者基本停更，bug fix 慢</li>
+      <li>easyquotation / pytdx 等爬虫类不要上生产链路</li>
+      <li>Tushare Pro 大量接口需积分（实质付费）</li>
+      <li>A 股回测的复权 + 涨跌停 + 停牌默认不处理 — 用 Qlib 或 vn.py</li>
+      <li>财报 RAG 类 demo 对小用户是过度工程（见 §17）</li>
+    </ul>
+
+    <h2 id="automation">17. 自动化路线（精简）<span class="tag tag-accent">v1.1 砍 RAG</span></h2>
+
+    <h3>3 个月分阶段</h3>
+    <table>
+      <thead><tr><th>月</th><th>目标</th><th>组件</th></tr></thead>
+      <tbody>
+        <tr><td>M1</td><td>每日早报 TG bot</td><td><code>akshare</code> + <code>yfinance</code> + <code>edgartools</code> + Claude 摘要 + <code>python-telegram-bot</code>，GitHub Actions cron</td></tr>
+        <tr><td>M2</td><td>13F 监控 + watchlist 异动</td><td>每周 Dataroma diff，触发后 Claude 写一段解释推到 TG</td></tr>
+        <tr><td>M3</td><td>财报日历 + 季报 highlight</td><td>FMP API + 自动总结（不是 RAG）</td></tr>
+      </tbody>
+    </table>
+
+    <h3>v1.1 砍掉的</h3>
+    <ul>
+      <li class="changelog-removed">财报 RAG agent</li> — 小用户的 thesis 涉及 5-20 家公司，<strong>手工读完整 10-Q 反而能建立段落记忆和管理层语气感</strong>，RAG 把这个抹平了。</li>
+      <li class="changelog-removed">链上巨鲸实时监控</li> — 噪音 &gt;&gt; 信号。</li>
+      <li class="changelog-removed">X list LLM 摘要</li> — 2026 年 X API 价格高且不稳定，性价比差。手动扫 15 分钟更可控。</li>
+    </ul>
+
+    <h2 id="learning">18. 学习路径 90/270/720<span class="tag tag-accent">REWRITTEN</span></h2>
+    <div class="warn"><strong>真实退出率提醒：</strong>类似自学课程的完成率，30 天约 50%，90 天 10-15%，180 天 &lt; 5%。<strong>读到第 30 天会想放弃，这是正常的</strong>。本方法论假设你已经决定加入剩下的 10%。</div>
+
+    <h3>Day 1-90：跑通第一家公司 + Pabrai/Marks 入门</h3>
+    <ul>
+      <li>选 1 家日常使用的美股公司（Costco / Hermès / Apple / Visa）</li>
+      <li>读 5 年 10-K（每周 1 年）</li>
+      <li>同步读 Marks《The Most Important Thing》+ Pabrai《Dhandho》</li>
+      <li>简版估值：反向 DCF + EV/EBIT 历史百分位 + Pabrai 检查清单</li>
+      <li>写 1500 字 thesis + 决策日志 + 退出条件</li>
+      <li>开 paper trading 账号</li>
+      <li><strong>产出</strong>：第一份完整 thesis + Pabrai/Marks 笔记</li>
+    </ul>
+
+    <h3>Day 91-270：第二、三家公司 + 系统化</h3>
+    <ul>
+      <li>每 6-8 周一家公司（节奏可下调，新手第二家通常仍很慢）</li>
+      <li>第二家：A 股优质公司（建议消费 / 医药白马，先学习国内市场结构）</li>
+      <li>第三家：港股或新兴市场</li>
+      <li>启动 paper trading 实际下单</li>
+      <li>启动半自动化：M1 TG bot 早报</li>
+      <li>月度归因 + 读 1 个失败案例 / 月</li>
+      <li>读完 Oaktree memos 精选 30 篇 + Buffett Partnership Letters</li>
+      <li><strong>产出</strong>：3 份 thesis + 自动化早报 v1 + 12 个月 paper trading 记录</li>
+    </ul>
+
+    <h3>Day 271-720：实战与体系化</h3>
+    <ul>
+      <li>真实小额资金（&lt; 流动资产 20% 净资产）执行 5-10 只组合</li>
+      <li>经历 1-2 次回撤（如有，写心理日志归档）</li>
+      <li>季度持仓重审 + 月度归因 + 失败案例 12 个</li>
+      <li>读完剩余经典文本（Munger / Marks 周期 / Nomad / Klarman / 段永平历史）</li>
+      <li>180 天后可引入 DCF（结合 Damodaran 工具书）</li>
+      <li>Day 720 写 "我的投资体系 v2.0"（3000 字+），含买入清单 / 卖出清单 / 仓位规则 / 复盘模板</li>
+      <li><strong>产出</strong>：完整可执行的投资 SOP + 真实回报曲线 + 1 份失败复盘</li>
+    </ul>
+
+    <h2 id="preferences">19. 用户偏好与决策记录</h2>
+    <p>已沉淀到 memory，下次对话默认生效：</p>
+    <ul>
+      <li><strong>身份</strong>：在校 + 实习，工作日 1-2h，周末更多，~10h+ /周</li>
+      <li><strong>轨道</strong>：B 轨（5-10 个股 + 季度深度 + 半自动化）</li>
+      <li><strong>市场重心</strong>：US ~50% / A-share ~30% / 加密 ≤ 20% 但仓位上限 5% 净资产</li>
+      <li><strong>起点流派</strong>：Pabrai + Marks（3 年精通后吸收 Buffett / Munger / Damodaran）</li>
+      <li><strong>信息源原则</strong>：senior practitioner 一手内容 &gt; KOL / 大V；分"经典文本"和"持续信号流"两类</li>
+      <li><strong>已订阅播客</strong>：张小珺商业访谈录、非共识 20 分钟、The Wanderers</li>
+      <li><strong>语言</strong>：实质性内容中文输出</li>
+    </ul>
+
+    <h2 id="changelog">20. v1.0 → v1.1 变更日志</h2>
+
+    <h3>新增</h3>
+    <ul>
+      <li><strong>§0 开始之前</strong>：6 个前置项（现金缓冲 / 保险 / 税务身份 等）</li>
+      <li><strong>§2 选派</strong>：默认 Pabrai + Marks 起点（之前是七派并列）</li>
+      <li><strong>§7 失败案例研究</strong>：Bill Miller / Einhorn / Lampert / 中国明星私募 / LUNA / FTX</li>
+      <li><strong>§8 心理与卖出</strong>：决策日志模板 + 50% 回撤预演 + 卖出决策树</li>
+      <li><strong>§9 税务 / 外汇 / 政策</strong>：W-8BEN、USD/CNY 波动、政策风险</li>
+      <li><strong>§10 经典文本</strong>分类（一次性学完）</li>
+      <li><strong>§16 工具栈</strong>：基于开源调研（AKShare / yfinance / edgartools / FinanceToolkit / Qlib）</li>
+    </ul>
+
+    <h3>重写</h3>
+    <ul>
+      <li><strong>§3 估值工具</strong>：前 180 天禁 DCF；改用反向 DCF + P/E 百分位 + EV/EBIT 对比 + Owner Earnings Yield vs 10Y；"三档情景概率加权" → Pabrai 检查清单</li>
+      <li><strong>§12 A 股信号流</strong>：所有中国基金经理加客观回撤数据 + reframe "周期性 outperformer，不 clone"</li>
+      <li><strong>§13 加密</strong>：从"价值投资框架 70% 可迁移"重定位为"非对称配置"；删除 S2F；仓位上限 5% 净资产</li>
+      <li><strong>§14 播客</strong>：从 20+ 档砍到第一类 3 档（必听）+ 第二类娱乐用</li>
+      <li><strong>§15 Routine</strong>：取消 30 分钟 daily 仪式（时区矛盾 + 信号稀薄）；改 工作日早 15min + 晚 45-90min + 周末 4-6h + 月/季滚动</li>
+      <li><strong>§18 学习路径</strong>：30/90/180 → 90/270/720；明示退出率；第一阶段砍理论灌输，先跑通一家公司</li>
+    </ul>
+
+    <h3>降级 / 删除</h3>
+    <ul>
+      <li><strong>@michaeljburry</strong> 从"必追" → "娱乐"（2023/2024 多次错误 call）</li>
+      <li><strong>Berkshire post-Buffett letter</strong>（2026+）从"必读" → "年扫一眼"</li>
+      <li><strong>Klarman / Nomad letters</strong> 从"信号流" → "经典文本"（避免把考古和现役混搭）</li>
+      <li><strong>段永平雪球账号</strong> 当下从"必追" → "偶尔扫一眼"；历史发言转入经典文本</li>
+      <li><strong>13F clone trading</strong> 警告：45 天时滞，<strong>用来产生 watchlist 不是直接抄</strong></li>
+      <li><strong>财报 RAG / 链上巨鲸 / X list LLM 摘要</strong> 从自动化路线砍掉</li>
+      <li><strong>S2F 模型</strong>：从加密估值里完全删除</li>
+      <li>大量重叠 / 脱离操作的播客（Patrick Boyle / Macro Hive / Excess Returns / 等）</li>
+    </ul>
+
+    <h2 id="next">21. 下一步</h2>
+    <p>v1.1 已沉淀。下面三条按重要性排：</p>
+    <ol>
+      <li><strong>B</strong>（建议优先）：第一份"语料学习"——挑 In Good Company 上 Druckenmiller / Larry Fink 那一期，拉 transcript → 拆解他思考宏观 + 仓位的框架 → 写成你方法论的第一份 case study + 决策日志范例</li>
+      <li><strong>D</strong>：搭 M1 自动化（每日早报 TG bot），用 §16 工具栈，1-2 周内可用</li>
+      <li><strong>C</strong>：选第一家公司（建议 Costco / Hermès），开始 Day 1-90 路径</li>
+    </ol>
+    <p>B 适合"立刻有学习产出"；D 适合"立刻有可用工具"；C 适合"开始真正的长期路径"。可以串行：D 先搭好 → B 做一次 → C 启动。</p>
+
+    <div class="footer">
+      <p>v1.1 · 沉淀于 2026-06 · 修订自 v1.0（吸收 18 条批判性 review + 开源工具栈调研）</p>
+      <p>反馈循环：<em>消费内容 → 拆解框架 → 写入方法论 → 影响交易决策 → 复盘验证 → 修订方法论</em></p>
+      <p>本文件是 living document。下一次大修订建议在完成 Day 1-90 第一家公司之后（约 2026-09），届时基于真实操作经验做 v2.0。</p>
+    </div>
+  </main>
+</div>
+</body>
+</html>

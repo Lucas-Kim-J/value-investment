@@ -1,0 +1,2 @@
+# Static site generator dependencies
+markdown>=3.5

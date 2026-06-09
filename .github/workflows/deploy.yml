@@ -1,0 +1,53 @@
+# GitHub Actions — 自动构建并部署 value-investment 静态站点
+#
+# 触发条件：push 到 main 分支，或在 Actions 页面手动触发 (workflow_dispatch)。
+#
+# 需要在仓库 Settings → Secrets and variables → Actions 中设置以下 4 个 Secret：
+#   DEPLOY_SSH_KEY   部署用的 SSH 私钥（对应公钥需加入服务器的 authorized_keys）
+#   DEPLOY_HOST      服务器地址（IP 或域名）
+#   DEPLOY_PORT      SSH 端口
+#   DEPLOY_USER      SSH 登录用户名
+#
+# 注意：本文件是公开仓库的一部分，绝不在此硬编码任何服务器信息，全部走 Secrets。
+
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: pip install -r requirements-build.txt
+
+      - name: Build static site
+        run: python build.py
+
+      - name: Deploy to server via rsync
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/id_deploy -p $DEPLOY_PORT -o StrictHostKeyChecking=accept-new" \
+            dist/ "$DEPLOY_USER@$DEPLOY_HOST:/var/www/value-investment/"

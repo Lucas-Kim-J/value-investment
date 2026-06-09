@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学习进度追踪 · 90/270/720</title>
+<style>
+:root {
+  --bg: #faf9f7; --bg-soft: #f3f1ec; --fg: #1a1a1a; --fg-soft: #3d3d3d;
+  --muted: #767676; --accent: #b45309; --accent-soft: rgba(180,83,9,0.08);
+  --good: #4d7c0f; --good-soft: rgba(77,124,15,0.10); --warn: #c0421a;
+  --border: #e5e2dc; --code-bg: #f0ede6;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #16161a; --bg-soft: #1f1f24; --fg: #f0eee8; --fg-soft: #cfcdc6;
+    --muted: #8b8b85; --accent: #f59e0b; --accent-soft: rgba(245,158,11,0.12);
+    --good: #a3e635; --good-soft: rgba(163,230,53,0.10); --warn: #fb7185;
+    --border: #2d2d33; --code-bg: #232328; }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.7; color: var(--fg); background: var(--bg); font-size: 15.5px;
+  -webkit-font-smoothing: antialiased; padding: 32px 24px;
+}
+.container { max-width: 880px; margin: 0 auto; }
+.nav { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+.nav a { color: var(--accent); border-bottom: 1px dotted var(--accent); text-decoration: none; }
+h1 { font-size: 32px; margin: 0 0 8px; letter-spacing: -0.01em; }
+.subtitle { color: var(--fg-soft); margin-bottom: 32px; }
+.meter-box { background: var(--bg-soft); padding: 18px 22px; border-radius: 8px; margin-bottom: 28px; border: 1px solid var(--border); }
+.meter-row { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; font-size: 14px; color: var(--fg-soft); }
+.bar { height: 10px; background: var(--bg); border-radius: 5px; overflow: hidden; margin-top: 4px; border: 1px solid var(--border); }
+.bar-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+.bar-fill.good { background: var(--good); }
+.phase { margin: 40px 0; padding: 20px 24px; background: var(--bg-soft); border-radius: 8px; border: 1px solid var(--border); }
+.phase-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; }
+.phase h2 { margin: 0; font-size: 20px; }
+.phase-meta { color: var(--muted); font-size: 13px; }
+.task-list { list-style: none; padding: 0; margin: 0; }
+.task-item { padding: 10px 0; border-bottom: 1px dashed var(--border); display: flex; align-items: flex-start; gap: 12px; }
+.task-item:last-child { border-bottom: none; }
+.task-item input[type="checkbox"] { margin-top: 4px; cursor: pointer; width: 16px; height: 16px; flex-shrink: 0; }
+.task-item label { flex: 1; cursor: pointer; color: var(--fg-soft); font-size: 14.5px; }
+.task-item input:checked + label { color: var(--muted); text-decoration: line-through; }
+.task-item .tag { display: inline-block; background: var(--bg); color: var(--muted); padding: 1px 8px; border-radius: 10px; font-size: 11.5px; border: 1px solid var(--border); margin-left: 6px; }
+.hours-tracker { background: var(--accent-soft); padding: 16px 20px; border-radius: 8px; margin: 24px 0; }
+.hours-tracker h3 { margin: 0 0 12px; font-size: 15px; color: var(--accent); }
+.hours-input { display: flex; gap: 12px; align-items: center; margin: 8px 0; }
+.hours-input label { font-size: 14px; min-width: 90px; color: var(--fg-soft); }
+.hours-input input[type="number"] { width: 70px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--fg); font-size: 14px; }
+.reset { color: var(--warn); cursor: pointer; font-size: 12px; background: none; border: none; padding: 4px 8px; }
+.reset:hover { text-decoration: underline; }
+.timestamp { color: var(--muted); font-size: 12px; margin-top: 16px; }
+.footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="nav"><a href="../index.html">← 方法论 v1.1</a> · <a href="../dashboard.html">Dashboard</a></div>
+  <h1>学习进度追踪</h1>
+  <p class="subtitle">90 / 270 / 720 天路径 · B 轨 (~10h/周) · 进度自动保存到本地浏览器（localStorage），换设备不同步。</p>
+
+  <div class="meter-box">
+    <div class="meter-row">
+      <span>总体进度</span>
+      <span id="totalPct">0%</span>
+    </div>
+    <div class="bar"><div class="bar-fill" id="totalBar" style="width: 0%"></div></div>
+    <div class="meter-row" style="margin-top: 16px;">
+      <span>Day 1-90（第一家公司 + Pabrai/Marks）</span>
+      <span id="p1Pct">0%</span>
+    </div>
+    <div class="bar"><div class="bar-fill" id="p1Bar" style="width: 0%"></div></div>
+    <div class="meter-row" style="margin-top: 12px;">
+      <span>Day 91-270（第二/三家 + 半自动化）</span>
+      <span id="p2Pct">0%</span>
+    </div>
+    <div class="bar"><div class="bar-fill" id="p2Bar" style="width: 0%"></div></div>
+    <div class="meter-row" style="margin-top: 12px;">
+      <span>Day 271-720（实战与体系化）</span>
+      <span id="p3Pct">0%</span>
+    </div>
+    <div class="bar"><div class="bar-fill" id="p3Bar" style="width: 0%"></div></div>
+  </div>
+
+  <div class="hours-tracker">
+    <h3>本周时间投入 (目标 10h+)</h3>
+    <div class="hours-input">
+      <label>本周实际</label>
+      <input type="number" id="weeklyActual" step="0.5" min="0" />
+      <span style="color: var(--fg-soft); font-size: 14px;">小时</span>
+    </div>
+    <div class="meter-row">
+      <span>本周完成率</span>
+      <span id="weeklyPct">0%</span>
+    </div>
+    <div class="bar"><div class="bar-fill" id="weeklyBar" style="width: 0%"></div></div>
+    <p style="font-size: 12px; color: var(--muted); margin: 12px 0 0;">每周日重置；如果连续 4 周低于 6h，考虑降到 A 轨（被动 + 卫星）。</p>
+  </div>
+
+  <div class="phase">
+    <div class="phase-header">
+      <h2>Phase 1 · Day 1-90</h2>
+      <span class="phase-meta">"跑通第一家公司"</span>
+    </div>
+    <ul class="task-list" data-phase="p1">
+      <li class="task-item"><input type="checkbox" id="t1-1"><label for="t1-1">读完 Marks 《The Most Important Thing》<span class="tag">~20h</span></label></li>
+      <li class="task-item"><input type="checkbox" id="t1-2"><label for="t1-2">读完 Pabrai 《The Dhandho Investor》<span class="tag">~10h</span></label></li>
+      <li class="task-item"><input type="checkbox" id="t1-3"><label for="t1-3">选定第一家公司（建议 Costco / Hermès / Apple / Visa）</label></li>
+      <li class="task-item"><input type="checkbox" id="t1-4"><label for="t1-4">读 5 年 10-K（每周 1 年）</label></li>
+      <li class="task-item"><input type="checkbox" id="t1-5"><label for="t1-5">读完 Oaktree Memos 精选 10 篇</label></li>
+      <li class="task-item"><input type="checkbox" id="t1-6"><label for="t1-6">完成第一家公司的"反向 DCF + EV/EBIT 历史百分位 + Owner Earnings Yield"估值</label></li>
+      <li class="task-item"><input type="checkbox" id="t1-7"><label for="t1-7">写 1500 字 thesis + 决策日志 + 退出条件</label></li>
+      <li class="task-item"><input type="checkbox" id="t1-8"><label for="t1-8">开 paper trading 账号（盈透 / 富途 / 老虎）</label></li>
+      <li class="task-item"><input type="checkbox" id="t1-9"><label for="t1-9">连续 4 周完成每日 journal + 周末复盘</label></li>
+      <li class="task-item"><input type="checkbox" id="t1-10"><label for="t1-10">读完 1 个失败案例（§7）+ 500 字归因笔记</label></li>
+      <li class="task-item"><input type="checkbox" id="t1-11"><label for="t1-11">读完 Buffett Partnership Letters 1957-1969</label></li>
+      <li class="task-item"><input type="checkbox" id="t1-12"><label for="t1-12">完成自我评估：是否进入 Phase 2 (写一段决定理由)</label></li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <div class="phase-header">
+      <h2>Phase 2 · Day 91-270</h2>
+      <span class="phase-meta">"第二/三家 + 半自动化"</span>
+    </div>
+    <ul class="task-list" data-phase="p2">
+      <li class="task-item"><input type="checkbox" id="t2-1"><label for="t2-1">选定第二家公司（A 股，建议消费 / 医药白马）</label></li>
+      <li class="task-item"><input type="checkbox" id="t2-2"><label for="t2-2">第二家公司完整 thesis + 估值</label></li>
+      <li class="task-item"><input type="checkbox" id="t2-3"><label for="t2-3">选定第三家公司（港股 / 新兴市场）</label></li>
+      <li class="task-item"><input type="checkbox" id="t2-4"><label for="t2-4">第三家公司完整 thesis + 估值</label></li>
+      <li class="task-item"><input type="checkbox" id="t2-5"><label for="t2-5">paper trading 实际下单（至少 3 笔）</label></li>
+      <li class="task-item"><input type="checkbox" id="t2-6"><label for="t2-6">搭建 M1 自动化早报 TG bot（akshare + yfinance + Claude）</label></li>
+      <li class="task-item"><input type="checkbox" id="t2-7"><label for="t2-7">搭建 M2 13F 监控（Dataroma diff）</label></li>
+      <li class="task-item"><input type="checkbox" id="t2-8"><label for="t2-8">读完 Oaktree Memos 精选 30 篇</label></li>
+      <li class="task-item"><input type="checkbox" id="t2-9"><label for="t2-9">读完 Munger《Poor Charlie's Almanack》</label></li>
+      <li class="task-item"><input type="checkbox" id="t2-10"><label for="t2-10">读完 Nomad Letters 2001-2014</label></li>
+      <li class="task-item"><input type="checkbox" id="t2-11"><label for="t2-11">读完 3 个失败案例 + 归因笔记</label></li>
+      <li class="task-item"><input type="checkbox" id="t2-12"><label for="t2-12">完成 6 次月度归因 + 行为日志统计</label></li>
+      <li class="task-item"><input type="checkbox" id="t2-13"><label for="t2-13">完成 2 次季度持仓重审</label></li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <div class="phase-header">
+      <h2>Phase 3 · Day 271-720</h2>
+      <span class="phase-meta">"实战与体系化"</span>
+    </div>
+    <ul class="task-list" data-phase="p3">
+      <li class="task-item"><input type="checkbox" id="t3-1"><label for="t3-1">真实资金（≤ 流动资产 20% 净资产）执行 5-10 只组合</label></li>
+      <li class="task-item"><input type="checkbox" id="t3-2"><label for="t3-2">经历至少 1 次 ≥ 20% 回撤 + 写心理日志归档</label></li>
+      <li class="task-item"><input type="checkbox" id="t3-3"><label for="t3-3">读完 Klarman《Margin of Safety》</label></li>
+      <li class="task-item"><input type="checkbox" id="t3-4"><label for="t3-4">读完 Marks《Mastering the Market Cycle》</label></li>
+      <li class="task-item"><input type="checkbox" id="t3-5"><label for="t3-5">读完段永平雪球历史精华 (2010-2018)</label></li>
+      <li class="task-item"><input type="checkbox" id="t3-6"><label for="t3-6">读完 6 个失败案例全部归因笔记</label></li>
+      <li class="task-item"><input type="checkbox" id="t3-7"><label for="t3-7">180 天后引入 DCF（用 Damodaran 工具书）</label></li>
+      <li class="task-item"><input type="checkbox" id="t3-8"><label for="t3-8">完成 18 次月度归因（含跑赢/跑输基准的解释）</label></li>
+      <li class="task-item"><input type="checkbox" id="t3-9"><label for="t3-9">完成 6 次季度持仓重审</label></li>
+      <li class="task-item"><input type="checkbox" id="t3-10"><label for="t3-10">写"我的投资体系 v2.0"（3000 字+）</label></li>
+      <li class="task-item"><input type="checkbox" id="t3-11"><label for="t3-11">完成 1 份失败复盘（自己的实际亏损案例）</label></li>
+      <li class="task-item"><input type="checkbox" id="t3-12"><label for="t3-12">通过自我评估：是否进入 C 轨 / 维持 B 轨 / 降到 A 轨</label></li>
+    </ul>
+  </div>
+
+  <div class="timestamp" id="timestamp">最后更新：—</div>
+
+  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px;">
+    <button class="reset" onclick="exportProgress()" style="color: var(--accent);">📥 导出进度 JSON</button>
+    <button class="reset" onclick="document.getElementById('importFile').click()" style="color: var(--accent);">📤 导入</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importProgress(event)">
+    <button class="reset" onclick="if(confirm('确认重置所有进度？此操作不可撤销，请先导出备份。')) { localStorage.clear(); location.reload(); }">重置全部进度</button>
+  </div>
+
+  <div class="footer">
+    <p><strong style="color: var(--warn);">⚠️ 数据备份：</strong>进度只在当前浏览器 localStorage——换设备 / 清缓存 / 隐私模式都会丢。<strong>每月 1 号导出一次 JSON 备份</strong>到 iCloud Drive / Google Drive。</p>
+    <p>追踪原则：诚实勾选。如果连续 2 周没有任何勾选，触发 <a href="../routine/circuit-breaker.md">circuit-breaker</a> Tier 1。</p>
+    <p>关联文件：<a href="../index.html">方法论 v1.1</a> · <a href="../dashboard.html">Dashboard</a> · <a href="../routine/daily-journal.md">每日 journal</a> · <a href="../routine/weekly-review.md">周复盘</a></p>
+  </div>
+</div>
+
+<script>
+function updateProgress() {
+  const phases = ['p1', 'p2', 'p3'];
+  let totalDone = 0, totalCount = 0;
+
+  phases.forEach(p => {
+    const list = document.querySelector(`[data-phase="${p}"]`);
+    if (!list) return;
+    const boxes = list.querySelectorAll('input[type="checkbox"]');
+    const done = Array.from(boxes).filter(b => b.checked).length;
+    const total = boxes.length;
+    const pct = total > 0 ? Math.round(done / total * 100) : 0;
+    document.getElementById(p + 'Pct').textContent = pct + '% (' + done + '/' + total + ')';
+    document.getElementById(p + 'Bar').style.width = pct + '%';
+    if (pct === 100) document.getElementById(p + 'Bar').classList.add('good');
+    totalDone += done;
+    totalCount += total;
+  });
+
+  const totalPct = totalCount > 0 ? Math.round(totalDone / totalCount * 100) : 0;
+  document.getElementById('totalPct').textContent = totalPct + '% (' + totalDone + '/' + totalCount + ')';
+  document.getElementById('totalBar').style.width = totalPct + '%';
+
+  document.getElementById('timestamp').textContent = '最后更新：' + new Date().toLocaleString('zh-CN');
+}
+
+function updateWeekly() {
+  const actual = parseFloat(document.getElementById('weeklyActual').value) || 0;
+  const target = 10;
+  const pct = Math.min(Math.round(actual / target * 100), 200);
+  document.getElementById('weeklyPct').textContent = pct + '% (' + actual + 'h / ' + target + 'h)';
+  document.getElementById('weeklyBar').style.width = Math.min(pct, 100) + '%';
+  if (pct >= 100) document.getElementById('weeklyBar').classList.add('good');
+  else document.getElementById('weeklyBar').classList.remove('good');
+  localStorage.setItem('weeklyActual', actual);
+}
+
+// Load and save state
+document.querySelectorAll('input[type="checkbox"]').forEach(box => {
+  const saved = localStorage.getItem('vi_' + box.id);
+  if (saved === '1') box.checked = true;
+  box.addEventListener('change', () => {
+    localStorage.setItem('vi_' + box.id, box.checked ? '1' : '0');
+    updateProgress();
+  });
+});
+
+const savedWeekly = localStorage.getItem('weeklyActual');
+if (savedWeekly) document.getElementById('weeklyActual').value = savedWeekly;
+document.getElementById('weeklyActual').addEventListener('input', updateWeekly);
+
+// Weekly auto-reset on Sunday
+const lastResetWeek = localStorage.getItem('lastResetWeek');
+const now = new Date();
+const currentWeek = Math.floor(now.getTime() / (7 * 24 * 60 * 60 * 1000));
+if (lastResetWeek && parseInt(lastResetWeek) < currentWeek && now.getDay() === 0) {
+  // Sunday after a new week boundary - prompt to record before reset
+  // For now, just record
+  localStorage.setItem('lastResetWeek', currentWeek);
+}
+
+function exportProgress() {
+  const data = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k.startsWith('vi_') || k === 'weeklyActual' || k === 'lastResetWeek') {
+      data[k] = localStorage.getItem(k);
+    }
+  }
+  const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), version: 'v1.1', data }, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `value-investment-progress-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importProgress(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      const data = parsed.data || parsed;
+      if (!confirm(`将覆盖当前进度，从 ${parsed.exportedAt || '未知时间'} 的备份恢复，继续？`)) return;
+      Object.keys(data).forEach(k => localStorage.setItem(k, data[k]));
+      location.reload();
+    } catch (err) {
+      alert('导入失败：JSON 格式错误。' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+updateProgress();
+updateWeekly();
+</script>
+</body>
+</html>

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>估值 4 工具 Cheatsheet</title>
+<style>
+:root { --bg: #faf9f7; --bg-soft: #f3f1ec; --fg: #1a1a1a; --fg-soft: #3d3d3d;
+  --muted: #767676; --accent: #b45309; --accent-soft: rgba(180,83,9,0.08);
+  --good: #4d7c0f; --good-soft: rgba(77,124,15,0.10); --warn: #c0421a; --warn-soft: rgba(220,80,40,0.08);
+  --border: #e5e2dc; --code-bg: #f0ede6; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #16161a; --bg-soft: #1f1f24; --fg: #f0eee8; --fg-soft: #cfcdc6;
+    --muted: #8b8b85; --accent: #f59e0b; --accent-soft: rgba(245,158,11,0.12);
+    --good: #a3e635; --good-soft: rgba(163,230,53,0.10); --warn: #fb7185; --warn-soft: rgba(251,113,133,0.12);
+    --border: #2d2d33; --code-bg: #232328; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.7; color: var(--fg); background: var(--bg); font-size: 15.5px; padding: 32px 24px; }
+.container { max-width: 880px; margin: 0 auto; }
+.nav { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+.nav a { color: var(--accent); border-bottom: 1px dotted var(--accent); text-decoration: none; }
+h1 { font-size: 32px; margin: 0 0 8px; letter-spacing: -0.01em; }
+.subtitle { color: var(--fg-soft); margin-bottom: 32px; }
+.warn-box { background: var(--warn-soft); border-left: 3px solid var(--warn); padding: 14px 18px; border-radius: 0 6px 6px 0; margin-bottom: 32px; }
+.warn-box strong { color: var(--warn); }
+.tool { background: var(--bg-soft); padding: 24px 28px; border-radius: 8px; margin: 24px 0; border: 1px solid var(--border); }
+.tool h2 { margin: 0 0 8px; font-size: 21px; }
+.tool-meta { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+.tool h3 { font-size: 14px; color: var(--accent); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.tool p, .tool ul { color: var(--fg-soft); margin: 6px 0; }
+.tool ul { padding-left: 22px; }
+.tool li { margin: 4px 0; }
+.formula { background: var(--code-bg); padding: 12px 16px; border-radius: 6px; font-family: "SF Mono", Menlo, monospace; font-size: 13.5px; color: var(--fg); margin: 12px 0; border-left: 3px solid var(--accent); white-space: pre-wrap; }
+.example { background: var(--good-soft); border-left: 3px solid var(--good); padding: 12px 18px; border-radius: 0 6px 6px 0; margin: 14px 0; }
+.example strong { color: var(--good); }
+.example p, .example li { color: var(--fg); }
+.signal-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.8px; }
+.signal-table th, .signal-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.signal-table th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; background: var(--bg); }
+.tag { display: inline-block; background: var(--bg); color: var(--muted); padding: 1px 8px; border-radius: 10px; font-size: 11.5px; margin-right: 6px; border: 1px solid var(--border); }
+.tag-good { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.tag-warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.checklist { background: var(--accent-soft); padding: 18px 22px; border-radius: 8px; margin-top: 32px; }
+.checklist h2 { margin: 0 0 12px; color: var(--accent); }
+.footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="nav"><a href="../index.html">← 方法论 v1.1</a> · <a href="../dashboard.html">Dashboard</a></div>
+  <h1>估值 4 工具 Cheatsheet</h1>
+  <p class="subtitle">前 180 天的默认工具栈。<strong>不算 DCF</strong>——避免用猜想数字制造虚假精度。</p>
+
+  <div class="warn-box">
+    <strong>核心原则：</strong> "If you need to be precise about the value to know it's cheap, it's not cheap enough." — Buffett 的精神。这 4 个工具的设计目标是<strong>三角验证 + 不假装精确</strong>。任何一个工具单独使用都会犯错；四个一起使用，错误大多会暴露。
+  </div>
+
+  <div class="tool">
+    <h2>① 反向 DCF</h2>
+    <p class="tool-meta">Reverse DCF · 把"算估值"翻转成"市场假设了什么"</p>
+
+    <h3>核心问题</h3>
+    <p>不要问"这家公司值多少"，而是问：<strong>"当前股价隐含的未来增长率是多少？这个增长率合理吗？"</strong></p>
+
+    <h3>怎么算（最简版）</h3>
+    <div class="formula">输入：
+  当前市值 (Market Cap)
+  当前自由现金流 (FCF, 取近 3 年平均)
+  折现率 r (建议 9-10%, 接近股权成本)
+  永续增长率 g_term (建议 2-3%, 与 GDP 长期增速)
+
+求解：高增长期增长率 g, 使得:
+  Σ FCF × (1+g)^t / (1+r)^t  +  Terminal Value / (1+r)^10  =  当前市值
+
+Excel 工具：用 Goal Seek 反向求 g</div>
+
+    <h3>解读</h3>
+    <ul>
+      <li><strong>隐含 g &lt; 行业 / GDP 增速</strong>：市场已经定价"长期低于平均"，可能便宜（但确认 thesis 没 broken）</li>
+      <li><strong>隐含 g ≈ 行业增速</strong>：市场假设平庸，需要你判断公司是"平庸+"还是"平庸"</li>
+      <li><strong>隐含 g &gt; 行业增速 2x</strong>：高 expectations，需要公司确实是 outlier</li>
+      <li><strong>隐含 g &gt; GDP 增速 5x 持续 10 年</strong>：几乎不可能持久，是泡沫信号</li>
+    </ul>
+
+    <div class="example">
+      <strong>例：Costco (2026 假设)</strong>
+      <p>市值 $400B / FCF $7B / 10 年高增长 + 永续 2.5% / r=9%</p>
+      <p>Goal Seek → 隐含 g ≈ 12-13% × 10 年。Costco 历史 revenue 增速 ~8-10%, FCF 增速 ~10-12%。</p>
+      <p><strong>结论：</strong>市场假设 Costco 持续历史峰值表现。<em>不便宜</em>，但也不疯狂。是否买入取决于护城河确信度。</p>
+    </div>
+  </div>
+
+  <div class="tool">
+    <h2>② 历史 P/E 百分位</h2>
+    <p class="tool-meta">Historical P/E percentile · 用公司自己的历史做相对锚</p>
+
+    <h3>核心问题</h3>
+    <p>当前 P/E 处于这家公司过去 10 年的<strong>第几分位</strong>？</p>
+
+    <h3>怎么算</h3>
+    <div class="formula">1. 拉取过去 10 年（120 个月）的月度 P/E 数据
+2. 找出当前 P/E 在分布中的位置
+3. 表达为百分位：例如 "当前 25%" = 历史 75% 的时间比现在更贵
+
+工具：
+  TIKR / Koyfin / Stockanalysis 都有 historical P/E chart
+  AKShare: ak.stock_a_indicator_lg(symbol="600519")</div>
+
+    <h3>解读</h3>
+    <table class="signal-table">
+      <thead><tr><th>百分位</th><th>信号</th><th>动作</th></tr></thead>
+      <tbody>
+        <tr><td>0-25%</td><td>历史最便宜区间</td><td><span class="tag tag-good">深度研究 thesis</span></td></tr>
+        <tr><td>25-50%</td><td>偏便宜</td><td>值得看，但不急</td></tr>
+        <tr><td>50-75%</td><td>偏贵</td><td>需要 thesis 解释为何更贵</td></tr>
+        <tr><td>75-100%</td><td>历史最贵区间</td><td><span class="tag tag-warn">谨慎，除非公司有质变</span></td></tr>
+      </tbody>
+    </table>
+
+    <h3>陷阱</h3>
+    <ul>
+      <li><strong>周期股</strong>：低 P/E 可能是周期顶（EPS 即将腰斩），高 P/E 可能是周期底。配合 EBIT 历史百分位</li>
+      <li><strong>盈利质量恶化</strong>：P/E 看起来低是因为 E 已经是僵尸；配合 §4 的 FCF / Owner Earnings 检查</li>
+      <li><strong>10 年不够</strong>：覆盖 1-2 个周期，理想 20 年但很多公司没有这么长历史</li>
+    </ul>
+  </div>
+
+  <div class="tool">
+    <h2>③ EV/EBIT 同行对比</h2>
+    <p class="tool-meta">EV/EBIT vs peers · 跨资本结构 / 折旧政策的公允比较</p>
+
+    <h3>核心问题</h3>
+    <p>这家公司的 EV/EBIT 在同行里的位置？质量是不是匹配价格？</p>
+
+    <h3>为什么用 EV/EBIT 而不是 P/E</h3>
+    <ul>
+      <li>P/E 被资本结构影响（一家高杠杆 / 低杠杆公司不可直接比）</li>
+      <li>EV/EBIT 把债务加进分子、把利息加回分母 → 一视同仁</li>
+      <li>比 EV/EBITDA 更保守（不忽略 D&amp;A，这是 Munger 强调的）</li>
+    </ul>
+
+    <h3>怎么做</h3>
+    <div class="formula">1. 列出 5-8 个最相关的同行（同业务模式、同规模量级）
+2. 算每家的 EV/EBIT (TTM 或 NTM)
+3. 同时记录：ROIC / 营收增速 / 毛利率 / 净负债率
+4. 画一张表：估值便宜 ≠ 候选；估值便宜 + 质量更好 = 候选
+
+判定：<strong>同行最便宜 30% + ROIC 不输平均</strong> = 进入深度研究</div>
+
+    <div class="example">
+      <strong>例：H&amp;M vs 同行（2026 假设）</strong>
+      <p>同行：Inditex (Zara) / Fast Retailing (Uniqlo) / Gap / Next / Hennes</p>
+      <p>EV/EBIT: H&amp;M 9x · Inditex 18x · Fast Retailing 22x · Gap 7x · Next 13x</p>
+      <p>ROIC: H&amp;M 12% · Inditex 28% · Fast 18% · Gap 8% · Next 22%</p>
+      <p><strong>结论：</strong> H&amp;M 便宜 (9x) 但 ROIC 也偏低 (12%)，是"便宜但平庸"。Gap 更便宜 + ROIC 更差。Inditex 贵但质量碾压。<em>都不是 obvious 候选</em>，除非有特定的 turnaround thesis。</p>
+    </div>
+  </div>
+
+  <div class="tool">
+    <h2>④ Owner Earnings Yield vs 10Y</h2>
+    <p class="tool-meta">最接近 Buffett 原义的"现金回报率"</p>
+
+    <h3>核心问题</h3>
+    <p>把这家公司当债券看：它每年给你的"实际可分配现金回报率"vs 10 年美债，差额有多大？</p>
+
+    <h3>怎么算</h3>
+    <div class="formula">Owner Earnings = 净利润 + 折旧摊销 - 维持性 Capex - 营运资金变化
+
+  其中"维持性 Capex"是难点：
+    保守估法：总 Capex × (折旧 / 总 Capex 历史比) → 即折旧本身近似
+    或：用 5 年滚动平均 Capex
+
+Owner Earnings Yield = Owner Earnings / EV   (用 EV 而非 Market Cap, 跨资本结构可比)
+
+对比锚：当前 10 年美债收益率 (US 10Y Treasury)</div>
+
+    <h3>解读</h3>
+    <table class="signal-table">
+      <thead><tr><th>差额 (OE Yield - 10Y)</th><th>信号</th></tr></thead>
+      <tbody>
+        <tr><td>&gt; +6%</td><td><span class="tag tag-good">显著便宜，深度研究</span></td></tr>
+        <tr><td>+4% ~ +6%</td><td>合理 hurdle，可以买</td></tr>
+        <tr><td>+2% ~ +4%</td><td>需要公司有持续增长才划算</td></tr>
+        <tr><td>0% ~ +2%</td><td>除非 growth story 极强否则不如买债</td></tr>
+        <tr><td>&lt; 0%</td><td><span class="tag tag-warn">市场假设极高增长，泡沫信号</span></td></tr>
+      </tbody>
+    </table>
+
+    <h3>注意</h3>
+    <ul>
+      <li>高增长公司 OE Yield 看起来低是正常的 —— 关键是 5 年后这个比率会到多少</li>
+      <li>周期股用平均周期的 OE，不要用顶部</li>
+      <li>金融股不适用（重资本 / 复杂的 capex 概念），改用 ROE / P/B 框架</li>
+    </ul>
+  </div>
+
+  <div class="checklist">
+    <h2>三角验证 + Pabrai 决策清单</h2>
+    <p>4 个工具跑完后，最后一步：</p>
+
+    <h3>三角验证</h3>
+    <ul>
+      <li>4 个工具至少 3 个给出"便宜"信号才进入深度研究</li>
+      <li>任何 1 个给出"贵"信号必须有解释为什么这个工具在此场景失效</li>
+      <li>都给"中性"也是信号——大概率不是好机会</li>
+    </ul>
+
+    <h3>Pabrai 3 问（再问一次）</h3>
+    <ol>
+      <li><strong>最坏情况我亏多少？</strong>（不是百分比，是具体金额）</li>
+      <li><strong>我能心理 + 财务上承受这个金额吗？</strong>（是 / 否）</li>
+      <li><strong>如果对了，赔率至少 2:1 吗？</strong>（潜在涨 / 潜在亏）</li>
+    </ol>
+    <p>三个 yes 才下注。三个里有任何一个 no 或不确定 → 不下注，watchlist 继续观察。</p>
+  </div>
+
+  <div class="footer">
+    <p><strong>更新触发</strong>：每季度持仓重审时把 4 个工具刷新一次。</p>
+    <p><strong>180 天后</strong>：引入完整 DCF（Damodaran 工具书），但这 4 个工具仍是 sanity check。</p>
+    <p>本 cheatsheet v1.1 · 关联 <a href="../index.html#valuation">方法论 §3 估值工具</a></p>
+  </div>
+</div>
+</body>
+</html>

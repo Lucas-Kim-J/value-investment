@@ -1,0 +1,32 @@
+# Copy to config.yaml and customize. Do NOT commit config.yaml to git.
+
+# 美股持仓（实盘 + paper trading）
+us_holdings:
+  - COST    # Costco（如果是你的第一家研究公司）
+  # - AAPL
+  # - V
+
+# 美股 watchlist（在深度研究 / 观察中）
+us_watchlist:
+  - HRMS.PA   # Hermès
+  # - BRK-B
+  # - NTDOY
+
+# A 股持仓（akshare 格式：sh / sz + 6 位代码）
+a_share_holdings:
+  # - sh600519    # 贵州茅台
+  # - sz000858    # 五粮液
+  []
+
+# A 股 watchlist
+a_share_watchlist:
+  []
+
+# 给 Claude 摘要的方法论 context（可选）
+# 引用你方法论里的关键原则，让 Claude 反馈更对齐你的框架
+methodology_context: |
+  我是 B 轨学习者，~10h/周。
+  起点流派：Pabrai + Marks。
+  前 180 天禁用 DCF，用反向 DCF + 历史 P/E 百分位 + EV/EBIT + Owner Earnings Yield。
+  加密占比 ≤ 5% 净资产，定位非对称配置非价值投资。
+  当前 phase：Phase 1（Day 1-90），第一家公司是 Costco。

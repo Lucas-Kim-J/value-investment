@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>失败案例研究</title>
+<style>
+:root { --bg: #faf9f7; --bg-soft: #f3f1ec; --fg: #1a1a1a; --fg-soft: #3d3d3d;
+  --muted: #767676; --accent: #b45309; --accent-soft: rgba(180,83,9,0.08);
+  --warn: #c0421a; --warn-soft: rgba(220,80,40,0.08); --border: #e5e2dc; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #16161a; --bg-soft: #1f1f24; --fg: #f0eee8; --fg-soft: #cfcdc6;
+    --muted: #8b8b85; --accent: #f59e0b; --accent-soft: rgba(245,158,11,0.12);
+    --warn: #fb7185; --warn-soft: rgba(251,113,133,0.12); --border: #2d2d33; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.7; color: var(--fg); background: var(--bg); font-size: 15.5px; padding: 32px 24px; }
+.container { max-width: 880px; margin: 0 auto; }
+.nav { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+.nav a { color: var(--accent); border-bottom: 1px dotted var(--accent); text-decoration: none; }
+h1 { font-size: 32px; margin: 0 0 8px; letter-spacing: -0.01em; }
+.subtitle { color: var(--fg-soft); margin-bottom: 32px; }
+.intro { background: var(--warn-soft); border-left: 3px solid var(--warn); padding: 16px 20px; border-radius: 0 6px 6px 0; margin-bottom: 32px; }
+.intro strong { color: var(--warn); }
+.case { background: var(--bg-soft); padding: 22px 26px; border-radius: 8px; margin: 28px 0; border: 1px solid var(--border); }
+.case-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+.case h2 { margin: 0; font-size: 21px; color: var(--fg); }
+.case-meta { color: var(--muted); font-size: 13px; }
+.case-tag { display: inline-block; background: var(--accent-soft); color: var(--accent); padding: 2px 10px; border-radius: 12px; font-size: 12px; margin-right: 6px; }
+.tag-warn { background: var(--warn-soft); color: var(--warn); }
+.case-section { margin: 14px 0; }
+.case-section h3 { font-size: 14px; color: var(--accent); margin: 12px 0 6px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.case-section p, .case-section ul { color: var(--fg-soft); margin: 6px 0; }
+.case-section ul { padding-left: 22px; }
+.case-section li { margin: 4px 0; }
+.questions { background: var(--bg); padding: 14px 18px; border-radius: 6px; border: 1px dashed var(--border); margin-top: 14px; }
+.questions h3 { color: var(--accent); }
+.questions ol { padding-left: 22px; color: var(--fg-soft); }
+.notes-input { width: 100%; margin-top: 10px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--fg); font-family: inherit; font-size: 13.5px; min-height: 100px; resize: vertical; }
+.notes-label { font-size: 13px; color: var(--muted); margin-top: 12px; display: block; }
+.check-done { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 14px; color: var(--fg-soft); }
+.footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="nav"><a href="../index.html">← 方法论 v1.1</a> · <a href="../dashboard.html">Dashboard</a> · <a href="canon-reading.html">经典文本</a></div>
+  <h1>失败案例研究</h1>
+  <p class="subtitle">"不读失败者的方法论永远是宣传册。"</p>
+
+  <div class="intro">
+    <strong>使用方式：</strong>每月研究 1 个案例，写 500 字归因笔记保存到本地。重点不是"哀悼"，而是回答：<strong>"如果我当时持有，决策点在哪？" + "这个教训如何修改我的清单？"</strong>
+  </div>
+
+  <div class="case">
+    <div class="case-header">
+      <h2>1. Bill Miller</h2>
+      <span class="case-meta">Legg Mason Value Trust · 2008</span>
+    </div>
+    <div><span class="case-tag">长期 outperformer 的尾部风险</span> <span class="case-tag">价值陷阱</span> <span class="case-tag tag-warn">不肯认错</span></div>
+
+    <div class="case-section">
+      <h3>背景</h3>
+      <p>Bill Miller 在 Legg Mason Value Trust 连续 15 年（1991-2005）跑赢 S&amp;P 500——史无前例的记录。被誉为"巴菲特之后最伟大的价值投资者"。然后 2008 年金融危机基金净值几乎归零，2011 年被迫卸任。</p>
+    </div>
+
+    <div class="case-section">
+      <h3>关键事实</h3>
+      <ul>
+        <li>2007-2008 在金融股上反复 averaging down：Bear Stearns、Freddie Mac、AIG、Citigroup、Countrywide、Wachovia</li>
+        <li>使用杠杆放大头寸</li>
+        <li>2008 Q1 公开 letter 仍坚持"这些是几代人一遇的便宜价格"</li>
+        <li>基金 2008 年回撤 -55% vs S&amp;P -37%</li>
+      </ul>
+    </div>
+
+    <div class="case-section">
+      <h3>归因</h3>
+      <ul>
+        <li><strong>承诺一致性偏差</strong>：长期 track record 让他无法承认"这次不一样"</li>
+        <li><strong>价值陷阱</strong>：低 P/B 银行股的"账面价值"已是僵尸资产</li>
+        <li><strong>杠杆放大</strong>：错误的 thesis 加上杠杆 = 致命</li>
+        <li><strong>本质问题</strong>：基金经理的连续胜率天然 hide 了"尾部风险"</li>
+      </ul>
+    </div>
+
+    <div class="questions">
+      <h3>研究问题（写 500 字回答）</h3>
+      <ol>
+        <li>2007 年我如果是 Miller 的 LP，看哪 3 个信号应该撤资？</li>
+        <li>"averaging down" 在什么前提下是对的，什么前提下是灾难？</li>
+        <li>这个案例如何修改你"克隆大佬持仓"的规则？</li>
+        <li>对你自己的 thesis discipline 有什么 SOP 修改建议？</li>
+      </ol>
+    </div>
+
+    <div class="check-done">
+      <input type="checkbox" id="c1-done" />
+      <label for="c1-done">已完成研究 + 500 字归因笔记</label>
+    </div>
+    <textarea class="notes-input" placeholder="把 500 字归因笔记粘到这里..." data-key="c1-notes"></textarea>
+  </div>
+
+  <div class="case">
+    <div class="case-header">
+      <h2>2. David Einhorn (Greenlight Capital)</h2>
+      <span class="case-meta">2015 至今的结构性跑输</span>
+    </div>
+    <div><span class="case-tag">结构性看空</span> <span class="case-tag">风格失衡</span> <span class="case-tag tag-warn">深度价值在成长股时代</span></div>
+
+    <div class="case-section">
+      <h3>背景</h3>
+      <p>Einhorn 是 2008 年最准确预测 Lehman 倒闭的人之一。2015 年后 Greenlight 持续跑输 S&amp;P 500：累计回报远逊大盘，AUM 从峰值 ~$12B 萎缩至 ~$2B。<strong>这一条直接挑战 v1.0 "必追 Greenlight letters" 的建议。</strong></p>
+    </div>
+
+    <div class="case-section">
+      <h3>关键事实</h3>
+      <ul>
+        <li>持续看空 Tesla / Netflix / Amazon 等"泡沫"成长股 — 都涨上天</li>
+        <li>持续看多深度价值（Athens / GM 等）— 长期跑不动</li>
+        <li>2018 letter 公开承认"价值已死"的市场状态</li>
+        <li>近年回归深度价值（如能源、煤炭）有部分修复</li>
+      </ul>
+    </div>
+
+    <div class="case-section">
+      <h3>归因</h3>
+      <ul>
+        <li><strong>风格漂移的反面</strong>：他过度坚持深度价值，在 QE + 成长股时代 10 年</li>
+        <li><strong>"对的逻辑、错的时代"</strong>：估值最终回归是对的，但"最终"是 5 年还是 50 年差异巨大</li>
+        <li><strong>对你的启示</strong>：如果你跟着 letter 抄作业，你也会被困在跑输 10 年的资金里</li>
+      </ul>
+    </div>
+
+    <div class="questions">
+      <h3>研究问题</h3>
+      <ol>
+        <li>"价值投资者跑输 10 年" 是 thesis 错还是市场异常？</li>
+        <li>如果一位有 30 年记录的大佬开始连续 5 年跑输，你应该停止追随还是加大信心？</li>
+        <li>这个案例如何修改你阅读 fund letters 的方式？</li>
+        <li>你的方法论 v2 应该如何防止"风格僵化"？</li>
+      </ol>
+    </div>
+
+    <div class="check-done">
+      <input type="checkbox" id="c2-done" />
+      <label for="c2-done">已完成研究 + 500 字归因笔记</label>
+    </div>
+    <textarea class="notes-input" placeholder="..." data-key="c2-notes"></textarea>
+  </div>
+
+  <div class="case">
+    <div class="case-header">
+      <h2>3. Eddie Lampert &amp; Sears</h2>
+      <span class="case-meta">2003-2018</span>
+    </div>
+    <div><span class="case-tag">价值投资者跨界 CEO</span> <span class="case-tag">企业再造 ≠ 投资</span> <span class="case-tag tag-warn">沉没成本</span></div>
+
+    <div class="case-section">
+      <h3>背景</h3>
+      <p>Eddie Lampert 是 ESL Investments 的传奇 hedge fund manager。2003 年用价值投资框架"抄底" Kmart，2005 年合并 Sears。然后亲自接管 CEO 试图"复兴" Sears + Kmart 帝国。15 年后，2018 年 Sears 申请破产。</p>
+    </div>
+
+    <div class="case-section">
+      <h3>关键事实</h3>
+      <ul>
+        <li>初始 thesis：Sears 房地产价值远高于市值（"清算价值"框架）</li>
+        <li>Lampert 接 CEO 后用价值投资的"资本配置"思路：拒绝投资门店、削减成本、回购股票</li>
+        <li>结果：门店持续衰败，员工流失，库存腐烂，与 Amazon / Walmart 差距越拉越大</li>
+        <li>Lampert 自己持有大量 Sears 股权 + 债权，最终归零数十亿美元个人净值</li>
+      </ul>
+    </div>
+
+    <div class="case-section">
+      <h3>归因</h3>
+      <ul>
+        <li><strong>静态资产 vs 动态生意</strong>：房地产值钱不等于 Sears 这门生意还能赚钱</li>
+        <li><strong>价值投资框架的边界</strong>：买股票 ≠ 经营企业</li>
+        <li><strong>CEO 跨界陷阱</strong>：基金经理用资本配置思路管运营 = 灾难</li>
+        <li><strong>沉没成本谬误</strong>：Lampert 持续注资是为了避免承认初始 thesis 错误</li>
+      </ul>
+    </div>
+
+    <div class="questions">
+      <h3>研究问题</h3>
+      <ol>
+        <li>"清算价值" 估值在什么场景有效，什么场景是陷阱？</li>
+        <li>"Activist investor" 模式何时有效？（对比 Ackman 的 Chipotle 复苏）</li>
+        <li>这个案例如何修改你看"低 P/B"的视角？</li>
+        <li>你的 SOP 如何防止"沉没成本"驱动的加仓？</li>
+      </ol>
+    </div>
+
+    <div class="check-done">
+      <input type="checkbox" id="c3-done" />
+      <label for="c3-done">已完成研究 + 500 字归因笔记</label>
+    </div>
+    <textarea class="notes-input" placeholder="..." data-key="c3-notes"></textarea>
+  </div>
+
+  <div class="case">
+    <div class="case-header">
+      <h2>4. 中国明星私募的销声匿迹</h2>
+      <span class="case-meta">王亚伟时代后的多位</span>
+    </div>
+    <div><span class="case-tag">survivorship bias 教育</span> <span class="case-tag">被神化时刚好是高点</span></div>
+
+    <div class="case-section">
+      <h3>背景</h3>
+      <p>2007-2015 中国市场涌现一批"明星基金经理 / 私募大佬"：王亚伟（华夏大盘）、徐翔（泽熙投资）、林利军（汇添富）、王茹远等。被中文金融媒体反复报道，被散户当"中国巴菲特"追捧。15 年后大多归零或销声匿迹。</p>
+    </div>
+
+    <div class="case-section">
+      <h3>具体案例</h3>
+      <ul>
+        <li><strong>徐翔</strong>：2015 年因操纵市场被捕，"宁波涨停板敢死队"代名词</li>
+        <li><strong>王亚伟</strong>：2012 年转私募，千合资本表现远不及预期</li>
+        <li><strong>2015 牛市顶部</strong>：多家"私募冠军"次年腰斩，三年消失</li>
+        <li><strong>近年</strong>：但斌、林园、冯柳等"价值派"业绩持续承压（见 v1.1 §12）</li>
+      </ul>
+    </div>
+
+    <div class="case-section">
+      <h3>归因</h3>
+      <ul>
+        <li><strong>幸存者偏差</strong>：媒体只报道"上榜"的，没人统计"过去 5 年明星里幸存几个"</li>
+        <li><strong>风格周期</strong>：某种风格在某个时段碾压市场，正好被神化</li>
+        <li><strong>规模诅咒</strong>：明星化后 AUM 暴涨，反过来限制策略容量</li>
+        <li><strong>媒体放大</strong>：中文金融媒体的叙事偏好"神话"而非"长期复合"</li>
+      </ul>
+    </div>
+
+    <div class="questions">
+      <h3>研究问题</h3>
+      <ol>
+        <li>过去 10 年还在持续 outperform 的中国基金经理有几个？（自己查证而不是听媒体）</li>
+        <li>"明星化" 的 3 个预警信号是什么？</li>
+        <li>当下被神化的中国基金经理是谁？10 年后大概率结局？</li>
+        <li>你的方法论如何区分"周期性 outperformer" vs "长期 outperformer"？</li>
+      </ol>
+    </div>
+
+    <div class="check-done">
+      <input type="checkbox" id="c4-done" />
+      <label for="c4-done">已完成研究 + 500 字归因笔记</label>
+    </div>
+    <textarea class="notes-input" placeholder="..." data-key="c4-notes"></textarea>
+  </div>
+
+  <div class="case">
+    <div class="case-header">
+      <h2>5. LUNA / Terra</h2>
+      <span class="case-meta">Do Kwon · 2022 年 5 月崩盘</span>
+    </div>
+    <div><span class="case-tag tag-warn">价值投资框架在加密的失灵</span> <span class="case-tag">算法稳定币</span> <span class="case-tag">庞氏</span></div>
+
+    <div class="case-section">
+      <h3>背景</h3>
+      <p>Terra (LUNA) 是市值曾达 $40B+ 的 L1 公链 + 算法稳定币 (UST) 系统。2022 年 5 月一周内系统性崩盘，LUNA 从 $80 跌至接近 0，UST 脱锚归零。<strong>它是"基本面看似良好的庞氏"，从价值投资视角难以识别。</strong></p>
+    </div>
+
+    <div class="case-section">
+      <h3>关键事实</h3>
+      <ul>
+        <li>UST 通过"焚毁 LUNA 维持 1 美元锚定"的算法机制——理论自洽但脆弱</li>
+        <li>Anchor Protocol 提供 UST 20% 年化收益，吸引数百亿存款</li>
+        <li>Token Terminal 上 Terra 协议收入数据"看起来不错"</li>
+        <li>5 月 7-12 日：大额 UST 被抛售 → 死亡螺旋 → 一周归零</li>
+        <li>多家"机构级" VC 和加密基金重仓 LUNA：Three Arrows Capital 因此破产引爆连环</li>
+      </ul>
+    </div>
+
+    <div class="case-section">
+      <h3>归因</h3>
+      <ul>
+        <li><strong>价值投资框架的失灵</strong>：协议收入数据 ≠ 持久现金流</li>
+        <li><strong>循环 token 经济</strong>：LUNA-UST 是相互背书的循环，本质庞氏</li>
+        <li><strong>"机构背书"在加密里近乎为零</strong>：Sequoia / Jump / 3AC 都重仓</li>
+        <li><strong>20% 收益率本身就是警告</strong>：无风险高收益不存在</li>
+      </ul>
+    </div>
+
+    <div class="questions">
+      <h3>研究问题</h3>
+      <ol>
+        <li>用 v1.1 的"加密非对称配置 + 5% 仓位上限"框架，你是否会被 LUNA 套住？</li>
+        <li>"协议收入"在加密里是不是有效的估值锚？哪些情况下是，哪些不是？</li>
+        <li>如何识别"循环 token 经济"的庞氏结构？</li>
+        <li>未来还可能出现类似的"基本面看似良好的加密庞氏"吗？早期信号？</li>
+      </ol>
+    </div>
+
+    <div class="check-done">
+      <input type="checkbox" id="c5-done" />
+      <label for="c5-done">已完成研究 + 500 字归因笔记</label>
+    </div>
+    <textarea class="notes-input" placeholder="..." data-key="c5-notes"></textarea>
+  </div>
+
+  <div class="case">
+    <div class="case-header">
+      <h2>6. FTX / SBF</h2>
+      <span class="case-meta">Sam Bankman-Fried · 2022 年 11 月崩盘</span>
+    </div>
+    <div><span class="case-tag tag-warn">"机构治理"在加密里近乎为零</span> <span class="case-tag">名人背书的失灵</span></div>
+
+    <div class="case-section">
+      <h3>背景</h3>
+      <p>FTX 是估值曾达 $32B 的加密交易所，被 Sequoia / BlackRock / Tiger / Temasek / Ontario Teachers' Pension Plan 等顶级机构投资。SBF 是"加密圈的 Buffett"——上 Time 封面、在国会作证。2022 年 11 月一个月内崩盘，SBF 被起诉欺诈定罪。</p>
+    </div>
+
+    <div class="case-section">
+      <h3>关键事实</h3>
+      <ul>
+        <li>FTX 客户存款被秘密转移到关联公司 Alameda Research 做投机</li>
+        <li>FTT (FTX 平台币) 在 Alameda 资产负债表上虚增 SBF 净资产</li>
+        <li>CZ (Binance) 公开抛售 FTT → 挤兑 → 一周破产</li>
+        <li>所有顶级机构 due diligence 都没发现这个明显的欺诈</li>
+        <li>SBF 被判 25 年监禁</li>
+      </ul>
+    </div>
+
+    <div class="case-section">
+      <h3>归因</h3>
+      <ul>
+        <li><strong>"机构治理"在加密的失灵</strong>：传统 DD 标准不适用</li>
+        <li><strong>名人 + 媒体 + 政治影响力背书的失灵</strong>：SBF 的"光环"是表演</li>
+        <li><strong>VC 的 FOMO</strong>：错过 FTX 比投错更可怕，所以谁都没认真 DD</li>
+        <li><strong>加密交易所的根本问题</strong>：托管 + 自营 + 平台币的利益冲突</li>
+      </ul>
+    </div>
+
+    <div class="questions">
+      <h3>研究问题</h3>
+      <ol>
+        <li>"机构投资了 → 我也可以投"在加密圈适用吗？为什么？</li>
+        <li>FTX 是否有可识别的早期红旗？（如：自有 token + 关联交易所）</li>
+        <li>未来你在加密交易所放钱的原则？（v1.1 应该补充哪条）</li>
+        <li>这个案例如何修改你"信任名人 / 媒体背书"的算法？</li>
+      </ol>
+    </div>
+
+    <div class="check-done">
+      <input type="checkbox" id="c6-done" />
+      <label for="c6-done">已完成研究 + 500 字归因笔记</label>
+    </div>
+    <textarea class="notes-input" placeholder="..." data-key="c6-notes"></textarea>
+  </div>
+
+  <div class="footer">
+    <p><strong>研究节奏</strong>：每月 1 个，Phase 1 完成 1 个，Phase 2 完成 3 个，Phase 3 完成 6 个全部。</p>
+    <p><strong>研究产出</strong>：每个 500 字归因笔记 → 提炼 1-3 条 SOP 修订建议 → 季度汇总到方法论 v(x+1)</p>
+    <p>本清单 v1.1 · 关联 <a href="../index.html#failures">方法论 §7 失败案例研究</a></p>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('input[type="checkbox"]').forEach(box => {
+  const saved = localStorage.getItem('fail_' + box.id);
+  if (saved === '1') box.checked = true;
+  box.addEventListener('change', () => {
+    localStorage.setItem('fail_' + box.id, box.checked ? '1' : '0');
+  });
+});
+
+document.querySelectorAll('.notes-input').forEach(input => {
+  const key = input.dataset.key;
+  const saved = localStorage.getItem('fail_' + key);
+  if (saved) input.value = saved;
+  input.addEventListener('input', () => {
+    localStorage.setItem('fail_' + key, input.value);
+  });
+});
+</script>
+</body>
+</html>
