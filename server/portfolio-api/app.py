@@ -18,6 +18,7 @@ import datetime
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -85,14 +86,31 @@ def _load(user: str) -> dict:
     return {"holdings": [], "updated_at": None}
 
 
+def _backup(path: Path, prefix: str) -> None:
+    """Keep a timestamped copy before overwriting, so data is never silently lost.
+    Retains the newest 50 backups per prefix."""
+    try:
+        bdir = DATA_DIR / "backups"
+        bdir.mkdir(exist_ok=True)
+        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
+        shutil.copy2(path, bdir / f"{prefix}-{ts}.json")
+        for old in sorted(bdir.glob(f"{prefix}-*.json"))[:-50]:
+            old.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
 def _save(user: str, data: dict) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    f = _user_file(user)
+    if f.exists():
+        _backup(f, f"holdings-{_safe(user)}")
     tmp = tempfile.NamedTemporaryFile("w", dir=DATA_DIR, delete=False, encoding="utf-8")
     json.dump(data, tmp, ensure_ascii=False, indent=2)
     tmp.flush()
     os.fsync(tmp.fileno())
     tmp.close()
-    os.replace(tmp.name, _user_file(user))
+    os.replace(tmp.name, f)
 
 
 def _current_user() -> str | None:
