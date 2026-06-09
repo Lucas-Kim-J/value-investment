@@ -1,5 +1,9 @@
 # Copy to config.yaml and customize. Do NOT commit config.yaml to git.
 
+# 推送目标（飞书）。在服务器上运行 `hermes send --list` 查看可用目标。
+# 'feishu' = home channel（默认私聊）；也可写成 'feishu:oc_xxxxxxxx'
+feishu_target: feishu
+
 # 美股持仓（实盘 + paper trading）
 us_holdings:
   - COST    # Costco（如果是你的第一家研究公司）

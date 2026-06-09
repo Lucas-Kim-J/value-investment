@@ -143,7 +143,7 @@ ex-ante = "事前"（决策时的预测）；ex-post = "事后"（结果出来�
 ## 自动化
 
 **M1 / M2 / M3**
-方法论 §17 的自动化分阶段：M1 = 每日早报 TG bot；M2 = 13F 监控；M3 = 财报日历 + 季报 highlight。
+方法论 §17 的自动化分阶段：M1 = 每日早报飞书 bot（hermes send → 飞书）；M2 = 13F 监控；M3 = 财报日历 + 季报 highlight。
 
 **RAG (Retrieval-Augmented Generation)**
 向量化文档让 LLM 做问答。**v1.1 砍掉**——小用户的 thesis 涉及 5-20 家公司，直接读 10-K 反而能建立段落记忆。

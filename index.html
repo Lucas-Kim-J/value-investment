@@ -475,7 +475,7 @@ Thesis 一句话：
       <thead><tr><th>时间</th><th>动作</th></tr></thead>
       <tbody>
         <tr><td><span class="routine-time">5 min</span></td><td>雪球 App / 东方财富看 A 股集合竞价 + 北向资金（仅 09:15-09:30 时段）</td></tr>
-        <tr><td><span class="routine-time">5 min</span></td><td>看自动推送的美股隔夜收盘 + 持仓异动（Telegram bot，见 §17）</td></tr>
+        <tr><td><span class="routine-time">5 min</span></td><td>看自动推送的美股隔夜收盘 + 持仓异动（飞书推送，见 §17）</td></tr>
         <tr><td><span class="routine-time">5 min</span></td><td>Journal 三句话：昨日动作 / 今日 thesis 是否变化 / 风险点</td></tr>
       </tbody>
     </table>
@@ -548,8 +548,8 @@ Thesis 一句话：
     <table>
       <thead><tr><th>月</th><th>目标</th><th>组件</th></tr></thead>
       <tbody>
-        <tr><td>M1</td><td>每日早报 TG bot</td><td><code>akshare</code> + <code>yfinance</code> + <code>edgartools</code> + Claude 摘要 + <code>python-telegram-bot</code>，GitHub Actions cron</td></tr>
-        <tr><td>M2</td><td>13F 监控 + watchlist 异动</td><td>每周 Dataroma diff，触发后 Claude 写一段解释推到 TG</td></tr>
+        <tr><td>M1</td><td>每日早报飞书 bot</td><td><code>akshare</code> + <code>yfinance</code> + <code>edgartools</code> + Claude 摘要 + <code>hermes send → 飞书</code>，hermes cron 定时</td></tr>
+        <tr><td>M2</td><td>13F 监控 + watchlist 异动</td><td>每周 Dataroma diff，触发后 Claude 写一段解释推到飞书</td></tr>
         <tr><td>M3</td><td>财报日历 + 季报 highlight</td><td>FMP API + 自动总结（不是 RAG）</td></tr>
       </tbody>
     </table>
@@ -581,7 +581,7 @@ Thesis 一句话：
       <li>第二家：A 股优质公司（建议消费 / 医药白马，先学习国内市场结构）</li>
       <li>第三家：港股或新兴市场</li>
       <li>启动 paper trading 实际下单</li>
-      <li>启动半自动化：M1 TG bot 早报</li>
+      <li>启动半自动化：M1 飞书早报</li>
       <li>月度归因 + 读 1 个失败案例 / 月</li>
       <li>读完 Oaktree memos 精选 30 篇 + Buffett Partnership Letters</li>
       <li><strong>产出</strong>：3 份 thesis + 自动化早报 v1 + 12 个月 paper trading 记录</li>
@@ -649,7 +649,7 @@ Thesis 一句话：
     <p>v1.1 已沉淀。下面三条按重要性排：</p>
     <ol>
       <li><strong>B</strong>（建议优先）：第一份"语料学习"——挑 In Good Company 上 Druckenmiller / Larry Fink 那一期，拉 transcript → 拆解他思考宏观 + 仓位的框架 → 写成你方法论的第一份 case study + 决策日志范例</li>
-      <li><strong>D</strong>：搭 M1 自动化（每日早报 TG bot），用 §16 工具栈，1-2 周内可用</li>
+      <li><strong>D</strong>：搭 M1 自动化（每日早报飞书 bot），用 §16 工具栈，1-2 周内可用</li>
       <li><strong>C</strong>：选第一家公司（建议 Costco / Hermès），开始 Day 1-90 路径</li>
     </ol>
     <p>B 适合"立刻有学习产出"；D 适合"立刻有可用工具"；C 适合"开始真正的长期路径"。可以串行：D 先搭好 → B 做一次 → C 启动。</p>

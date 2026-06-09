@@ -1,15 +1,18 @@
 # Daily briefing M1 dependencies
 # Pin versions for reproducibility; bump quarterly
+#
+# Delivery is via `hermes send` (server) — no HTTP client needed here.
 
-anthropic>=0.40.0
 python-dotenv>=1.0.0
 PyYAML>=6.0
-requests>=2.31.0
 
 # Data sources
 yfinance>=0.2.40
 akshare>=1.13.0
 
-# Optional later additions (commented):
+# Optional — only for `briefing.py --llm` (Claude-written summary)
+# anthropic>=0.40.0
+
+# Optional later additions:
 # edgartools>=2.0.0       # for 13F monitoring (M2)
 # pandas>=2.0             # auto-installed by yfinance/akshare

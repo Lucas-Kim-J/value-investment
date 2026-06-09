@@ -29,7 +29,7 @@ python build.py --serve     # → http://localhost:8000/dashboard.html
 | **Routine** | 每日 / 每周 / 每月 / 每季模板、术语表、watchlist、Week 0 onboarding、自动熔断 governance |
 | **研究** | 公司深度研究模板、决策日志、第一家公司 SOP |
 | **反馈** | 批判性反馈框架（每日 status → 7 维度反馈） |
-| **自动化** | M1 每日早报 TG bot（yfinance + akshare + Claude + Telegram） |
+| **自动化** | M1 每日早报飞书 bot（yfinance + akshare + Claude + hermes send → 飞书） |
 
 ---
 

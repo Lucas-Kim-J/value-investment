@@ -65,12 +65,12 @@ Dashboard 是你今后每天的入口，所有模块都从这里链接。
 
 ### 🤖 1 套自动化骨架
 
-`automation/daily-briefing/` — M1 每日早报 TG bot：
-- `briefing.py`（可运行）
-- `README.md`（含 GitHub Actions 部署指南）
+`automation/daily-briefing/` — M1 每日早报飞书 bot：
+- `briefing.py`（可运行：拉数据 → `hermes send --to feishu`）
+- `run-and-send.sh`（cron 封装）
+- `README.md`（含飞书 + hermes cron 部署指南）
 - `requirements.txt`
 - `.env.example` + `config.example.yaml`
-- `github-actions-example.yml`
 
 ### 🏠 1 个 Dashboard
 
@@ -161,7 +161,7 @@ Review #3 建议 v2.0 把"23 个文件"重构为"1 个状态机 + N 个 view"（
 ## 一些我没做的事
 
 - ❌ 没启动第一家公司研究（你自己选 + 决策）
-- ❌ 没配 .env 真实 keys（你需要自己配 Anthropic + Telegram）
+- ❌ 没在服务器上配置定时任务（hermes send 已验证可发飞书；早报定时需你确认后我再配）
 - ❌ 没下任何买卖单（B 轨的 B 是 Behavior，不是 Buy）
 - ❌ 没承诺这套系统一定 work——它需要你 6 个月真实使用后才能验证
 

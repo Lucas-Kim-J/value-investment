@@ -1,114 +1,89 @@
-# M1 · Daily Briefing TG Bot
+# M1 · 每日早报飞书 Bot
 
-> 每日早报自动化的最小可用版本。**预计耗时**：从 0 到跑通 ~2-3h。
+> 每日早报自动化的最小可用版本，通过**飞书**推送（服务器上的 `hermes send`）。
+> **预计耗时**：从 0 到跑通 ~30 min（不需要任何 bot token）。
 
 ---
 
 ## 它做什么
 
-每天定时（默认北京时间 07:25）拉取：
-- 美股隔夜：SPX / IXIC / VIX / DXY / BTC / ETH
-- 你的美股持仓涨跌
+每天定时拉取：
+- 美股隔夜：SPX / IXIC / VIX / DXY / 10Y / BTC / ETH
+- 你的美股持仓涨跌（|Δ|>2% 标记 ⚠️）
 - 你的 A 股持仓涨跌 + 北向资金
 - 你的 watchlist 财报日历（未来 7 天）
 
-然后用 Claude 生成中文 ≤ 600 字晨报，推送到 Telegram。
+然后构建一份中文纯文本晨报，通过 `hermes send --to feishu` 发到你的飞书。
+（可选 `--llm`：用 Claude 把数据写成 ≤500 字摘要；不加则用结构化纯文本，无需任何 API key。）
 
 ---
 
-## 你能不能用？
+## 关键设计：飞书走 hermes，代码里没有 token
 
-**这个版本适合**：
-- 想最少时间搭起来（不需要自建数据库）
-- 接受 yfinance / akshare 数据偶有错误的可接受程度（决策前永远 cross-check 一手源）
-- 有 Telegram + Anthropic API key
+推送由服务器上的 **hermes** 完成——hermes 持有飞书凭证。本脚本只是把早报文本通过管道交给 `hermes send`：
 
-**这个版本不适合**：
-- 想要分钟级实时监控（这是日级的）
-- 想做下单（这只是信息推送）
-- 加密 24/7 监控（加密只在每日一次扫描）
+```
+briefing.py  ──stdout──►  hermes send --to feishu  ──►  你的飞书
+```
+
+所以这个 bot **不需要**任何 bot token / key / webhook。`hermes send --list`（在服务器上跑）可看所有可用目标。
 
 ---
 
-## 安装步骤
+## 在哪里运行
+
+**在服务器上运行**（hermes 装在那里）。本地只能 `--dry-run` 预览文本，不能真正发送（本地没有 hermes）。
+
+---
+
+## 安装步骤（在服务器上）
 
 ### 1. Python 环境
 
 ```bash
-# 需要 Python 3.11+
-cd /Users/Zhuanz/Documents/code/value-investment/automation/daily-briefing
-
-# 建虚拟环境
-python3 -m venv .venv
-source .venv/bin/activate
-
-# 装依赖
+cd <repo>/automation/daily-briefing      # 服务器上 clone 的仓库
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. 拿三把钥匙
-
-#### Anthropic API Key
-
-- 去 [console.anthropic.com](https://console.anthropic.com)
-- Settings → API Keys → Create Key
-- 复制 `sk-ant-...`
-
-#### Telegram Bot Token + Chat ID
-
-- 在 Telegram 搜 `@BotFather`，发 `/newbot`
-- 起名字（如 `LucasValueBriefing`）
-- BotFather 会给你 `123456:ABC-DEF...` 这个 token
-- 然后给你的 bot 发一条消息（任意内容）
-- 浏览器打开 `https://api.telegram.org/bot<TOKEN>/getUpdates`
-- 找到 `"chat":{"id":数字}` —— 这是你的 chat_id
-
-### 3. 配置
+### 2. 配置
 
 ```bash
-# 复制示例
-cp .env.example .env
 cp config.example.yaml config.yaml
-
-# 编辑 .env，填入三把钥匙
-# 编辑 config.yaml，填入你的持仓 + watchlist
+# 编辑 config.yaml：填你的持仓 + watchlist + feishu_target（默认 'feishu'）
+# 如需 Claude 摘要：cp .env.example .env 并填 ANTHROPIC_API_KEY
 ```
 
-### 4. 本地试跑
+### 3. 试跑
 
 ```bash
-python briefing.py
+python briefing.py --dry-run      # 只打印，不发送（先看格式对不对）
+python briefing.py                # 真发到飞书（通过 hermes send）
 ```
 
-成功会推一条 Telegram 消息给你。
+成功会在飞书收到一条早报。
 
 ---
 
 ## 定时运行
 
-### 选项 A：Mac 本地 cron（最简单）
+### 选项 A：hermes cron（hermes 原生，推荐）
+
+```bash
+hermes cron create --name daily-briefing --schedule "25 7 * * *" \
+  --command "<repo>/automation/daily-briefing/run-and-send.sh"
+hermes cron list        # 查看
+```
+
+### 选项 B：系统 cron
 
 ```bash
 crontab -e
-# 加一行（北京时间 07:25 = UTC 23:25 前一天，调整成你机器的时区）
-25 7 * * * cd /Users/Zhuanz/Documents/code/value-investment/automation/daily-briefing && .venv/bin/python briefing.py >> briefing.log 2>&1
+# 07:25 北京时间（按服务器时区调整；服务器多为 UTC，则用 25 23 * * *）
+25 7 * * *  <repo>/automation/daily-briefing/run-and-send.sh >> /var/log/daily-briefing.log 2>&1
 ```
 
-缺点：电脑要开着。
-
-### 选项 B：GitHub Actions（推荐，免费且免开机）
-
-1. 把整个 `value-investment/` 推到一个 GitHub **私库**
-2. 把 `automation/daily-briefing/github-actions-example.yml` 内容拷到 `.github/workflows/briefing.yml`
-3. 在 GitHub repo Settings → Secrets and variables → Actions，加：
-   - `ANTHROPIC_API_KEY`
-   - `TELEGRAM_BOT_TOKEN`
-   - `TELEGRAM_CHAT_ID`
-4. push 之后 Actions tab 看到工作流；可手动 trigger 测试
-
-### 选项 C：远程 VPS
-
-任何 $5/月 的小机器跑 cron。最稳。
+`run-and-send.sh` 是一个薄封装：`cd` 到本目录 → `python3 briefing.py`。
 
 ---
 
@@ -116,58 +91,49 @@ crontab -e
 
 ```
 automation/daily-briefing/
-├── README.md                       # 这份
-├── briefing.py                     # 主脚本
-├── requirements.txt                # Python 依赖
-├── .env.example                    # 三把钥匙模板
-├── .env                            # 你的真实 keys（gitignore）
-├── config.example.yaml             # 持仓 / watchlist 模板
-├── config.yaml                     # 你的真实配置（gitignore）
-└── github-actions-example.yml      # GitHub Actions cron 示例
+├── README.md              # 这份
+├── briefing.py            # 主脚本（拉数据 → 构建文本 → hermes send）
+├── run-and-send.sh        # cron 封装
+├── requirements.txt       # Python 依赖（无 HTTP client，hermes 负责发送）
+├── .env.example           # 可选 ANTHROPIC_API_KEY（仅 --llm 需要）
+├── .env                   # 你的真实 key（gitignore）
+├── config.example.yaml    # 持仓 / watchlist / feishu_target 模板
+└── config.yaml            # 你的真实配置（gitignore）
 ```
 
-务必 `.gitignore` `.env` 和 `config.yaml`（这些有持仓和 API key）。
+务必 `.gitignore` `.env` 和 `config.yaml`（持仓 + key）。仓库已配好。
 
 ---
 
 ## 如何扩展
 
 ### 加新数据源
+在 `briefing.py` 加 `fetch_*` 函数 → 在 `main()` 的 `data` 字典里调用 → 在 `build_text()`（或 Claude prompt）里渲染。
 
-在 `briefing.py` 加新 `fetch_*` 函数 → 在 `build_briefing` 调用 → 传给 Claude prompt。
+例子：OpenInsider cluster buying（周扫）、Dataroma 13F diff（季）、Glassnode BTC ETF 资金流（日）。
 
-例子：
-- 加 OpenInsider cluster buying：每周一次扫
-- 加 Dataroma 13F diff：每季度一次
-- 加 Glassnode BTC ETF 资金流：每日一次
-
-### 改 prompt 风格
-
-`build_briefing` 函数里的 prompt 控制输出风格。可以试：
-- 加你方法论 §X 的引用作为 system context
-- 加上周 status 让 Claude 做 trend 反馈
-- 让 Claude 把异动事件关联到失败案例归因
+### 多个推送
+`hermes send --list` 看目标。可以早报发飞书私聊，异动 alert 发某个群——给 `briefing.py --to feishu:oc_xxxx` 指定不同 chat。
 
 ### 改触发频率
-
-cron 表达式改一改，或加多个工作流（如周末加一份周复盘提示）。
+改 cron 表达式，或加多个 job（如周末加一份周复盘提示）。
 
 ---
 
 ## 已知限制
 
-- **yfinance 数据偶有错误**：分红日期、stock split 调整可能晚；只用于初筛
-- **akshare 字段偶变**：A 股接口偶尔返回字段重命名，加 schema 校验
-- **VIX / DXY 周末不更新**：处理 stale 数据
-- **加密价格 24/7**：早报里加密只是 snapshot，不构成实时信号
-- **Telegram 消息长度限制**：4096 字符。Claude prompt 限制 800 tokens 输出避免超长
+- **yfinance 数据偶有错误**：分红日期、stock split 调整可能晚；只用于初筛，决策前回一手源 cross-check
+- **akshare 字段偶变**：A 股接口偶尔重命名字段；脚本已 fail-soft，但留意空值
+- **VIX / DXY 周末不更新**：会是 stale 数据
+- **加密 24/7**：早报里只是 snapshot，不构成实时信号
+- **飞书消息**：纯文本最稳；如需富文本卡片，未来可让 hermes 用 interactive card
 
 ---
 
 ## 与方法论的关系
 
 这是 §17 自动化路线的 **M1**。完成后：
-- **M2**（30 天后）：加 13F 监控（Dataroma diff）+ insider cluster buying
-- **M3**（60 天后）：加 财报日历 highlight（不是 RAG）
+- **M2**（30 天后）：加 13F 监控（Dataroma diff）+ insider cluster buying，异动推飞书
+- **M3**（60 天后）：加财报日历 highlight（不是 RAG）
 
-**不在这个 bot 范围内**：决策建议、买卖信号。任何"建议买入"类输出都被 prompt 明确禁止。
+**不在范围内**：决策建议、买卖信号。脚本与 prompt 都明确禁止任何"建议买入/卖出"类输出——它只汇总信息，决策回到 decision log。
