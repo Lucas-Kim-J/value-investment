@@ -1,0 +1,484 @@
+[
+  {
+    "slug": "buffett-partnership-letters",
+    "source": "Warren Buffett",
+    "kind": "letter",
+    "title": "Buffett Partnership Letters (1957–1969)",
+    "period": "1957–1969",
+    "official_url": "",
+    "coverage": "guide",
+    "tier": "tier0",
+    "est_minutes": 600,
+    "why": "巴菲特尚未被伯克希尔与保险浮存金「放大」之前的原始投资思维，最接近格雷厄姆式套利与集中持有的纯粹形态，是理解他方法起点的最佳样本。",
+    "guide": "重点看他如何向有限合伙人定义「跑赢市场」这件事——他坚持用相对市场（尤其是熊市）的表现而非绝对涨跌来评判自己，并把投资分成「低估类、套利类、控制类」几种结构。读时关注他对「我能解释清楚为什么便宜」的执念，以及他如何主动管理预期、拒绝用波动讨好客户。官方原始合集链接待核实，可优先查证可信转载来源。",
+    "questions": [
+      "为什么巴菲特坚持用「相对市场表现」而不是绝对收益来评判自己？这对评估一个投资者意味着什么？",
+      "他把投资机会分成几类结构，每一类的盈利逻辑和风险来源有何不同？",
+      "面对短期波动，他如何向出资人管理预期、又如何避免被客户情绪绑架？",
+      "从合伙阶段到伯克希尔阶段，他的方法发生了哪些演化、又有哪些内核没变？"
+    ],
+    "related_terms": ["margin-of-safety", "intrinsic-value", "circle-of-competence"]
+  },
+  {
+    "slug": "berkshire-shareholder-letters",
+    "source": "Warren Buffett",
+    "kind": "letter",
+    "title": "Berkshire Hathaway Shareholder Letters (1977– )",
+    "period": "1977–",
+    "official_url": "https://www.berkshirehathaway.com/letters/letters.html",
+    "coverage": "guide",
+    "tier": "tier0",
+    "est_minutes": 1800,
+    "why": "几十年连续的致股东信，是价值投资公开教材里密度最高、内部一致性最强的长期思想样本，能看到一套方法在真实周期里反复被检验。",
+    "guide": "把信当作「思维方法的纵切面」而非财报附录来读：留意他如何用「所有者收益」（owner earnings）而非会计利润看待一家公司，如何用「护城河」描述竞争优势的持久性，以及如何区分「我能理解」与「我无法理解」的生意。重点体会他承认错误的方式——错误往往写得比成功更坦白，这正是校准自己判断的好材料。",
+    "questions": [
+      "巴菲特为什么更看重「所有者收益」而不是报表净利润？两者的差别从何而来？",
+      "他用哪些角度判断一条护城河是变宽还是变窄？",
+      "他如何界定自己的能力圈、又如何处理圈外的诱人机会？",
+      "从他复盘错误的方式中，能提炼出哪些避免重蹈覆辙的检查清单？"
+    ],
+    "related_terms": ["owner-earnings", "moat", "circle-of-competence", "intrinsic-value"]
+  },
+  {
+    "slug": "berkshire-annual-meeting-archive",
+    "source": "Warren Buffett",
+    "kind": "agm",
+    "title": "Berkshire Annual Meeting (CNBC Buffett Archive)",
+    "period": "1994–",
+    "official_url": "https://buffett.cnbc.com/",
+    "coverage": "guide",
+    "tier": "tier1",
+    "est_minutes": 1200,
+    "why": "股东大会问答展示的是「即兴状态下的思维框架」——没有讲稿润色，能看到他和芒格如何当场拆解一个陌生问题，比成稿文字更接近真实决策过程。",
+    "guide": "看问答时不要追逐他对某只股票的具体看法，而要观察「他如何回答」：先界定问题边界、再坦诚说出不知道的部分、然后回到几条简单原则上。注意巴菲特与芒格的互补——一个铺陈、一个证伪，本身就是一套「双人思维纠错」机制，可作为你自己决策时的内部对话模板。",
+    "questions": [
+      "面对一个他不熟悉的领域，巴菲特通常如何组织回答、又如何划定「我不知道」的边界？",
+      "芒格在问答中扮演什么角色？这种互补对决策质量有何价值？",
+      "他反复回到哪几条最简单的原则上？为什么越简单的原则越经得起即兴检验？"
+    ],
+    "related_terms": ["circle-of-competence", "mental-models", "intrinsic-value"]
+  },
+  {
+    "slug": "essays-of-warren-buffett-cunningham",
+    "source": "Warren Buffett",
+    "kind": "book",
+    "title": "The Essays of Warren Buffett (ed. Lawrence Cunningham)",
+    "period": "—",
+    "official_url": "",
+    "coverage": "guide",
+    "tier": "tier1",
+    "est_minutes": 600,
+    "why": "把散落多年的致股东信按主题重新编排，等于给巴菲特的思维做了一次「主题索引」，适合系统性地一次性建立框架而非线性逐年阅读。",
+    "guide": "把它当成「按概念分章的导航」：公司治理、财务与会计、估值、并购、市场先生等各成一块，方便你横向比较他在不同年份对同一主题的措辞演化。读时刻意对照同一主题下早年与后期的表述，找出哪些观点被强化、哪些被修正。官方/出版方稳定链接待核实，建议从正版书籍获取。",
+    "questions": [
+      "按主题重排后，哪些核心观念在不同年份被反复强调？这种重复说明了什么？",
+      "他对「会计利润 vs 经济实质」的态度在编排里如何被集中呈现？",
+      "把「市场先生」放进估值与情绪的章节里，能帮你建立怎样的决策纪律？"
+    ],
+    "related_terms": ["mr-market", "owner-earnings", "intrinsic-value", "margin-of-safety"]
+  },
+  {
+    "slug": "poor-charlies-almanack",
+    "source": "Charlie Munger",
+    "kind": "book",
+    "title": "Poor Charlie's Almanack",
+    "period": "—",
+    "official_url": "",
+    "coverage": "guide",
+    "tier": "tier0",
+    "est_minutes": 900,
+    "why": "芒格思想最完整的载体，核心不是选股技巧而是「多元思维模型」这套跨学科认知操作系统，决定了你能否从更高的维度看懂一桩生意和一个人。",
+    "guide": "重点不是收集模型清单，而是练习「格栅式思维」——把心理学、经济学、物理、生物等领域的基本原理叠加到同一个问题上互相印证。特别留意「反过来想」（inversion）：先问怎样会失败，再倒推怎样避免。读时随手记下每个模型可以套用到哪个真实决策上。官方/出版方稳定链接待核实，建议从正版书籍获取。",
+    "questions": [
+      "什么是「多元思维模型」？为什么单一学科的视角容易导致系统性误判？",
+      "「反过来想」这一方法在具体投资或人生决策中怎么落地？",
+      "芒格如何看待激励机制对人类行为的塑造？这对评估一家公司意味着什么？",
+      "如何把跨学科模型真正「内化」成下意识的判断，而不是知识摆设？"
+    ],
+    "related_terms": ["mental-models", "inversion", "circle-of-competence", "moat"]
+  },
+  {
+    "slug": "psychology-of-human-misjudgment",
+    "source": "Charlie Munger",
+    "kind": "talk",
+    "title": "The Psychology of Human Misjudgment",
+    "period": "—",
+    "official_url": "",
+    "coverage": "guide",
+    "tier": "tier0",
+    "est_minutes": 90,
+    "why": "把人类系统性认知偏误整理成一张可操作的「故障清单」，是价值投资里「认识自己」这一半功课的核心文本，缺了它再多估值技巧也会被情绪反噬。",
+    "guide": "读时把每一种倾向都当成「你自己也会犯的错」而非别人的笑话——重点是建立「偏误自查」的习惯，尤其关注多种偏误叠加产生的「lollapalooza」放大效应。最有价值的练习是：回看自己最近一次冲动决策，逐条对照是哪几种倾向在共同作用。官方稳定链接待核实，建议查证可信收录版本。",
+    "questions": [
+      "为什么说大多数投资错误本质上是心理错误而非分析错误？",
+      "什么是多种偏误叠加的「lollapalooza」效应？它为什么特别危险？",
+      "激励机制为什么被排在偏误清单的前列？它如何悄悄扭曲判断？",
+      "你可以为自己设计哪些制度或清单，来对冲这些已知偏误？"
+    ],
+    "related_terms": ["mental-models", "inversion", "second-level-thinking"]
+  },
+  {
+    "slug": "munger-usc-commencement",
+    "source": "Charlie Munger",
+    "kind": "talk",
+    "title": "Munger USC Commencement / Law School Address",
+    "period": "—",
+    "official_url": "",
+    "coverage": "guide",
+    "tier": "tier2",
+    "est_minutes": 45,
+    "why": "把投资原则上升为通用的人生与处世智慧——可靠、避免愚蠢、终身学习——是理解芒格「人格即方法」的最佳短文本。",
+    "guide": "把它当作「品格清单」来读：留意他强调「避免做蠢事」胜过「追求聪明」，以及复利不仅适用于金钱也适用于知识和声誉。重点不是励志，而是把「可靠性、诚实、终身学习」当成可执行的长期策略来理解。官方稳定链接待核实，建议查证可信收录版本。",
+    "questions": [
+      "为什么芒格认为「避免愚蠢」比「追求聪明」更可靠？",
+      "复利思维如何同样适用于知识、信任与声誉的积累？",
+      "「终身学习」在他的框架里是一种美德还是一种竞争策略？两者矛盾吗？"
+    ],
+    "related_terms": ["inversion", "mental-models", "circle-of-competence"]
+  },
+  {
+    "slug": "daily-journal-annual-meeting",
+    "source": "Charlie Munger",
+    "kind": "agm",
+    "title": "Daily Journal Annual Meeting Q&A",
+    "period": "—",
+    "official_url": "",
+    "coverage": "guide",
+    "tier": "tier1",
+    "est_minutes": 600,
+    "why": "芒格晚年最集中、最不加修饰的现场问答，能听到他独立于巴菲特之外、对人性与商业本质的犀利判断，是「坦率到近乎冒犯」的真实思维样本。",
+    "guide": "看问答时重点学他的「回答风格」：直接说「我不知道」或「这个问题问得不对」，拒绝用模糊话术取悦提问者。注意他如何用极少的原则覆盖极广的问题，以及他对耐心、集中和拒绝平庸机会的反复强调。官方稳定链接待核实，建议查证可信收录版本。",
+    "questions": [
+      "芒格如何处理他不认同或认为提错的问题？这种坦率本身有何方法论价值？",
+      "他为什么强调「极度耐心 + 偶尔果断重击」这种集中式策略？",
+      "在他的判断里，「拒绝平庸机会」为什么和「抓住好机会」同样重要？"
+    ],
+    "related_terms": ["circle-of-competence", "mental-models", "margin-of-safety"]
+  },
+  {
+    "slug": "oaktree-memos",
+    "source": "Howard Marks",
+    "kind": "memo",
+    "title": "Oaktree Capital Memos (Howard Marks)",
+    "period": "1990–",
+    "official_url": "https://www.oaktreecapital.com/insights/memos",
+    "coverage": "guide",
+    "tier": "tier0",
+    "est_minutes": 1500,
+    "why": "马克斯的备忘录是把「风险」与「周期」讲得最透彻的连续文本，弥补巴菲特/芒格较少展开的「市场情绪与定价错位」这一维度，是理解「什么时候该谨慎」的核心读物。",
+    "guide": "核心抓两条主线：「第二层思维」（second-level thinking）——不仅判断一家公司好不好，更要判断「好」是否已被价格充分反映；以及「钟摆」式的周期观——市场在贪婪与恐惧间摆动，真正的机会出现在情绪极端处。读时刻意区分「风险」与「波动」，并体会他强调的「我们无法预测，但可以做好准备」。",
+    "questions": [
+      "什么是「第二层思维」？它和「第一层思维」在结论与行为上有何不同？",
+      "马克斯如何定义风险？为什么他认为风险不等于价格波动？",
+      "周期为什么不可预测却又可以「做好准备」？这对仓位管理意味着什么？",
+      "在情绪极端时，他主张用什么纪律来对抗从众？"
+    ],
+    "related_terms": ["second-level-thinking", "market-cycle", "margin-of-safety", "mr-market"]
+  },
+  {
+    "slug": "the-most-important-thing",
+    "source": "Howard Marks",
+    "kind": "book",
+    "title": "The Most Important Thing",
+    "period": "—",
+    "official_url": "",
+    "coverage": "guide",
+    "tier": "tier0",
+    "est_minutes": 480,
+    "why": "把多年备忘录里反复出现的关键观念体系化为一套互相支撑的「最重要的事」，是建立风险意识与逆向纪律的最佳单本入门。",
+    "guide": "每一章是一件「最重要的事」，但作者真正想说的是它们必须叠加在一起才成立——单独抓一条都会失衡。重点理解「价格与价值的关系才是投资的核心」、「防御重于进攻」、以及如何在不确定中保持谦逊。读时把每一章映射到你自己的一次真实决策上检验。官方/出版方稳定链接待核实，建议从正版书籍获取。",
+    "questions": [
+      "为什么作者说没有任何一件「最重要的事」能单独成立？它们如何互相制约？",
+      "价格与价值的关系，为什么被放在比「好公司」更核心的位置？",
+      "在他的框架里，「防御」为什么常常优先于「进攻」？",
+      "面对无法消除的不确定性，正确的态度是预测还是准备？为什么？"
+    ],
+    "related_terms": ["second-level-thinking", "margin-of-safety", "intrinsic-value", "market-cycle"]
+  },
+  {
+    "slug": "mastering-the-market-cycle",
+    "source": "Howard Marks",
+    "kind": "book",
+    "title": "Mastering the Market Cycle",
+    "period": "—",
+    "official_url": "",
+    "coverage": "guide",
+    "tier": "tier1",
+    "est_minutes": 540,
+    "why": "专门把「周期」这件事讲深讲透——经济、信贷、风险态度、情绪如何环环相扣，是把「低买高卖」从口号变成可判断信号的方法论。",
+    "guide": "重点不是预测周期的拐点，而是学会「判断我们现在大概处在周期的哪个位置」——通过观察估值水平、信贷松紧、人们的风险态度等「温度计」。理解多个周期（经济、信贷、情绪）如何相互放大，以及为什么「校准仓位」比「精确择时」更现实。官方/出版方稳定链接待核实，建议从正版书籍获取。",
+    "questions": [
+      "为什么「判断当前所处周期位置」比「预测拐点」更可行也更有价值？",
+      "经济周期、信贷周期与情绪周期如何相互放大成极端？",
+      "哪些可观察的「温度计」能帮你估计市场的冷热程度？",
+      "如何把对周期位置的判断转化为仓位的进退，而非简单的全进全出？"
+    ],
+    "related_terms": ["market-cycle", "second-level-thinking", "mr-market", "margin-of-safety"]
+  },
+  {
+    "slug": "pabrai-dhandho-investor",
+    "source": "Mohnish Pabrai",
+    "kind": "book",
+    "title": "The Dhandho Investor（憨夺型投资者）",
+    "period": "2007",
+    "official_url": "",
+    "coverage": "guide",
+    "tier": "tier0",
+    "est_minutes": 480,
+    "why": "把价值投资浓缩成一句口诀「正面我大赢，反面我小输」的低风险/高不确定性框架。",
+    "guide": "不要当成选股清单读，而是拆解作者的「Dhandho 九条」决策骨架：只在能力圈内、买现有简单生意、买困境中被错杀的好生意、要厚的安全边际、押注少而重。读每一章时把它翻译成一句你自己能复述的判断准则，并刻意区分「低风险」与「低不确定性」这两件常被混为一谈的事。",
+    "questions": [
+      "这笔投资的「下行」具体是什么、最坏情况我亏多少且能否承受？",
+      "我是在为「确定性」付钱，还是在为「低风险但高不确定」的不对称机会付钱？",
+      "这个生意是否简单到我能用一两句话讲清它怎么赚钱？"
+    ],
+    "related_terms": ["dhandho", "margin-of-safety", "circle-of-competence"]
+  },
+  {
+    "slug": "pabrai-lectures-talks",
+    "source": "Mohnish Pabrai",
+    "kind": "talk",
+    "title": "Mohnish Pabrai 大学讲座 / 访谈",
+    "period": "持续更新",
+    "official_url": "https://chaiwithpabrai.com/",
+    "coverage": "guide",
+    "tier": "tier1",
+    "est_minutes": 600,
+    "why": "用大量真实案例口语化复述他的「clone（抄袭高手思路）+ 少决策 + 重注」实践，是书的活体补充。",
+    "guide": "把这些演讲当作「方法论的现场演示」而非操作信号：注意他如何复盘自己的错误、如何描述一个想法从哪来又如何被证伪。听到他提到具体某只股票时，练习只提取「他为什么这么想」的思维链，主动忽略价格与时点。具体某场视频链接待核实。",
+    "questions": [
+      "他在这段里展示的是哪一条决策原则，我能否用自己的话复述？",
+      "他承认的错误属于「分析错」还是「行为错」，我犯过同类错吗？",
+      "如果抛开他说的标的，这套思路能套到我能力圈里的什么生意上？"
+    ],
+    "related_terms": ["dhandho", "circle-of-competence", "13f-clone"]
+  },
+  {
+    "slug": "guy-spier-education-value-investor",
+    "source": "Guy Spier",
+    "kind": "book",
+    "title": "The Education of a Value Investor（与巴菲特共进午餐改变了我的人生）",
+    "period": "2014",
+    "official_url": "",
+    "coverage": "guide",
+    "tier": "tier1",
+    "est_minutes": 420,
+    "why": "一本关于「环境与习惯如何决定投资行为」的成长自白，价值投资的「软件/品格」面而非「估值技术」面。",
+    "guide": "重点读他设计的「环境与流程」——比如如何隔绝噪音、如何排序信息输入、如何刻意让自己慢下来做决定。把书里每一条个人规则抽象成一个可移植的「行为约束」，对照你自己的研究流程查漏。这本书几乎不讲公式，价值在于「如何让自己不犯傻」。",
+    "questions": [
+      "我当前的信息环境里，哪些输入在系统性地让我做更差的决策？",
+      "我可以给自己设哪一条「流程性规则」来对抗情绪与从众？",
+      "我是在模仿大师的「持仓」还是在模仿他的「品格与流程」？"
+    ],
+    "related_terms": ["circle-of-competence", "margin-of-safety"]
+  },
+  {
+    "slug": "nomad-letters",
+    "source": "Nick Sleep & Qais Zakaria",
+    "kind": "letter",
+    "title": "Nomad Investment Partnership Letters (2001–2014)",
+    "period": "2001–2014",
+    "official_url": "https://igyfoundation.org.uk/nomad-partnership-letters/",
+    "coverage": "guide",
+    "tier": "tier1",
+    "est_minutes": 1200,
+    "why": "长期主义与「规模经济共享（scaled economics shared）」模式护城河的经典文本，半年一封的思维实况。",
+    "guide": "按时间顺序连读，观察作者「思维框架」如何随年份逐步收敛——尤其是他们如何识别并坚守「把规模红利让渡给客户从而强化飞轮」的生意模型。真源是 IGY Foundation 网站上经作者授权的公开合集 PDF（避开网络流传的盗版版本）。读法是追问「他们在为什么样的『质』而非『价』付钱」，把单封信当成一次推理演示来拆。",
+    "questions": [
+      "「规模经济共享」这种模式的飞轮在哪、又会在什么条件下失效？",
+      "他们用什么标准判断一个管理层是「长期复利的盟友」？",
+      "如果只有半年才能改一次仓位，我的研究会变得更像还是更不像他们？"
+    ],
+    "related_terms": ["moat", "circle-of-competence", "intrinsic-value"]
+  },
+  {
+    "slug": "duan-yongping-xueqiu-qa",
+    "source": "段永平（大道无形我有型）",
+    "kind": "talk",
+    "title": "段永平 雪球历史问答合集（「大道无形我有型」）",
+    "period": "持续更新",
+    "official_url": "https://xueqiu.com/u/1247347556",
+    "coverage": "guide",
+    "tier": "tier1",
+    "est_minutes": 900,
+    "why": "以「本分 / 平常心 / 能力圈 / 不懂不做」为内核的中文一手价值投资语料，碎片化问答里藏着完整的判断体系。",
+    "guide": "不要按时间刷，而是按主题归类他的回答（生意模式、企业文化、安全边际、不为清单）。注意他反复强调「不懂不做」与「做对的事、把事做对」——把这些口头禅还原成可执行的筛选标准。核心读法是看他「拒绝什么」，他的「不为清单」往往比他买什么更有信息量。",
+    "questions": [
+      "用他的「不懂不做」标准，我手上有几只票其实应该直接放弃？",
+      "他说的「企业文化」具体落到哪些可观察的行为上？",
+      "我现在的决策是出于「本分/平常心」，还是出于焦虑和比较？"
+    ],
+    "related_terms": ["circle-of-competence", "margin-of-safety", "moat"]
+  },
+  {
+    "slug": "damodaran-online",
+    "source": "Aswath Damodaran",
+    "kind": "talk",
+    "title": "NYU Stern Damodaran Online（估值公开课 + 博客）",
+    "period": "持续更新",
+    "official_url": "https://pages.stern.nyu.edu/~adamodar/",
+    "coverage": "guide",
+    "tier": "tier1",
+    "est_minutes": 1500,
+    "why": "全网最系统、且完全免费的估值教学+数据+电子表格集合，外加「故事+数字」的叙事估值方法论。",
+    "guide": "把它当工具箱分层用：先用公开课与讲义建立 DCF/相对估值的结构性认知，再用他的博客（Musings on Markets）学「如何用一个商业故事约束你的数字假设」。他的数据集与行业基准适合用来检查自己的假设是否离谱，但务必只把数据当「参照系」而非「结论」。",
+    "questions": [
+      "我的估值里，哪几个假设在驱动 80% 的结果、它们经得起推敲吗？",
+      "我能否先讲清这家公司的「故事」，再让数字去匹配故事？",
+      "和他给出的行业基准相比，我的假设是偏乐观还是偏保守、凭什么？"
+    ],
+    "related_terms": ["intrinsic-value", "reverse-dcf"]
+  },
+  {
+    "slug": "damodaran-on-valuation-book",
+    "source": "Aswath Damodaran",
+    "kind": "book",
+    "title": "Damodaran on Valuation（估值）",
+    "period": "教材（多版本）",
+    "official_url": "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/eqlect.htm",
+    "coverage": "guide",
+    "tier": "tier2",
+    "est_minutes": 1200,
+    "why": "把内在价值估值从「公式」讲成「一套可辩护的假设体系」的体系化教材。",
+    "guide": "不要追求算出一个「精确数字」，而要练习「为每个输入找到可辩护的理由」并做敏感性分析。每读完一类方法（DCF、相对、期权），就拿一家你真懂的公司做一遍，把模型的脆弱点（增长、折现率、再投资）单独列出来。",
+    "questions": [
+      "如果我把增长率/折现率各调一档，结论会不会反转？",
+      "这个估值的最大不确定性来自商业判断还是来自数学？",
+      "我能否向一个怀疑者逐条为我的关键假设辩护？"
+    ],
+    "related_terms": ["intrinsic-value", "reverse-dcf", "ev-ebit"]
+  },
+  {
+    "slug": "fisher-common-stocks-uncommon-profits",
+    "source": "Philip A. Fisher",
+    "kind": "book",
+    "title": "Common Stocks and Uncommon Profits（怎样选择成长股）",
+    "period": "1958",
+    "official_url": "",
+    "coverage": "guide",
+    "tier": "tier2",
+    "est_minutes": 480,
+    "why": "成长股质化研究的奠基之作，提出「闲聊法（scuttlebutt）」与著名的「十五要点」。",
+    "guide": "重点不是十五要点的字面清单，而是其背后的「质化尽调思维」：通过供应商、客户、前员工、竞争对手等多方信源交叉验证一家公司的真实竞争力（即 scuttlebutt）。读时把每个要点改写成你能实际去问、去查的具体动作，并体会他「找到伟大公司就长期持有」的立场如何区别于纯捡烟蒂。",
+    "questions": [
+      "针对这家公司，我能用 scuttlebutt 向谁求证、问哪三个问题？",
+      "它的管理层与研发/销售组织是否具备「可持续增长」的质化特征？",
+      "我准备好在质化逻辑不变时长期持有、忽略短期价格波动吗？"
+    ],
+    "related_terms": ["scuttlebutt", "moat", "circle-of-competence"]
+  },
+  {
+    "slug": "tool-13f-filings",
+    "source": "SEC EDGAR / Dataroma",
+    "kind": "13f",
+    "title": "13F 机构持仓披露 —— 怎么读（不是抄作业）",
+    "period": "季度披露，季后约 45 天",
+    "official_url": "https://www.dataroma.com/m/home.php",
+    "coverage": "guide",
+    "tier": "tier1",
+    "est_minutes": 180,
+    "why": "用来「逆向工程大师的思路、生成研究线索」，而非照单复制持仓的公开机构数据。",
+    "guide": "把 13F 当成 watchlist 的「灵感来源」而非买入信号：看到一只票后，去读原始年报自己重建一遍投资逻辑（thesis），想不通就不碰。务必记住它只披露季末美股多头快照、滞后约 45 天，且不含做空/期权对冲/海外仓，所以你看到的可能早已过时或被对冲掉。真源是 SEC EDGAR 的原始 13F 申报，Dataroma 是便于按知名投资者浏览的二手整理。",
+    "questions": [
+      "我能否在不看任何人持仓的前提下，独立讲清这只票的投资逻辑？",
+      "这份数据已经滞后约 45 天，期间发生了什么可能让它失效？",
+      "这是该机构的核心重仓还是边角试验仓，仓位变化说明了什么？"
+    ],
+    "related_terms": ["13f-clone", "intrinsic-value"]
+  },
+  {
+    "slug": "tool-10k-10q-filings",
+    "source": "SEC EDGAR",
+    "kind": "quarterly",
+    "title": "10-K / 10-Q 美股年报季报 —— 怎么读",
+    "period": "年报/季报",
+    "official_url": "https://www.sec.gov/edgar/search/",
+    "coverage": "guide",
+    "tier": "tier1",
+    "est_minutes": 240,
+    "why": "美股公司向 SEC 报送的一手原始档案，是绕开二手解读、自己重建商业图景的根基。",
+    "guide": "用固定动线读：先 MD&A（管理层怎么解释自己的生意与变化）→ Risk Factors（他们自己承认的风险，逐年对比新增了什么）→ 三张表与附注（验证管理层叙事是否被数字证实）。配方法论：用 owner earnings / 自由现金流的视角去还原「这门生意一年真正能落袋多少现金」，而不是只看会计利润。官方原文检索入口为 SEC EDGAR 全文检索。",
+    "questions": [
+      "管理层在 MD&A 里强调和回避的，分别是什么？",
+      "今年风险因素里新增/删改了哪条，背后发生了什么？",
+      "财报口径的利润和我估算的 owner earnings 差在哪、为什么？"
+    ],
+    "related_terms": ["owner-earnings", "ev-ebit"]
+  },
+  {
+    "slug": "tool-cninfo-a-share-filings",
+    "source": "巨潮资讯网（cninfo）",
+    "kind": "quarterly",
+    "title": "A股年报/季报/公告 —— 怎么读",
+    "period": "年报/季报/临时公告",
+    "official_url": "http://www.cninfo.com.cn/",
+    "coverage": "guide",
+    "tier": "tier1",
+    "est_minutes": 240,
+    "why": "A股上市公司法定信息披露的官方指定平台，是 A 股一手原文（年报/季报/公告/问询函回复）的真源。",
+    "guide": "读 A 股年报的固定动线：经营情况讨论与分析（对应美股 MD&A）→ 三张表与重要会计政策 → 关联交易/担保/股权质押/承诺事项等公司治理细节，再看交易所问询函与回复（监管替你问出了管理层不愿主动说的问题）。配方法论用现金流与能力圈双重过滤：看不懂的关联交易和资金往来，就当作风险信号而非待解之谜。",
+    "questions": [
+      "经营性现金流和净利润是否长期背离、差额去哪了？",
+      "关联交易、担保、质押里有没有我看不懂的资金流向？",
+      "交易所问询函问了什么、管理层的回复是否令人信服？"
+    ],
+    "related_terms": ["owner-earnings", "value-trap"]
+  },
+  {
+    "slug": "tool-investor-conferences",
+    "source": "Sohn / Robin Hood Investors Conference",
+    "kind": "talk",
+    "title": "投资者演讲/会议（Sohn、Robin Hood 等）—— 怎么当线索源",
+    "period": "年度会议",
+    "official_url": "https://www.sohnconference.org/",
+    "coverage": "guide",
+    "tier": "tier2",
+    "est_minutes": 180,
+    "why": "知名投资者公开路演自己的核心逻辑，适合做研究线索与思维样本，但绝不是买入信号。",
+    "guide": "把这些 pitch 当成「别人完整摆出来的论证」来逆向训练：先听他的逻辑链与关键假设，再追问「哪一步最容易错、什么会证伪它」。注意演讲者往往已经建好仓、且有动机喊话（talking his book），所以只取思路、自建 thesis，绝不照单照搬。",
+    "questions": [
+      "这个 pitch 里最关键、也最可能错的那一个假设是什么？",
+      "演讲者的利益与动机会如何影响他呈现的内容？",
+      "如果由我从零验证这个逻辑，我会先去查证哪一点？"
+    ],
+    "related_terms": ["13f-clone", "second-level-thinking"]
+  },
+  {
+    "slug": "tool-fund-quarterly-letters",
+    "source": "Oaktree / GMO / Pershing Square",
+    "kind": "letter",
+    "title": "基金季度信 / 备忘录 —— 怎么读（重点看作者怎么写「亏的钱」）",
+    "period": "季度/不定期",
+    "official_url": "https://www.oaktreecapital.com/insights",
+    "coverage": "guide",
+    "tier": "tier1",
+    "est_minutes": 360,
+    "why": "顶级管理人公开的思维与周期判断，是学习「如何思考风险与错误」的高密度一手文本。",
+    "guide": "读法的关键是「看他们怎么写亏损与犯错」：一封诚实的信会清楚复盘哪里判断错了、当时的推理为何看似合理却落空——这比报喜的部分有价值得多。读 Marks 的备忘录练「周期与情绪」的思维，读 GMO 练「均值回归与资产配置」，读 Pershing 类持仓信练「集中持仓的论证强度」。只提取可迁移的思维方法，不追逐其具体持仓。",
+    "questions": [
+      "作者如何复盘自己的亏损与误判、他承担责任了吗？",
+      "他对当前所处「周期位置」的判断依据是什么？",
+      "这套思维方法里，哪一条我今天就能用到自己的流程上？"
+    ],
+    "related_terms": ["market-cycle", "second-level-thinking"]
+  },
+  {
+    "slug": "tool-jpm-eye-on-the-market",
+    "source": "Michael Cembalest (J.P. Morgan)",
+    "kind": "tool",
+    "title": "JPM Eye on the Market（Cembalest）—— 免费宏观图表源",
+    "period": "持续更新",
+    "official_url": "https://www.jpmorgan.com/insights/markets/eye-on-the-market",
+    "coverage": "guide",
+    "tier": "tier2",
+    "est_minutes": 120,
+    "why": "数据扎实、几乎不卖产品的免费宏观/主题图表来源，适合补全宏观背景而非提供选股结论。",
+    "guide": "把它当「事实与图表」用，而非「该买什么」的指令：看他如何用一张图把一个宏观叙事证伪或证实，并留意数据口径与时间区间。价值投资里宏观是背景噪音而非买卖触发器，所以用它校准世界观、警惕共识，而不是据此择时。",
+    "questions": [
+      "这张图想说服我相信什么、它的口径和时间窗有没有被挑选过？",
+      "这条宏观结论会改变我对具体某家公司内在价值的判断吗？",
+      "我是在用它校准认知，还是在被它诱导去做择时？"
+    ],
+    "related_terms": ["market-cycle"]
+  }
+]

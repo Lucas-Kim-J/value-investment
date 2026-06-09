@@ -1,0 +1,74 @@
+[
+  {
+    "key": "first-step",
+    "title": "启程",
+    "desc": "录入第一笔持仓，或读完第一篇一手内容",
+    "tier": 1,
+    "icon": "🚀",
+    "rule": {"type": "any", "of": [{"type": "holdings", "gte": 1}, {"type": "canon_read", "gte": 1}]}
+  },
+  {
+    "key": "first-canon",
+    "title": "第一次读一手",
+    "desc": "读完第一篇一手内容，并写下你的笔记（不是看一眼就走）",
+    "tier": 1,
+    "icon": "📜",
+    "rule": {"type": "canon_noted", "gte": 1}
+  },
+  {
+    "key": "feynman-first",
+    "title": "用自己的话",
+    "desc": "第一次用自己的话复述一个术语——讲得出才算掌握",
+    "tier": 1,
+    "icon": "🗣️",
+    "rule": {"type": "term_mastered", "gte": 1}
+  },
+  {
+    "key": "tier0-done",
+    "title": "啃完起点流派",
+    "desc": "读完并记录 Pabrai + Marks 起点 2 篇一手内容",
+    "tier": 2,
+    "icon": "⛰️",
+    "rule": {"type": "canon_noted_tier", "tier": "tier0", "gte": 2}
+  },
+  {
+    "key": "feynman-ten",
+    "title": "费曼十词",
+    "desc": "用自己的话讲对 10 个术语",
+    "tier": 2,
+    "icon": "📚",
+    "rule": {"type": "term_mastered", "gte": 10}
+  },
+  {
+    "key": "first-report",
+    "title": "第一份规范报告",
+    "desc": "为你的持仓生成第一份规范报告",
+    "tier": 1,
+    "icon": "📊",
+    "rule": {"type": "report_generated", "gte": 1}
+  },
+  {
+    "key": "first-analysis",
+    "title": "第一次公司分析",
+    "desc": "完成并归档第一份公司一键分析",
+    "tier": 2,
+    "icon": "🏢",
+    "rule": {"type": "company_analyzed", "gte": 1}
+  },
+  {
+    "key": "cross-market",
+    "title": "跨市场",
+    "desc": "分析过 ≥3 个不同市场（美股 / A股 / 港股 / 加密）的公司",
+    "tier": 3,
+    "icon": "🌏",
+    "rule": {"type": "markets_analyzed", "gte": 3}
+  },
+  {
+    "key": "ten-canon",
+    "title": "博览一手",
+    "desc": "读过 10 篇一手内容",
+    "tier": 3,
+    "icon": "📖",
+    "rule": {"type": "canon_read", "gte": 10}
+  }
+]

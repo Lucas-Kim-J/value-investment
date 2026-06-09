@@ -28,6 +28,11 @@ services:
       VI_REPORT_MODE: mock
     volumes:
       - ./dev/access-codes.dev.json:/run/codes/access-codes.json:ro
+      # mount content so `docker compose exec api python seed.py` works locally
+      - ./seed.py:/app/seed.py:ro
+      - ./content_lib.py:/app/content_lib.py:ro
+      - ./content:/app/content:ro
+      - ./routine/glossary.md:/app/routine/glossary.md:ro
     depends_on:
       db:
         condition: service_healthy
