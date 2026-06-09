@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
-"""Portfolio input API for the value-investing system.
+"""Portfolio input API for the value-investing system (PostgreSQL-backed).
 
 A tiny Flask service behind nginx (proxied at /api/). Provides:
   - access-code login (whitelist) → signed session cookie
-  - per-user holdings storage (one JSON file per user)
-  - on-demand 规范报告 generation via the server's `hermes` agent
+  - per-user holdings storage in PostgreSQL (durable, transactional)
+  - on-demand 规范报告 generation via the server's `hermes` agent (async)
   - optional push of the report to Feishu (for whitelisted users)
 
 Secrets live ONLY on the server (never in the repo):
-  - VI_CODES_FILE   JSON mapping {access_code: username}
-  - VI_SECRET_KEY   Flask session signing key
-  - VI_DATA_DIR     where per-user holdings/report files live
+  - VI_CODES_FILE     JSON mapping {access_code: username}
+  - VI_SECRET_KEY     Flask session signing key
+  - VI_DATABASE_URL   postgresql://vi_app:...@127.0.0.1:5432/value_investment
 """
 from __future__ import annotations
 
 import datetime
 import json
 import os
-import re
-import shutil
 import subprocess
-import tempfile
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
+import psycopg2
+import psycopg2.extras
 from flask import Flask, jsonify, request, session
 
-DATA_DIR = Path(os.environ.get("VI_DATA_DIR", "/var/lib/value-investment"))
 CODES_FILE = Path(os.environ.get("VI_CODES_FILE", "/etc/value-investment/access-codes.json"))
+DB_URL = os.environ.get("VI_DATABASE_URL", "")
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("VI_SECRET_KEY", "dev-insecure-change-me")
@@ -39,7 +39,6 @@ app.config.update(
 )
 
 # Users whose generated report may be pushed to *their own* Feishu.
-# (hermes' Feishu home channel currently belongs to lucas only.)
 FEISHU_USERS = {"lucas": "feishu"}
 
 METHODOLOGY_CONTEXT = """【方法论核心 v1.1】
@@ -64,64 +63,130 @@ def _codes() -> dict:
         return {}
 
 
-def _safe(user: str) -> str:
-    return re.sub(r"[^a-z0-9_-]", "", user.lower())[:32] or "unknown"
+def _current_user() -> str | None:
+    return session.get("user")
 
 
-def _user_file(user: str) -> Path:
-    return DATA_DIR / f"holdings-{_safe(user)}.json"
+# ---------- database ----------
+
+@contextmanager
+def _db():
+    conn = psycopg2.connect(DB_URL)
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
-def _report_file(user: str) -> Path:
-    return DATA_DIR / f"report-{_safe(user)}.json"
+def _init_db() -> None:
+    if not DB_URL:
+        return
+    with _db() as c, c.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS holdings (
+                id           SERIAL PRIMARY KEY,
+                username     TEXT NOT NULL,
+                market       TEXT,
+                ticker       TEXT,
+                name         TEXT,
+                buy_date     TEXT,
+                cost         DOUBLE PRECISION,
+                position_pct DOUBLE PRECISION,
+                note         TEXT,
+                updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_holdings_user ON holdings(username);
+            CREATE TABLE IF NOT EXISTS reports (
+                username     TEXT PRIMARY KEY,
+                status       TEXT,
+                report       TEXT,
+                error        TEXT,
+                started_at   DOUBLE PRECISION,
+                generated_at TIMESTAMPTZ,
+                updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            """
+        )
 
 
 def _load(user: str) -> dict:
-    f = _user_file(user)
-    if f.exists():
-        try:
-            return json.loads(f.read_text("utf-8"))
-        except Exception:
-            pass
-    return {"holdings": [], "updated_at": None}
+    with _db() as c, c.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            "SELECT market, ticker, name, buy_date, cost, position_pct, note "
+            "FROM holdings WHERE username=%s ORDER BY id",
+            (user,),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT max(updated_at) AS u FROM holdings WHERE username=%s", (user,))
+        u = cur.fetchone()["u"]
+    return {"holdings": rows, "updated_at": u.isoformat() if u else None}
 
 
-def _backup(path: Path, prefix: str) -> None:
-    """Keep a timestamped copy before overwriting, so data is never silently lost.
-    Retains the newest 50 backups per prefix."""
-    try:
-        bdir = DATA_DIR / "backups"
-        bdir.mkdir(exist_ok=True)
-        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
-        shutil.copy2(path, bdir / f"{prefix}-{ts}.json")
-        for old in sorted(bdir.glob(f"{prefix}-*.json"))[:-50]:
-            old.unlink(missing_ok=True)
-    except Exception:
-        pass
+def _save(user: str, holdings: list[dict]) -> None:
+    # transactional replace: delete-then-insert in one transaction (atomic)
+    with _db() as c, c.cursor() as cur:
+        cur.execute("DELETE FROM holdings WHERE username=%s", (user,))
+        for h in holdings:
+            cur.execute(
+                "INSERT INTO holdings(username, market, ticker, name, buy_date, cost, position_pct, note) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                (user, h["market"], h["ticker"], h["name"], h["buy_date"], h["cost"], h["position_pct"], h["note"]),
+            )
 
 
-def _save(user: str, data: dict) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    f = _user_file(user)
-    if f.exists():
-        _backup(f, f"holdings-{_safe(user)}")
-    tmp = tempfile.NamedTemporaryFile("w", dir=DATA_DIR, delete=False, encoding="utf-8")
-    json.dump(data, tmp, ensure_ascii=False, indent=2)
-    tmp.flush()
-    os.fsync(tmp.fileno())
-    tmp.close()
-    os.replace(tmp.name, f)
+def _read_report_state(user: str) -> dict | None:
+    with _db() as c, c.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            "SELECT status, report, error, started_at, generated_at FROM reports WHERE username=%s",
+            (user,),
+        )
+        r = cur.fetchone()
+    if not r:
+        return None
+    d = dict(r)
+    if d.get("generated_at"):
+        d["generated_at"] = d["generated_at"].isoformat()
+    return d
 
 
-def _current_user() -> str | None:
-    return session.get("user")
+def _write_report_state(user: str, state: dict) -> None:
+    with _db() as c, c.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO reports(username, status, report, error, started_at, generated_at, updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s, now())
+            ON CONFLICT (username) DO UPDATE SET
+                status=EXCLUDED.status, report=EXCLUDED.report, error=EXCLUDED.error,
+                started_at=EXCLUDED.started_at, generated_at=EXCLUDED.generated_at, updated_at=now()
+            """,
+            (user, state.get("status"), state.get("report"), state.get("error"),
+             state.get("started_at"), state.get("generated_at")),
+        )
+
+
+try:
+    _init_db()
+except Exception as _e:  # noqa: BLE001
+    print(f"[warn] _init_db failed: {_e}")
 
 
 # ---------- auth ----------
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "time": _now()}
+    db_ok = False
+    try:
+        with _db() as c, c.cursor() as cur:
+            cur.execute("SELECT 1")
+            db_ok = cur.fetchone()[0] == 1
+    except Exception:
+        db_ok = False
+    return {"ok": True, "db": db_ok, "time": _now()}
 
 
 @app.post("/api/login")
@@ -182,9 +247,8 @@ def put_holdings():
                 "note": str(h.get("note", ""))[:280],
             }
         )
-    data = {"holdings": clean, "updated_at": _now()}
-    _save(user, data)
-    return jsonify(data)
+    _save(user, clean)
+    return jsonify(_load(user))
 
 
 # ---------- 规范报告 ----------
@@ -215,25 +279,8 @@ def _build_report_prompt(data: dict) -> str:
     )
 
 
-def _write_report_state(user: str, state: dict) -> None:
-    state.setdefault("can_push", user in FEISHU_USERS)
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    _report_file(user).write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _read_report_state(user: str) -> dict | None:
-    rf = _report_file(user)
-    if rf.exists():
-        try:
-            return json.loads(rf.read_text("utf-8"))
-        except Exception:
-            pass
-    return None
-
-
 def _run_report_job(user: str, prompt: str) -> None:
-    """Runs in a background thread; report gen takes ~30-90s. Writes result to the
-    per-user report file so polling GETs (possibly on another worker) can read it."""
+    """Background thread; report gen takes ~30-90s. Writes result to DB."""
     try:
         r = subprocess.run(["hermes", "-z", prompt], capture_output=True, text=True, timeout=240)
         report = (r.stdout or "").strip()
@@ -252,26 +299,24 @@ def _run_report_job(user: str, prompt: str) -> None:
 
 @app.get("/api/report")
 def get_report():
-    """Current report state: {status: none|running|done|error, report?, error?, ...}."""
     user = _current_user()
     if not user:
         return {"error": "未登录"}, 401
     state = _read_report_state(user)
     if not state:
         return {"status": "none", "report": None, "can_push": user in FEISHU_USERS}
-    state.setdefault("can_push", user in FEISHU_USERS)
+    state["can_push"] = user in FEISHU_USERS
     return jsonify(state)
 
 
 @app.post("/api/report")
 def gen_report():
-    """Kick off async generation; returns immediately. Poll GET /api/report for result."""
     user = _current_user()
     if not user:
         return {"error": "未登录"}, 401
     cur = _read_report_state(user)
-    if cur and cur.get("status") == "running" and (time.time() - cur.get("started_at", 0) < 300):
-        return {"status": "running"}  # already generating
+    if cur and cur.get("status") == "running" and (time.time() - (cur.get("started_at") or 0) < 300):
+        return {"status": "running"}
     _write_report_state(user, {"status": "running", "started_at": time.time()})
     prompt = _build_report_prompt(_load(user))
     threading.Thread(target=_run_report_job, args=(user, prompt), daemon=True).start()
