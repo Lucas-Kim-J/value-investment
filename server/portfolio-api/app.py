@@ -41,6 +41,14 @@ app.config.update(
 # Users whose generated report may be pushed to *their own* Feishu.
 FEISHU_USERS = {"lucas": "feishu"}
 
+# "hermes" (prod) calls the real LLM; "mock" (local dev) returns a placeholder.
+REPORT_MODE = os.environ.get("VI_REPORT_MODE", "hermes")
+_MOCK_REPORT = (
+    "## 组合总览\n\n（本地 mock 模式）这是本地开发的占位报告——未调用 hermes。\n\n"
+    "- prompt 长度：{n} 字符\n- 生产环境由服务器上的 hermes 按方法论生成真实报告\n\n"
+    "## 下一步\n\n在服务器上 `VI_REPORT_MODE` 为默认 hermes，会生成真实的逐仓位审视报告。\n"
+)
+
 METHODOLOGY_CONTEXT = """【方法论核心 v1.1】
 - B 轨学习者(~10h/周)，起点流派 Pabrai + Marks（先精通这两派 3 年再吸收其他）。
 - 配置重心：美股~50% / A股~30% / 加密≤5%净资产（加密是非对称配置，不是价值投资）。
@@ -281,6 +289,10 @@ def _build_report_prompt(data: dict) -> str:
 
 def _run_report_job(user: str, prompt: str) -> None:
     """Background thread; report gen takes ~30-90s. Writes result to DB."""
+    if REPORT_MODE == "mock":
+        time.sleep(2)
+        _write_report_state(user, {"status": "done", "report": _MOCK_REPORT.format(n=len(prompt)), "generated_at": _now()})
+        return
     try:
         r = subprocess.run(["hermes", "-z", prompt], capture_output=True, text=True, timeout=240)
         report = (r.stdout or "").strip()
