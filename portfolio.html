@@ -53,9 +53,22 @@ td.num input { text-align:right; font-variant-numeric:tabular-nums; }
 .status.ok { color:var(--good); }
 .status.err { color:var(--warn); }
 .empty { padding:30px; text-align:center; color:var(--muted); font-size:14px; }
-.report-hint { margin-top:34px; padding:16px 18px; background:var(--bg-soft); border:1px dashed var(--border);
-  border-radius:10px; color:var(--fg-soft); font-size:13.5px; line-height:1.6; }
-.report-hint b { color:var(--fg); }
+.report-section { margin-top:40px; padding-top:24px; border-top:1px solid var(--border); }
+.report-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.report-head h2 { font-size:20px; margin:0; }
+.report-actions { display:flex; gap:10px; }
+.report-meta { color:var(--muted); font-size:13px; margin:8px 0 14px; line-height:1.55; }
+.report-body { margin-top:16px; }
+.report-body:empty { display:none; }
+.report-body h2 { font-size:18px; margin:24px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+.report-body h3 { font-size:15.5px; margin:18px 0 8px; color:var(--accent); }
+.report-body h4 { font-size:14px; margin:14px 0 6px; }
+.report-body p { color:var(--fg-soft); margin:10px 0; line-height:1.7; }
+.report-body ul, .report-body ol { color:var(--fg-soft); padding-left:22px; }
+.report-body li { margin:5px 0; line-height:1.6; }
+.report-body strong { color:var(--fg); }
+.report-body code { background:var(--code-bg); padding:1px 6px; border-radius:4px; font-size:0.86em; }
+.report-body hr { border:none; border-top:1px solid var(--border); margin:20px 0; }
 </style>
 </head>
 <body>
@@ -97,8 +110,17 @@ td.num input { text-align:right; font-variant-numeric:tabular-nums; }
     <span class="status" id="status"></span>
   </div>
 
-  <div class="report-hint">
-    <b>下一步（规划中）</b>：保存后，这里会出现「生成规范报告」——把你的持仓 + 决策日志 + 学习笔记喂给服务器上的 hermes，按你的方法论（Pabrai 三问、4 估值工具、经典文本/信号流逻辑）生成一份报告，并可推送到飞书。
+  <div class="report-section">
+    <div class="report-head">
+      <h2>规范报告</h2>
+      <div class="report-actions">
+        <button class="btn btn-ghost" id="push" style="display:none">发到飞书</button>
+        <button class="btn btn-primary" id="gen">📝 生成规范报告</button>
+      </div>
+    </div>
+    <p class="report-meta">基于你当前持仓 + 方法论，由服务器上的 hermes 生成（首次约 30-90 秒）。不给买卖建议，只用方法论视角审视你的流程与纪律——哪些仓位缺 thesis / 缺估值 / 没过 Pabrai 三问。</p>
+    <div id="reportStatus" class="status"></div>
+    <div id="report" class="report-body"></div>
   </div>
 </div>
 
@@ -177,13 +199,79 @@ async function init(){
   }catch(err){ setStatus('加载失败：'+err.message,'err'); }
 }
 
+// ---- 规范报告 ----
+function esc(s){ return String(s).replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function inline(s){
+  return esc(s).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>');
+}
+function renderMd(md){
+  const lines = String(md).replace(/\r/g,'').split('\n');
+  const out=[]; let i=0;
+  const isBlock = l => /^#{1,6}\s|^\s*[-*]\s|^\s*\d+\.\s|^\s*---+\s*$/.test(l);
+  while(i<lines.length){
+    const l=lines[i];
+    if(/^\s*$/.test(l)){ i++; continue; }
+    let m;
+    if(m=l.match(/^(#{1,6})\s+(.*)/)){ const n=Math.min(m[1].length,4); out.push(`<h${n}>${inline(m[2])}</h${n}>`); i++; continue; }
+    if(/^\s*---+\s*$/.test(l)){ out.push('<hr>'); i++; continue; }
+    if(/^\s*[-*]\s+/.test(l)){ const it=[]; while(i<lines.length && /^\s*[-*]\s+/.test(lines[i])){ it.push('<li>'+inline(lines[i].replace(/^\s*[-*]\s+/,''))+'</li>'); i++; } out.push('<ul>'+it.join('')+'</ul>'); continue; }
+    if(/^\s*\d+\.\s+/.test(l)){ const it=[]; while(i<lines.length && /^\s*\d+\.\s+/.test(lines[i])){ it.push('<li>'+inline(lines[i].replace(/^\s*\d+\.\s+/,''))+'</li>'); i++; } out.push('<ol>'+it.join('')+'</ol>'); continue; }
+    const para=[]; while(i<lines.length && !/^\s*$/.test(lines[i]) && !isBlock(lines[i])){ para.push(inline(lines[i])); i++; }
+    out.push('<p>'+para.join('<br>')+'</p>');
+  }
+  return out.join('\n');
+}
+function showReport(md, ts, canPush){
+  $('report').innerHTML = renderMd(md);
+  $('reportStatus').textContent = ts ? ('生成于 '+new Date(ts).toLocaleString('zh-CN')) : '';
+  $('reportStatus').className = 'status ok';
+  $('push').style.display = canPush ? '' : 'none';
+}
+async function gen(){
+  $('gen').disabled=true;
+  $('reportStatus').className='status';
+  $('reportStatus').textContent='生成中…（约 30-90 秒，hermes 正按你的方法论审视持仓）';
+  $('report').innerHTML='';
+  try{
+    const r = await fetch('/api/report',{method:'POST',credentials:'same-origin'});
+    if(r.status===401){ location.replace('login.html'); return; }
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok){ $('reportStatus').textContent='失败：'+(d.error||r.status); $('reportStatus').className='status err'; return; }
+    showReport(d.report, d.generated_at, d.can_push);
+  }catch(err){ $('reportStatus').textContent='网络错误：'+err.message; $('reportStatus').className='status err'; }
+  finally{ $('gen').disabled=false; }
+}
+async function pushReport(){
+  $('push').disabled=true;
+  const prev=$('reportStatus').textContent;
+  $('reportStatus').textContent='推送中…'; $('reportStatus').className='status';
+  try{
+    const r = await fetch('/api/report/push',{method:'POST',credentials:'same-origin'});
+    const d = await r.json().catch(()=>({}));
+    $('reportStatus').textContent = r.ok ? '已发到飞书 ✓' : ('推送失败：'+(d.error||r.status));
+    $('reportStatus').className = 'status '+(r.ok?'ok':'err');
+  }catch(err){ $('reportStatus').textContent='推送错误：'+err.message; $('reportStatus').className='status err'; }
+  finally{ $('push').disabled=false; }
+}
+async function loadReport(){
+  try{
+    const r = await fetch('/api/report',{credentials:'same-origin'});
+    if(!r.ok) return;
+    const d = await r.json();
+    if(d && d.report) showReport(d.report, d.generated_at, d.can_push);
+    else if(d && d.can_push) $('push').dataset.can='1';
+  }catch{}
+}
+
 $('add').addEventListener('click', ()=>addRow());
 $('save').addEventListener('click', save);
+$('gen').addEventListener('click', gen);
+$('push').addEventListener('click', pushReport);
 $('logout').addEventListener('click', async ()=>{
   try{ await fetch('/api/logout',{method:'POST',credentials:'same-origin'}); }catch{}
   location.replace('login.html');
 });
-init();
+init().then(loadReport);
 </script>
 </body>
 </html>

@@ -55,6 +55,16 @@ systemctl enable --now value-investment-api
 systemctl restart value-investment-api
 sleep 1
 
+echo "== nginx vhost =="
+if [ -f "$SRC/../nginx-value-investment.conf" ] && command -v nginx >/dev/null 2>&1; then
+  cp "$SRC/../nginx-value-investment.conf" /etc/nginx/sites-available/value-investment
+  ln -sf /etc/nginx/sites-available/value-investment /etc/nginx/sites-enabled/value-investment
+  rm -f /etc/nginx/sites-enabled/default
+  nginx -t && systemctl reload nginx && echo "   vhost installed + nginx reloaded"
+else
+  echo "   (skipped — nginx not found or conf missing)"
+fi
+
 echo "== health =="
 curl -s http://127.0.0.1:8787/api/health && echo
 echo "DONE"

@@ -70,6 +70,9 @@ nginx 需要把 `/api/` 反代到 `127.0.0.1:8787`（见 `server-setup.sh` / 主
 | GET | `/api/me` | `{user}`（未登录则 null） |
 | GET | `/api/holdings` | 当前用户持仓（401 未登录） |
 | PUT | `/api/holdings` | body `{holdings:[...]}` 覆盖保存 |
+| GET | `/api/report` | 最近一次生成的规范报告（无则 null） |
+| POST | `/api/report` | 调服务器上的 hermes 按方法论生成规范报告（~30-90s） |
+| POST | `/api/report/push` | 把报告推送到飞书（仅白名单用户，目前仅 `lucas`） |
 | GET | `/api/health` | 健康检查 |
 
 holding 字段（轻量版）：`market, ticker, name, buy_date, cost, position_pct, note`。
@@ -87,6 +90,12 @@ ls -la /var/lib/value-investment/              # 看各用户数据文件
 
 ---
 
-## 下一步（报告生成）
+## 规范报告（已实现）
 
-持仓数据就位后，下一阶段：`POST /api/report` → 把该用户的持仓（+ 未来的决策日志 / 学习笔记）组织成结构化输入，交给服务器上的 **hermes**（`hermes -z` 或 `hermes send`）按方法论生成规范报告，并可推送飞书。hermes 飞书白名单目前仅 `lucas`。
+`POST /api/report` 把当前用户的持仓组织成结构化输入 + 嵌入方法论核心（`METHODOLOGY_CONTEXT`），交给服务器上的 **hermes**（`hermes -z`）按方法论生成中文 markdown 规范报告（组合总览 / 逐仓位审视 / 组合层面 / 纪律提醒 / 下一步该补什么），不给买卖建议。报告存 `report-<user>.json`，`GET /api/report` 取最近一次。`POST /api/report/push` 经 `hermes send --to feishu` 推送（飞书白名单目前仅 `lucas`）。
+
+报告生成调用 LLM，耗时 ~30-90s：
+- gunicorn `--timeout 300`（systemd unit）
+- nginx `/api/` `proxy_read_timeout 300s`（`nginx-value-investment.conf`）
+
+**下一步**：把「决策日志 / 学习笔记」也做成输入并纳入报告输入，让报告基于「持仓 + thesis + 学习」更完整。
