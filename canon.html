@@ -75,7 +75,7 @@ async function openItem(slug){
       ${(it.related_terms||[]).length?`<p style="font-size:13px;color:var(--muted)">相关术语：${it.related_terms.map(s=>`<a href="#" onclick="VI.showTerm('${s}');return false">${s}</a>`).join('　')}</p>`:''}
       <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
       <p style="font-size:13px;color:var(--muted)">读完写一句你的收获（不是摘抄，是你自己的话）→ 留痕 + 可能解锁成就：</p>
-      <textarea class="vi-ta" id="note" placeholder="我的收获 / 关联到我的某笔持仓…">${lastNote?lastNote.detail.note:''}</textarea>
+      <textarea class="vi-ta" id="note" placeholder="我的收获 / 关联到我的某笔持仓…">${lastNote?VI.esc(lastNote.detail.note):''}</textarea>
       <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
         <button class="btn btn-primary btn-sm" id="mark">${USER?'记下 + 标为已读':'登录后可留痕'}</button>
         <span class="status" id="markst"></span></div>

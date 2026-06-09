@@ -397,6 +397,7 @@ def get_report():
     user = _current_user()
     if not user:
         return {"error": "未登录"}, 401
+    _reap_stale("reports", user)
     state = _read_report_state(user)
     if not state:
         return {"status": "none", "report": None, "can_push": user in FEISHU_USERS}
@@ -450,6 +451,20 @@ def push_report():
 # ======================================================================
 
 RDC = psycopg2.extras.RealDictCursor
+
+
+def _reap_stale(table: str, user: str) -> None:
+    """Mark rows stuck in 'running' >5min as error (worker-restart orphans).
+    `table` is a fixed literal ('company_analyses' / 'reports'), never user input."""
+    try:
+        with _db() as c, c.cursor() as cur:
+            cur.execute(
+                f"UPDATE {table} SET status='error', error=coalesce(nullif(error,''),'超时/任务中断') "
+                "WHERE username=%s AND status='running' AND coalesce(started_at,0) < %s",
+                (user, time.time() - 300),
+            )
+    except Exception:
+        pass
 
 
 def run_hermes(prompt: str) -> str:
@@ -735,6 +750,7 @@ def list_analyses():
     user = _current_user()
     if not user:
         return {"error": "未登录"}, 401
+    _reap_stale("company_analyses", user)
     ticker = request.args.get("ticker")
     with _db() as c, c.cursor(cursor_factory=RDC) as cur:
         if ticker:
@@ -755,6 +771,7 @@ def get_analysis(aid):
     user = _current_user()
     if not user:
         return {"error": "未登录"}, 401
+    _reap_stale("company_analyses", user)
     with _db() as c, c.cursor(cursor_factory=RDC) as cur:
         cur.execute("SELECT id,username,market,ticker,company_name,status,report,error,created_at,generated_at FROM company_analyses WHERE id=%s", (aid,))
         r = cur.fetchone()

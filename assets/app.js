@@ -119,13 +119,13 @@
       (rel ? '<p style="font-size:13px;color:var(--muted)">相关：' + rel + "</p>" : "") +
       '<hr style="border:none;border-top:1px solid var(--border);margin:16px 0">' +
       '<p style="font-size:13px;color:var(--muted)">用你自己的话讲一遍（讲得出才算掌握）：</p>' +
-      '<textarea class="vi-ta" id="vi-restate" placeholder="我的复述…">' + (t.my_restatement || "") + "</textarea>" +
+      '<textarea class="vi-ta" id="vi-restate" placeholder="我的复述…">' + esc(t.my_restatement || "") + "</textarea>" +
       '<div style="margin-top:10px;display:flex;gap:10px;align-items:center">' +
       '<button class="btn btn-primary btn-sm" id="vi-master">' + (t.mastery === "mastered" ? "已掌握 ✓ 更新" : "标记已掌握") + "</button>" +
       '<span class="status" id="vi-master-st"></span></div></div></div>";
     m.classList.add("open");
-    // mark seen (best-effort, only if logged in)
-    VI.api("/api/terms/" + slug + "/mastery", { method: "PUT", body: { mastery: t.mastery === "mastered" ? "mastered" : "seen", restatement: t.my_restatement || "" } });
+    // mark seen once (only if never recorded) — avoids downgrade + repeated recheck
+    if (!t.mastery) VI.api("/api/terms/" + slug + "/mastery", { method: "PUT", body: { mastery: "seen" } });
     $("#vi-master").addEventListener("click", async () => {
       const v = $("#vi-restate").value.trim();
       const res = await VI.api("/api/terms/" + slug + "/mastery", { method: "PUT", body: { mastery: "mastered", restatement: v } });
@@ -136,8 +136,9 @@
   }
 
   // ---- markdown render (shared) ----
-  function esc(s) { return String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
   function inl(s) { return esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+)`/g, "<code>$1</code>"); }
+  VI.esc = esc;
   VI.renderMd = function (md) {
     const lines = String(md || "").replace(/\r/g, "").split("\n"); const out = []; let i = 0;
     const isB = l => /^#{1,6}\s|^\s*[-*]\s|^\s*\d+\.\s|^\s*---+\s*$/.test(l);
