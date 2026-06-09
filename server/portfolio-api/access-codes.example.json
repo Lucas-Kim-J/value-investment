@@ -1,0 +1,5 @@
+{
+  "_comment": "Real codes live ONLY on the server at /etc/value-investment/access-codes.json (gitignored). This is a placeholder example. Map: access_code -> username. Each username gets isolated storage holdings-<username>.json.",
+  "your-access-code-1": "alice",
+  "your-access-code-2": "bob"
+}

@@ -2,6 +2,12 @@
 **/.env
 automation/daily-briefing/config.yaml
 
+# Access codes & API secrets — server-only, NEVER commit
+server/portfolio-api/access-codes.json
+**/access-codes.json
+**/api.env
+*.secret
+
 # Python
 __pycache__/
 *.py[cod]

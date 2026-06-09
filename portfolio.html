@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>持仓输入 · 价值投资系统</title>
+<style>
+:root { --bg:#faf9f7; --bg-soft:#f3f1ec; --fg:#1a1a1a; --fg-soft:#3d3d3d; --muted:#767676;
+  --accent:#b45309; --accent-soft:rgba(180,83,9,0.08); --warn:#c0421a; --warn-soft:rgba(220,80,40,0.08);
+  --good:#4d7c0f; --good-soft:rgba(77,124,15,0.10); --border:#e5e2dc; --code-bg:#f0ede6; }
+@media (prefers-color-scheme: dark) { :root { --bg:#16161a; --bg-soft:#1f1f24; --fg:#f0eee8; --fg-soft:#cfcdc6;
+  --muted:#8b8b85; --accent:#f59e0b; --accent-soft:rgba(245,158,11,0.12); --warn:#fb7185; --warn-soft:rgba(251,113,133,0.12);
+  --good:#a3e635; --good-soft:rgba(163,230,53,0.10); --border:#2d2d33; --code-bg:#232328; } }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--fg); font-size:15px; -webkit-font-smoothing:antialiased; padding:24px 18px 64px; }
+.wrap { max-width:1000px; margin:0 auto; }
+.topbar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:8px; }
+.topbar a { color:var(--accent); text-decoration:none; font-size:13.5px; font-weight:600; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .spacer { margin-left:auto; }
+.user-chip { font-size:13px; color:var(--muted); }
+.user-chip b { color:var(--fg); }
+.logout { background:none; border:1px solid var(--border); color:var(--fg-soft); border-radius:6px;
+  padding:4px 10px; font-size:12.5px; cursor:pointer; }
+.logout:hover { border-color:var(--warn); color:var(--warn); }
+h1 { font-size:28px; margin:14px 0 6px; letter-spacing:-0.01em; }
+.intro { color:var(--fg-soft); font-size:14.5px; margin:0 0 8px; }
+.privacy { background:var(--accent-soft); border-left:3px solid var(--accent); padding:10px 14px;
+  border-radius:0 6px 6px 0; font-size:13px; color:var(--fg-soft); margin:14px 0 22px; }
+.privacy b { color:var(--accent); }
+.table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--border); border-radius:10px; }
+table { width:100%; border-collapse:collapse; font-size:14px; min-width:760px; }
+th { text-align:left; padding:10px 10px; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em;
+  color:var(--muted); background:var(--bg-soft); border-bottom:1px solid var(--border); white-space:nowrap; font-weight:600; }
+td { padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:middle; }
+tr:last-child td { border-bottom:none; }
+td input, td select { width:100%; padding:7px 8px; border:1px solid transparent; border-radius:6px;
+  background:transparent; color:var(--fg); font-size:13.5px; font-family:inherit; }
+td input:hover, td select:hover { border-color:var(--border); }
+td input:focus, td select:focus { outline:none; border-color:var(--accent); background:var(--bg); }
+td.num input { text-align:right; font-variant-numeric:tabular-nums; }
+.del { background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; padding:4px 8px; border-radius:6px; }
+.del:hover { color:var(--warn); background:var(--warn-soft); }
+.actions { display:flex; gap:12px; align-items:center; margin-top:18px; flex-wrap:wrap; }
+.btn { padding:10px 18px; border-radius:8px; border:none; font-size:14px; font-weight:600; cursor:pointer; }
+.btn-primary { background:var(--accent); color:#fff; }
+.btn-primary:hover { filter:brightness(1.06); }
+.btn-primary:disabled { opacity:.6; cursor:default; }
+.btn-ghost { background:transparent; border:1px solid var(--border); color:var(--fg-soft); }
+.btn-ghost:hover { border-color:var(--accent); color:var(--accent); }
+.status { font-size:13px; color:var(--muted); margin-left:auto; }
+.status.ok { color:var(--good); }
+.status.err { color:var(--warn); }
+.empty { padding:30px; text-align:center; color:var(--muted); font-size:14px; }
+.report-hint { margin-top:34px; padding:16px 18px; background:var(--bg-soft); border:1px dashed var(--border);
+  border-radius:10px; color:var(--fg-soft); font-size:13.5px; line-height:1.6; }
+.report-hint b { color:var(--fg); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a href="dashboard.html">🏠 Dashboard</a>
+    <a href="index.html">📖 方法论</a>
+    <span class="spacer"></span>
+    <span class="user-chip">用户：<b id="userName">…</b></span>
+    <button class="logout" id="logout">退出</button>
+  </div>
+
+  <h1>持仓输入</h1>
+  <p class="intro">记录「我现在买了哪些」。轻量版——代码 / 市场 / 成本价 / 仓位 / 备注。</p>
+  <div class="privacy">🔒 <b>私有数据</b>：你的持仓存在服务器、按访问码隔离，只有你能看到。这是整个系统的「输入端口」——之后会基于它 + 你的方法论生成规范报告。</div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:90px">市场</th>
+          <th style="width:110px">代码</th>
+          <th style="width:140px">名称</th>
+          <th style="width:130px">买入日期</th>
+          <th style="width:110px">成本价</th>
+          <th style="width:90px">仓位%</th>
+          <th>备注 / thesis 一句话</th>
+          <th style="width:40px"></th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" style="display:none">还没有持仓 — 点「+ 添加一行」开始记录。</div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-ghost" id="add">+ 添加一行</button>
+    <button class="btn btn-primary" id="save">保存</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div class="report-hint">
+    <b>下一步（规划中）</b>：保存后，这里会出现「生成规范报告」——把你的持仓 + 决策日志 + 学习笔记喂给服务器上的 hermes，按你的方法论（Pabrai 三问、4 估值工具、经典文本/信号流逻辑）生成一份报告，并可推送到飞书。
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const MARKETS = ['美股','A股','港股','加密'];
+
+function setStatus(t, cls){ const s=$('status'); s.textContent=t; s.className='status '+(cls||''); }
+
+function rowHtml(h){
+  h = h || {};
+  const opts = MARKETS.map(m => `<option ${h.market===m?'selected':''}>${m}</option>`).join('');
+  const v = x => (x===undefined||x===null) ? '' : String(x).replace(/"/g,'&quot;');
+  return `<tr>
+    <td><select class="f-market">${opts}</select></td>
+    <td><input class="f-ticker" placeholder="COST" value="${v(h.ticker)}"></td>
+    <td><input class="f-name" placeholder="Costco" value="${v(h.name)}"></td>
+    <td><input class="f-buy_date" type="date" value="${v(h.buy_date)}"></td>
+    <td class="num"><input class="f-cost" type="number" step="any" placeholder="0.00" value="${v(h.cost)}"></td>
+    <td class="num"><input class="f-position_pct" type="number" step="any" placeholder="0" value="${v(h.position_pct)}"></td>
+    <td><input class="f-note" placeholder="为什么买 / thesis" value="${v(h.note)}"></td>
+    <td><button class="del" title="删除">✕</button></td>
+  </tr>`;
+}
+
+function addRow(h){
+  const tb=$('rows'); tb.insertAdjacentHTML('beforeend', rowHtml(h));
+  tb.lastElementChild.querySelector('.del').addEventListener('click', e=>{ e.target.closest('tr').remove(); toggleEmpty(); });
+  toggleEmpty();
+}
+function toggleEmpty(){ $('empty').style.display = $('rows').children.length ? 'none' : 'block'; }
+
+function collect(){
+  return Array.from($('rows').children).map(tr=>({
+    market: tr.querySelector('.f-market').value,
+    ticker: tr.querySelector('.f-ticker').value.trim(),
+    name: tr.querySelector('.f-name').value.trim(),
+    buy_date: tr.querySelector('.f-buy_date').value,
+    cost: tr.querySelector('.f-cost').value === '' ? null : Number(tr.querySelector('.f-cost').value),
+    position_pct: tr.querySelector('.f-position_pct').value === '' ? null : Number(tr.querySelector('.f-position_pct').value),
+    note: tr.querySelector('.f-note').value.trim(),
+  })).filter(h => h.ticker || h.name || h.note);
+}
+
+async function save(){
+  $('save').disabled=true; setStatus('保存中…');
+  try{
+    const r = await fetch('/api/holdings', {
+      method:'PUT', credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({holdings: collect()})
+    });
+    if (r.status===401){ location.replace('login.html'); return; }
+    const d = await r.json();
+    setStatus('已保存 · '+new Date(d.updated_at).toLocaleString('zh-CN'),'ok');
+  }catch(err){ setStatus('保存失败：'+err.message,'err'); }
+  finally{ $('save').disabled=false; }
+}
+
+async function init(){
+  // who am I
+  let me;
+  try { me = await (await fetch('/api/me',{credentials:'same-origin'})).json(); }
+  catch { me = {}; }
+  if (!me || !me.user){ location.replace('login.html'); return; }
+  $('userName').textContent = me.user;
+
+  // load holdings
+  try{
+    const r = await fetch('/api/holdings',{credentials:'same-origin'});
+    if (r.status===401){ location.replace('login.html'); return; }
+    const d = await r.json();
+    (d.holdings||[]).forEach(addRow);
+    toggleEmpty();
+    if (d.updated_at) setStatus('上次保存 · '+new Date(d.updated_at).toLocaleString('zh-CN'));
+  }catch(err){ setStatus('加载失败：'+err.message,'err'); }
+}
+
+$('add').addEventListener('click', ()=>addRow());
+$('save').addEventListener('click', save);
+$('logout').addEventListener('click', async ()=>{
+  try{ await fetch('/api/logout',{method:'POST',credentials:'same-origin'}); }catch{}
+  location.replace('login.html');
+});
+init();
+</script>
+</body>
+</html>

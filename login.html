@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登录 · 价值投资系统输入端口</title>
+<style>
+:root { --bg:#faf9f7; --bg-soft:#f3f1ec; --fg:#1a1a1a; --fg-soft:#3d3d3d; --muted:#767676;
+  --accent:#b45309; --accent-soft:rgba(180,83,9,0.08); --warn:#c0421a; --warn-soft:rgba(220,80,40,0.08);
+  --good:#4d7c0f; --border:#e5e2dc; }
+@media (prefers-color-scheme: dark) { :root { --bg:#16161a; --bg-soft:#1f1f24; --fg:#f0eee8; --fg-soft:#cfcdc6;
+  --muted:#8b8b85; --accent:#f59e0b; --accent-soft:rgba(245,158,11,0.12); --warn:#fb7185; --warn-soft:rgba(251,113,133,0.12);
+  --good:#a3e635; --border:#2d2d33; } }
+* { box-sizing:border-box; }
+body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--fg); -webkit-font-smoothing:antialiased; }
+.card { width:100%; max-width:380px; background:var(--bg-soft); border:1px solid var(--border);
+  border-radius:14px; padding:34px 30px; box-shadow:0 10px 40px rgba(0,0,0,0.05); }
+.eyebrow { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:0.14em; font-weight:600; margin-bottom:8px; }
+h1 { font-size:23px; margin:0 0 6px; letter-spacing:-0.01em; }
+.sub { color:var(--fg-soft); font-size:14px; margin:0 0 24px; line-height:1.5; }
+label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; font-weight:600; }
+input[type=password],input[type=text] { width:100%; padding:11px 13px; border:1px solid var(--border);
+  border-radius:8px; background:var(--bg); color:var(--fg); font-size:15px; font-family:inherit; }
+input:focus { outline:none; border-color:var(--accent); }
+button { width:100%; margin-top:16px; padding:12px; border:none; border-radius:8px; background:var(--accent);
+  color:#fff; font-size:15px; font-weight:600; cursor:pointer; }
+button:hover { filter:brightness(1.06); }
+button:disabled { opacity:.6; cursor:default; }
+.msg { margin-top:14px; font-size:13.5px; min-height:18px; }
+.msg.err { color:var(--warn); }
+.msg.ok { color:var(--good); }
+.foot { margin-top:24px; padding-top:16px; border-top:1px solid var(--border); color:var(--muted); font-size:12.5px; line-height:1.6; }
+.foot a { color:var(--accent); text-decoration:none; border-bottom:1px dotted var(--accent); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="eyebrow">Value Investing · 输入端口</div>
+    <h1>🔒 访问码登录</h1>
+    <p class="sub">输入你的访问码进入私有输入端口。只读学习站无需登录。</p>
+
+    <form id="form" autocomplete="off">
+      <label for="code">访问码</label>
+      <input type="password" id="code" name="code" placeholder="••••••••" autofocus />
+      <button type="submit" id="btn">登录</button>
+    </form>
+    <div class="msg" id="msg"></div>
+
+    <div class="foot">
+      白名单访问，无需注册。<br>
+      只是来学习的？→ <a href="dashboard.html">公开学习站 Dashboard</a>
+    </div>
+  </div>
+
+<script>
+const $ = id => document.getElementById(id);
+const msg = (t, cls) => { const m=$('msg'); m.textContent=t; m.className='msg '+(cls||''); };
+
+// already logged in? jump to portfolio
+fetch('/api/me', {credentials:'same-origin'})
+  .then(r => r.json()).then(d => { if (d && d.user) location.replace('portfolio.html'); })
+  .catch(()=>{});
+
+$('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const code = $('code').value.trim();
+  if (!code) { msg('请输入访问码','err'); return; }
+  $('btn').disabled = true; msg('验证中…');
+  try {
+    const r = await fetch('/api/login', {
+      method:'POST', credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({code})
+    });
+    const d = await r.json().catch(()=>({}));
+    if (r.ok && d.ok) { msg('欢迎，'+d.user+' ✓','ok'); location.replace('portfolio.html'); }
+    else { msg(d.error || '访问码无效','err'); $('btn').disabled=false; }
+  } catch (err) { msg('网络错误：'+err.message,'err'); $('btn').disabled=false; }
+});
+</script>
+</body>
+</html>
