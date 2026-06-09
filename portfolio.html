@@ -227,39 +227,58 @@ function showReport(md, ts, canPush){
   $('reportStatus').className = 'status ok';
   $('push').style.display = canPush ? '' : 'none';
 }
+const sleep = ms => new Promise(r=>setTimeout(r, ms));
+function setStat(t, c){ $('reportStatus').textContent = t; $('reportStatus').className = 'status '+(c||''); }
+
 async function gen(){
-  $('gen').disabled=true;
-  $('reportStatus').className='status';
-  $('reportStatus').textContent='生成中…（约 30-90 秒，hermes 正按你的方法论审视持仓）';
-  $('report').innerHTML='';
+  $('gen').disabled = true;
+  $('report').innerHTML = '';
+  setStat('生成中…（约 30-90 秒）', '');
   try{
-    const r = await fetch('/api/report',{method:'POST',credentials:'same-origin'});
+    // start the async job — returns immediately so no long idle connection
+    const r = await fetch('/api/report', {method:'POST', credentials:'same-origin'});
     if(r.status===401){ location.replace('login.html'); return; }
     const d = await r.json().catch(()=>({}));
-    if(!r.ok){ $('reportStatus').textContent='失败：'+(d.error||r.status); $('reportStatus').className='status err'; return; }
-    showReport(d.report, d.generated_at, d.can_push);
-  }catch(err){ $('reportStatus').textContent='网络错误：'+err.message; $('reportStatus').className='status err'; }
-  finally{ $('gen').disabled=false; }
+    if(!r.ok){ setStat('启动失败：'+(d.error||r.status), 'err'); $('gen').disabled=false; return; }
+    await poll();
+  }catch(err){ setStat('网络错误：'+err.message, 'err'); $('gen').disabled=false; }
 }
+
+async function poll(){
+  const t0 = Date.now();
+  while(Date.now()-t0 < 200000){
+    await sleep(3000);
+    let d;
+    try{
+      const r = await fetch('/api/report', {credentials:'same-origin'});
+      if(r.status===401){ location.replace('login.html'); return; }
+      d = await r.json();
+    }catch(e){ continue; }  // transient blip; keep polling
+    if(d.status==='done'){ showReport(d.report, d.generated_at, d.can_push); $('gen').disabled=false; return; }
+    if(d.status==='error'){ setStat('生成失败：'+(d.error||'未知'), 'err'); $('gen').disabled=false; return; }
+    setStat('生成中… '+Math.round((Date.now()-t0)/1000)+'s（hermes 正按方法论审视持仓）', '');
+  }
+  setStat('超时，请重试', 'err'); $('gen').disabled=false;
+}
+
 async function pushReport(){
-  $('push').disabled=true;
-  const prev=$('reportStatus').textContent;
-  $('reportStatus').textContent='推送中…'; $('reportStatus').className='status';
+  $('push').disabled = true;
+  setStat('推送中…', '');
   try{
-    const r = await fetch('/api/report/push',{method:'POST',credentials:'same-origin'});
+    const r = await fetch('/api/report/push', {method:'POST', credentials:'same-origin'});
     const d = await r.json().catch(()=>({}));
-    $('reportStatus').textContent = r.ok ? '已发到飞书 ✓' : ('推送失败：'+(d.error||r.status));
-    $('reportStatus').className = 'status '+(r.ok?'ok':'err');
-  }catch(err){ $('reportStatus').textContent='推送错误：'+err.message; $('reportStatus').className='status err'; }
+    setStat(r.ok ? '已发到飞书 ✓' : ('推送失败：'+(d.error||r.status)), r.ok?'ok':'err');
+  }catch(err){ setStat('推送错误：'+err.message, 'err'); }
   finally{ $('push').disabled=false; }
 }
+
 async function loadReport(){
   try{
-    const r = await fetch('/api/report',{credentials:'same-origin'});
+    const r = await fetch('/api/report', {credentials:'same-origin'});
     if(!r.ok) return;
     const d = await r.json();
-    if(d && d.report) showReport(d.report, d.generated_at, d.can_push);
-    else if(d && d.can_push) $('push').dataset.can='1';
+    if(d.status==='done' && d.report){ showReport(d.report, d.generated_at, d.can_push); }
+    else if(d.status==='running'){ $('gen').disabled = true; setStat('生成中…', ''); await poll(); }
   }catch{}
 }
 

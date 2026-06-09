@@ -20,6 +20,8 @@ import os
 import re
 import subprocess
 import tempfile
+import threading
+import time
 from pathlib import Path
 
 from flask import Flask, jsonify, request, session
@@ -195,45 +197,67 @@ def _build_report_prompt(data: dict) -> str:
     )
 
 
-@app.get("/api/report")
-def get_report():
-    """Return the last generated report, if any."""
-    user = _current_user()
-    if not user:
-        return {"error": "未登录"}, 401
+def _write_report_state(user: str, state: dict) -> None:
+    state.setdefault("can_push", user in FEISHU_USERS)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _report_file(user).write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _read_report_state(user: str) -> dict | None:
     rf = _report_file(user)
     if rf.exists():
         try:
-            return jsonify(json.loads(rf.read_text("utf-8")))
+            return json.loads(rf.read_text("utf-8"))
         except Exception:
             pass
-    return {"report": None, "generated_at": None, "can_push": user in FEISHU_USERS}
+    return None
+
+
+def _run_report_job(user: str, prompt: str) -> None:
+    """Runs in a background thread; report gen takes ~30-90s. Writes result to the
+    per-user report file so polling GETs (possibly on another worker) can read it."""
+    try:
+        r = subprocess.run(["hermes", "-z", prompt], capture_output=True, text=True, timeout=240)
+        report = (r.stdout or "").strip()
+        if r.returncode != 0 or not report:
+            err = (r.stderr or "").strip()[-300:] or "hermes 返回空内容（可能需要刷新 codex 登录）"
+            _write_report_state(user, {"status": "error", "error": err})
+        else:
+            _write_report_state(user, {"status": "done", "report": report, "generated_at": _now()})
+    except subprocess.TimeoutExpired:
+        _write_report_state(user, {"status": "error", "error": "生成超时（>240s）"})
+    except FileNotFoundError:
+        _write_report_state(user, {"status": "error", "error": "服务器未安装 hermes"})
+    except Exception as e:  # noqa: BLE001
+        _write_report_state(user, {"status": "error", "error": str(e)[:300]})
+
+
+@app.get("/api/report")
+def get_report():
+    """Current report state: {status: none|running|done|error, report?, error?, ...}."""
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    state = _read_report_state(user)
+    if not state:
+        return {"status": "none", "report": None, "can_push": user in FEISHU_USERS}
+    state.setdefault("can_push", user in FEISHU_USERS)
+    return jsonify(state)
 
 
 @app.post("/api/report")
 def gen_report():
+    """Kick off async generation; returns immediately. Poll GET /api/report for result."""
     user = _current_user()
     if not user:
         return {"error": "未登录"}, 401
+    cur = _read_report_state(user)
+    if cur and cur.get("status") == "running" and (time.time() - cur.get("started_at", 0) < 300):
+        return {"status": "running"}  # already generating
+    _write_report_state(user, {"status": "running", "started_at": time.time()})
     prompt = _build_report_prompt(_load(user))
-    try:
-        r = subprocess.run(["hermes", "-z", prompt], capture_output=True, text=True, timeout=240)
-    except FileNotFoundError:
-        return {"error": "服务器未安装 hermes，无法生成报告"}, 500
-    except subprocess.TimeoutExpired:
-        return {"error": "生成超时（>240s），请稍后重试"}, 504
-    if r.returncode != 0:
-        return {"error": "hermes 生成失败：" + (r.stderr.strip()[-300:] or "unknown")}, 502
-    report = (r.stdout or "").strip()
-    if not report:
-        return {"error": "hermes 返回空内容（可能需要刷新 codex 登录）"}, 502
-
-    out = {"report": report, "generated_at": _now(), "can_push": user in FEISHU_USERS}
-    try:
-        _report_file(user).write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-    return jsonify(out)
+    threading.Thread(target=_run_report_job, args=(user, prompt), daemon=True).start()
+    return {"status": "running"}
 
 
 @app.post("/api/report/push")
@@ -244,15 +268,10 @@ def push_report():
     target = FEISHU_USERS.get(user)
     if not target:
         return {"error": "飞书推送暂未对该用户开通"}, 403
-    rf = _report_file(user)
-    if not rf.exists():
+    state = _read_report_state(user) or {}
+    report = state.get("report") or ""
+    if state.get("status") != "done" or not report:
         return {"error": "请先生成报告"}, 400
-    try:
-        report = json.loads(rf.read_text("utf-8")).get("report") or ""
-    except Exception:
-        report = ""
-    if not report:
-        return {"error": "没有可推送的报告"}, 400
     try:
         r = subprocess.run(
             ["hermes", "send", "--to", target, "--subject", "📊 价值投资 · 持仓规范报告"],
