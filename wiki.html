@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>术语 Wiki · 价值投资学习</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body class="app">
+<div class="app-wrap">
+  <div id="vi-nav"></div>
+  <div class="app-head">
+    <div class="eyebrow">Glossary Wiki</div>
+    <h1>术语 Wiki</h1>
+    <p>价值投资的概念底座。点任意术语即查；用自己的话讲对了才算「掌握」。全站任意页面按 <kbd style="font-family:monospace;border:1px solid var(--border);border-radius:3px;padding:0 5px">⌘K</kbd> 也能速查。</p>
+  </div>
+
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+    <input class="vi-in" id="q" placeholder="搜术语 (中文 / English)…" style="flex:1;min-width:200px">
+    <span class="status" id="meta"></span>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let ALL = [];
+
+function render(items){
+  const byCat = {};
+  items.forEach(t => { (byCat[t.category||"其他"] = byCat[t.category||"其他"] || []).push(t); });
+  const masteredN = ALL.filter(t=>t.mastery==='mastered').length;
+  $('meta').textContent = `${ALL.length} 个术语 · 已掌握 ${masteredN}`;
+  $('list').innerHTML = Object.keys(byCat).map(cat => `
+    <h2 style="font-size:16px;margin:28px 0 10px;color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:6px">${cat}</h2>
+    <div class="vi-grid">${byCat[cat].map(t => `
+      <div class="vi-card" style="cursor:pointer" onclick="VI.showTerm('${t.slug}')">
+        <h3>${t.term} ${t.mastery==='mastered' ? '<span class="read-dot" title="已掌握">✓</span>' : ''}
+          ${t.term_en ? '<span style="color:var(--muted);font-size:13px;font-weight:400">'+t.term_en+'</span>' : ''}</h3>
+        <p>${(t.definition||'').slice(0,80)}</p>
+      </div>`).join('')}</div>`).join('');
+}
+
+async function load(){
+  const u = await VI.me(); VI.nav('wiki', u); await VI.loadAchTitles();
+  const r = await VI.api('/api/terms'); ALL = (r.data && r.data.items) || []; render(ALL);
+}
+$('q').addEventListener('input', () => {
+  const q = $('q').value.trim().toLowerCase();
+  render(!q ? ALL : ALL.filter(t => (t.term||'').toLowerCase().includes(q) || (t.term_en||'').toLowerCase().includes(q) || (t.slug||'').includes(q)));
+});
+load();
+</script>
+</body>
+</html>

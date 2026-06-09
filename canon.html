@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一手内容库 · 价值投资学习</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body class="app">
+<div class="app-wrap">
+  <div id="vi-nav"></div>
+  <div class="app-head">
+    <div class="eyebrow">Primary Sources</div>
+    <h1>一手内容库</h1>
+    <p>letter / AGM / 13F / 季报 / 演讲 —— 大师们的原始思维，是你认知的底层框架，优先学它胜过二手解读。</p>
+    <p style="font-size:13px;color:var(--muted)">
+      <span class="cov cov-guide">导读</span> 官方链接 + 我们的概念级读法（绝不含编造的数字/引文）。
+      读完写一句你的笔记 → 留痕 + 解锁成就。涉及具体数字，一律去官方原文核对。
+    </p>
+    <p class="status" id="overview"></p>
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px" id="filters"></div>
+  <div id="list"></div>
+</div>
+
+<div class="vi-modal-bg" id="modal"></div>
+
+<script src="assets/app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let ITEMS = [], USER = null, curKind = 'all', curTier = 'all';
+const KINDS = {letter:'Letter 信',agm:'AGM 股东会','13f':'13F 持仓',quarterly:'季报/10-K',talk:'演讲/访谈',book:'书',memo:'备忘录',tool:'工具源'};
+const TIERS = {tier0:'起点必读',tier1:'核心',tier2:'拓展'};
+
+function tierLabel(t){ return TIERS[t]||t||''; }
+
+function renderFilters(){
+  const kinds = ['all', ...Array.from(new Set(ITEMS.map(i=>i.kind)))];
+  $('filters').innerHTML =
+    kinds.map(k=>`<button class="btn btn-ghost btn-sm ${curKind===k?'':''}" style="${curKind===k?'border-color:var(--accent);color:var(--accent)':''}" onclick="setKind('${k}')">${k==='all'?'全部':(KINDS[k]||k)}</button>`).join('') +
+    ' <span style="width:1px;background:var(--border);margin:0 4px"></span> ' +
+    ['all','tier0','tier1','tier2'].map(t=>`<button class="btn btn-ghost btn-sm" style="${curTier===t?'border-color:var(--accent);color:var(--accent)':''}" onclick="setTier('${t}')">${t==='all'?'全部层级':tierLabel(t)}</button>`).join('');
+}
+window.setKind = k => { curKind=k; renderFilters(); renderList(); };
+window.setTier = t => { curTier=t; renderFilters(); renderList(); };
+
+function renderList(){
+  let xs = ITEMS.filter(i => (curKind==='all'||i.kind===curKind) && (curTier==='all'||i.tier===curTier));
+  const readN = ITEMS.filter(i=>i.read).length;
+  $('overview').textContent = `共 ${ITEMS.length} 篇 · 你已开始 ${readN} 篇`;
+  $('list').innerHTML = '<div class="vi-grid">' + xs.map(i => `
+    <div class="vi-card" style="cursor:pointer" onclick="openItem('${i.slug}')">
+      <div style="margin-bottom:8px"><span class="kind-tag">${KINDS[i.kind]||i.kind}</span><span class="cov cov-guide">导读</span> ${i.read?'<span class="read-dot" title="已开始">●</span>':''}</div>
+      <h3>${i.title}</h3>
+      <p>${i.why||''}</p>
+      <div class="meta">${i.source} · ${i.period||''} · ${tierLabel(i.tier)} · 约 ${Math.round((i.est_minutes||0)/60)}h</div>
+    </div>`).join('') + '</div>';
+}
+
+async function openItem(slug){
+  const r = await VI.api('/api/canon/'+slug); const it = r.data; if(!it||it.error) return;
+  const qs = (it.questions||[]).map(q=>`<li>${q}</li>`).join('');
+  const lastNote = (it.my_events||[]).filter(e=>e.detail&&e.detail.note).slice(-1)[0];
+  const m = $('modal');
+  m.innerHTML = `<div class="vi-modal"><div class="vi-modal-head">
+      <h2>${it.title}</h2><button class="x" onclick="document.getElementById('modal').classList.remove('open')">✕</button></div>
+    <div class="vi-modal-body">
+      <p style="color:var(--muted);font-size:13px"><span class="kind-tag">${KINDS[it.kind]||it.kind}</span> ${it.source} · ${it.period||''} · ${tierLabel(it.tier)} · 约 ${Math.round((it.est_minutes||0)/60)} 小时</p>
+      <p><strong>为什么读：</strong>${it.why||''}</p>
+      <p><strong>导读：</strong>${it.guide||''}</p>
+      ${qs?`<p><strong>读完应能回答：</strong></p><ul style="color:var(--fg-soft);padding-left:20px">${qs}</ul>`:''}
+      ${it.official_url?`<p><a href="${it.official_url}" target="_blank" rel="noopener">📎 官方原文 / 权威链接 →</a></p>`:'<p style="color:var(--muted);font-size:13px">官方链接待核实——请自行搜索权威来源。</p>'}
+      ${(it.related_terms||[]).length?`<p style="font-size:13px;color:var(--muted)">相关术语：${it.related_terms.map(s=>`<a href="#" onclick="VI.showTerm('${s}');return false">${s}</a>`).join('　')}</p>`:''}
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+      <p style="font-size:13px;color:var(--muted)">读完写一句你的收获（不是摘抄，是你自己的话）→ 留痕 + 可能解锁成就：</p>
+      <textarea class="vi-ta" id="note" placeholder="我的收获 / 关联到我的某笔持仓…">${lastNote?lastNote.detail.note:''}</textarea>
+      <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+        <button class="btn btn-primary btn-sm" id="mark">${USER?'记下 + 标为已读':'登录后可留痕'}</button>
+        <span class="status" id="markst"></span></div>
+    </div></div>`;
+  m.classList.add('open');
+  m.onclick = e => { if(e.target===m) m.classList.remove('open'); };
+  $('mark').addEventListener('click', async ()=>{
+    if(!USER){ location.href='login.html'; return; }
+    const note = $('note').value.trim();
+    const res = await VI.api('/api/canon/'+slug+'/read', {body:{note, minutes: 30}});
+    const st = $('markst');
+    if(res.ok){ st.textContent = note?'已记下 ✓':'已标为已读 ✓'; st.className='status ok'; VI.celebrate(res.data.new_achievements);
+      const item = ITEMS.find(x=>x.slug===slug); if(item) item.read=true; renderList(); }
+    else { st.textContent = (res.data&&res.data.error)||'失败'; st.className='status err'; }
+  });
+}
+window.openItem = openItem;
+
+async function load(){
+  USER = await VI.me(); VI.nav('canon', USER); await VI.loadAchTitles();
+  const r = await VI.api('/api/canon'); ITEMS = (r.data&&r.data.items)||[];
+  renderFilters(); renderList();
+}
+load();
+</script>
+</body>
+</html>

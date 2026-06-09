@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>公司分析 · 价值投资学习</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body class="app">
+<div class="app-wrap">
+  <div id="vi-nav"></div>
+  <div class="app-head">
+    <div class="eyebrow">Company Analysis</div>
+    <h1>公司分析</h1>
+    <p>一键让 hermes 按价值投资方法论审视一家公司——并<strong>按你的学习阶段</strong>调整详略（新手多解释，进阶更犀利）。不荐股、不编数字，只帮你看「该看什么、缺什么验证」。每次分析自动归档，可回看演进。</p>
+  </div>
+
+  <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:8px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+      <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">代码 *</label><input class="vi-in" id="ticker" placeholder="COST" style="width:120px"></div>
+      <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">名称</label><input class="vi-in" id="name" placeholder="Costco" style="width:140px"></div>
+      <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">市场</label>
+        <select class="vi-in" id="market"><option>美股</option><option>A股</option><option>港股</option><option>加密</option></select></div>
+      <button class="btn btn-primary" id="go">📝 一键分析</button>
+      <span class="status" id="st"></span>
+    </div>
+    <div id="fromHoldings" style="margin-top:12px;font-size:13px;color:var(--muted)"></div>
+  </div>
+
+  <div id="report" class="md-render" style="margin-top:20px"></div>
+
+  <h2 style="font-size:17px;margin:36px 0 12px;border-bottom:1px solid var(--border);padding-bottom:8px">我的公司库（归档）</h2>
+  <div id="archive"></div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+async function analyze(ticker, name, market){
+  $('go').disabled = true; $('report').innerHTML='';
+  $('st').textContent = '已提交，hermes 正按你的学习阶段审视…（约 30-90 秒）'; $('st').className='status';
+  try{
+    const r = await VI.api('/api/analyses', {body:{ticker, name, market}});
+    if(r.status===401){ location.href='login.html'; return; }
+    if(!r.ok){ $('st').textContent='启动失败：'+((r.data&&r.data.error)||r.status); $('st').className='status err'; $('go').disabled=false; return; }
+    await poll(r.data.id);
+  }catch(e){ $('st').textContent='网络错误：'+e.message; $('st').className='status err'; }
+  $('go').disabled=false; loadArchive();
+}
+async function poll(id){
+  const t0 = Date.now();
+  while(Date.now()-t0 < 200000){
+    await sleep(3000);
+    let d; try{ const r = await VI.api('/api/analyses/'+id); d=r.data; }catch(e){ continue; }
+    if(!d) continue;
+    if(d.status==='done'){ showReport(d); return; }
+    if(d.status==='error'){ $('st').textContent='分析失败：'+(d.error||'未知'); $('st').className='status err'; return; }
+    $('st').textContent='分析中… '+Math.round((Date.now()-t0)/1000)+'s';
+  }
+  $('st').textContent='超时，请重试'; $('st').className='status err';
+}
+function showReport(d){
+  $('st').textContent = (d.ticker||'')+' 分析完成 · '+(d.generated_at?new Date(d.generated_at).toLocaleString('zh-CN'):''); $('st').className='status ok';
+  $('report').innerHTML = '<div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:20px 24px">'
+    + '<div style="color:var(--muted);font-size:13px;margin-bottom:10px">'+(d.ticker||'')+' '+(d.company_name||'')+' · '+(d.market||'')+'</div>'
+    + VI.renderMd(d.report) + '</div>';
+}
+
+async function loadArchive(){
+  const r = await VI.api('/api/analyses'); const xs = (r.data&&r.data.items)||[];
+  if(!xs.length){ $('archive').innerHTML = '<p style="color:var(--muted);font-size:14px">还没有分析记录。在上面输入一个公司代码，点「一键分析」。</p>'; return; }
+  $('archive').innerHTML = '<div class="vi-grid">' + xs.map(a=>`
+    <div class="vi-card" style="cursor:pointer" onclick="openArchive(${a.id})">
+      <h3>${a.ticker} ${a.company_name?'<span style="color:var(--muted);font-size:13px;font-weight:400">'+a.company_name+'</span>':''}</h3>
+      <p>${a.market||''} · ${a.status==='done'?'已完成':a.status}</p>
+      <div class="meta">${a.created_at?new Date(a.created_at).toLocaleString('zh-CN'):''}</div>
+    </div>`).join('') + '</div>';
+}
+async function openArchive(id){
+  const r = await VI.api('/api/analyses/'+id); const d = r.data;
+  if(d && d.status==='done'){ showReport(d); window.scrollTo({top:0,behavior:'smooth'}); }
+  else if(d && d.status==='running'){ $('st').textContent='这份还在生成中…'; poll(id); }
+  else $('st').textContent='这份分析没有内容（可能失败）';
+}
+window.openArchive = openArchive;
+
+async function loadHoldings(){
+  const r = await VI.api('/api/holdings'); const hs = (r.data&&r.data.holdings)||[];
+  if(hs.length){ $('fromHoldings').innerHTML = '从持仓快速分析：' + hs.map(h=>`<button class="btn btn-ghost btn-sm" style="margin:2px" onclick="quick('${h.ticker}','${(h.name||'').replace(/'/g,'')}','${h.market||''}')">${h.ticker}</button>`).join(''); }
+}
+window.quick = (t,n,m) => { $('ticker').value=t; $('name').value=n; if(m)$('market').value=m; analyze(t,n,m); };
+
+$('go').addEventListener('click', ()=>{
+  const t = $('ticker').value.trim(); if(!t){ $('st').textContent='请输入公司代码'; $('st').className='status err'; return; }
+  analyze(t, $('name').value.trim(), $('market').value);
+});
+
+async function load(){ const u = await VI.requireAuth(); if(!u) return; VI.nav('analyze', u); await VI.loadAchTitles(); loadHoldings(); loadArchive(); }
+load();
+</script>
+</body>
+</html>
