@@ -201,6 +201,18 @@ def _init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_ca_user ON company_analyses(username, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_ca_user_ticker ON company_analyses(username, ticker, created_at DESC);
+            CREATE TABLE IF NOT EXISTS chat_turns (
+                id         BIGSERIAL PRIMARY KEY,
+                username   TEXT NOT NULL,
+                status     TEXT NOT NULL DEFAULT 'running',
+                question   TEXT,
+                context    TEXT,
+                reply      TEXT,
+                error      TEXT,
+                started_at DOUBLE PRECISION,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_chat_user ON chat_turns(username, created_at DESC);
             """
         )
 
@@ -782,6 +794,91 @@ def get_analysis(aid):
     d["created_at"] = d["created_at"].isoformat() if d.get("created_at") else None
     d["generated_at"] = d["generated_at"].isoformat() if d.get("generated_at") else None
     return jsonify(d)
+
+
+# ---------- hermes chat (global learning companion) ----------
+
+def compose_chat_prompt(user: str, question: str, context: str, history: list) -> str:
+    p = _build_learner_profile(user)
+    stage_note = {
+        "novice": "用户是新手，多解释、少堆术语、鼓励先打基础。",
+        "building": "用户在建体系，可直接用他已掌握的术语，对未掌握的补一句定义。",
+        "practitioner": "用户进阶，直接、犀利、省略基础。",
+    }.get(p["stage"], "")
+    hist = "\n".join(f"用户：{h['q']}\nhermes：{h['r']}" for h in history[-5:] if h.get("r"))
+    ctx = f"\n【用户正在看 / 选中的文字】「{context}」\n" if context else ""
+    return (
+        "你是 hermes，这个用户的价值投资学习伙伴。用中文、简洁、像同行对话。"
+        "目标是帮他真正学懂：多用反问引导、鼓励他用自己的话复述、必要时关联他的方法论与持仓。\n"
+        "硬约束：不荐股、不给目标价；**绝不编造具体财务数字**（涉及具体数字就提示「去官方原文核对」）；不知道就说不知道。回答控制在 250 字内，除非他要求展开。\n\n"
+        f"{METHODOLOGY_CONTEXT}\n\n"
+        f"【用户画像】阶段={p['stage']}；已掌握术语：{('、'.join(p['mastered_terms'][:20]) or '暂无')}。{stage_note}\n"
+        f"{ctx}"
+        + (f"\n【最近对话】\n{hist}\n" if hist else "")
+        + f"\n用户：{question}\nhermes："
+    )
+
+
+def _run_chat_job(turn_id: int, prompt: str) -> None:
+    try:
+        reply = run_hermes(prompt)
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE chat_turns SET status='done', reply=%s WHERE id=%s", (reply, turn_id))
+    except subprocess.TimeoutExpired:
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE chat_turns SET status='error', error='思考超时，请重试' WHERE id=%s", (turn_id,))
+    except Exception as e:  # noqa: BLE001
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE chat_turns SET status='error', error=%s WHERE id=%s", (str(e)[:300], turn_id))
+
+
+@app.get("/api/chat")
+def chat_history():
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT id,status,question,context,reply,error,created_at FROM chat_turns WHERE username=%s ORDER BY id DESC LIMIT 16", (user,))
+        rows = list(cur.fetchall())[::-1]
+    items = [{"id": r["id"], "status": r["status"], "question": r["question"], "context": r["context"],
+              "reply": r["reply"], "error": r["error"]} for r in rows]
+    return jsonify({"items": items})
+
+
+@app.post("/api/chat")
+def chat_send():
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    body = request.get_json(force=True, silent=True) or {}
+    question = str(body.get("question", "")).strip()[:2000]
+    context = str(body.get("context", "")).strip()[:1500]
+    if not question:
+        return {"error": "请输入问题"}, 400
+    _reap_stale("chat_turns", user)
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT question q, reply r FROM chat_turns WHERE username=%s AND status='done' ORDER BY id DESC LIMIT 5", (user,))
+        history = list(cur.fetchall())[::-1]
+        cur.execute("INSERT INTO chat_turns(username,status,question,context,started_at) VALUES (%s,'running',%s,%s,%s) RETURNING id",
+                    (user, question, context, time.time()))
+        tid = cur.fetchone()["id"]
+    prompt = compose_chat_prompt(user, question, context, history)
+    threading.Thread(target=_run_chat_job, args=(tid, prompt), daemon=True).start()
+    return {"id": tid, "status": "running"}
+
+
+@app.get("/api/chat/<int:tid>")
+def chat_poll(tid):
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    _reap_stale("chat_turns", user)
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT id,username,status,question,reply,error FROM chat_turns WHERE id=%s", (tid,))
+        r = cur.fetchone()
+    if not r or r["username"] != user:
+        return {"error": "not found"}, 404
+    return jsonify({"id": r["id"], "status": r["status"], "question": r["question"], "reply": r["reply"], "error": r["error"]})
 
 
 if __name__ == "__main__":
