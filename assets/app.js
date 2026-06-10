@@ -122,7 +122,7 @@
       '<textarea class="vi-ta" id="vi-restate" placeholder="我的复述…">' + esc(t.my_restatement || "") + "</textarea>" +
       '<div style="margin-top:10px;display:flex;gap:10px;align-items:center">' +
       '<button class="btn btn-primary btn-sm" id="vi-master">' + (t.mastery === "mastered" ? "已掌握 ✓ 更新" : "标记已掌握") + "</button>" +
-      '<span class="status" id="vi-master-st"></span></div></div></div>";
+      '<span class="status" id="vi-master-st"></span></div></div></div>';
     m.classList.add("open");
     // mark seen once (only if never recorded) — avoids downgrade + repeated recheck
     if (!t.mastery) VI.api("/api/terms/" + slug + "/mastery", { method: "PUT", body: { mastery: "seen" } });
