@@ -10,16 +10,16 @@
 <body class="app">
 <div class="app-wrap">
   <div id="vi-nav"></div>
-  <div class="app-head">
+  <div class="app-head" data-reveal>
     <div class="eyebrow">Progress &amp; Achievements</div>
     <h1>成就与进度</h1>
     <p>成就只奖励<strong>可证伪的产出</strong>和<strong>事后被验证的判断</strong>——读完写下你的话、用费曼复述讲对术语、归档一份真实分析。<strong>刷不出来</strong>，也不奖励连续打卡或纯数量。</p>
   </div>
 
-  <div class="stat-row" id="stats"></div>
+  <div class="stat-row" id="stats" data-reveal></div>
 
-  <h2 style="font-size:17px;margin:30px 0 14px;border-bottom:1px solid var(--border);padding-bottom:8px">成就</h2>
-  <div class="vi-grid" id="ach"></div>
+  <h2 style="font-size:17px;margin:30px 0 14px;border-bottom:1px solid var(--border);padding-bottom:8px" data-reveal>成就</h2>
+  <div class="vi-grid vi-rise" id="ach"></div>
 
   <div style="margin-top:34px;padding:16px 18px;background:var(--bg-soft);border:1px dashed var(--border);border-radius:10px;color:var(--fg-soft);font-size:13.5px;line-height:1.6">
     <strong>进阶成就（设计中）</strong>：thesis 兑现率（你写下「X 事件发生则证明我错」，到期回看是否应验）、「我改变了主意」（记录证据驱动的观点转向）、错误归档（把自己的判断错误写进个人失败案例）。这些需要「时间检验」，无法当下刷出，是真正衡量学习的硬指标。
@@ -37,10 +37,11 @@ async function load(){
   if(s){
     $('stats').innerHTML =
       `<div class="stat"><div class="n"><span class="stage-chip">${stageCn[s.stage]||s.stage}</span></div><div class="l">当前段位</div></div>`+
-      `<div class="stat"><div class="n">${s.canon_read}</div><div class="l">读过的一手内容</div></div>`+
-      `<div class="stat"><div class="n">${s.term_mastered}</div><div class="l">掌握的术语</div></div>`+
-      `<div class="stat"><div class="n">${s.total_hours}</div><div class="l">累计学时(h)</div></div>`;
+      `<div class="stat"><div class="n" data-countup="${s.canon_read}">0</div><div class="l">读过的一手内容</div></div>`+
+      `<div class="stat"><div class="n" data-countup="${s.term_mastered}">0</div><div class="l">掌握的术语</div></div>`+
+      `<div class="stat"><div class="n" data-countup="${s.total_hours}">0</div><div class="l">累计学时(h)</div></div>`;
   }
+  if(window.VI && VI.motion) VI.motion.scan(document);
   const r = await VI.api('/api/achievements'); const items = (r.data&&r.data.items)||[];
   const un = items.filter(a=>a.unlocked).length;
   $('ach').innerHTML = items.map(a=>`

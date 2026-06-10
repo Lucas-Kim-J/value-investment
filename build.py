@@ -46,6 +46,26 @@ def rewrite_md_links(html: str) -> str:
     return MD_LINK_RE.sub(lambda m: f'{m.group(1)}{m.group(2)}.html{m.group(3) or ""}{m.group(4)}', html)
 
 
+# No-flash guard: mark <html> for motion synchronously in <head>, with a 3s
+# fallback that reveals everything in case motion.js never loads (content is
+# never trapped hidden).
+HEAD_MOTION = (
+    "<script>document.documentElement.classList.add('vi-motion');"
+    "setTimeout(function(){if(!document.documentElement.getAttribute('data-vi-ready'))"
+    "[].forEach.call(document.querySelectorAll('[data-reveal]'),function(e){e.classList.add('is-in')})},3000)</script>"
+)
+
+
+def inject_motion(html: str, root: str) -> str:
+    """Inject the motion layer (CSS + head guard + JS) into a finished page. Idempotent."""
+    if "assets/motion.css" not in html:
+        head = f'{HEAD_MOTION}\n<link rel="stylesheet" href="{root}assets/motion.css">'
+        html = html.replace("</head>", head + "\n</head>", 1)
+    if "assets/motion.js" not in html:
+        html = html.replace("</body>", f'<script src="{root}assets/motion.js"></script>\n</body>', 1)
+    return html
+
+
 def wrap_tables(html: str) -> str:
     """Wrap <table> in a horizontally-scrollable div for mobile."""
     return html.replace("<table>", '<div class="table-wrap"><table>').replace("</table>", "</table></div>")
@@ -170,13 +190,15 @@ def build() -> None:
         if src.suffix == ".md":
             out = DIST / rel.with_suffix(".html")
             out.parent.mkdir(parents=True, exist_ok=True)
-            out.write_text(convert_markdown(src), encoding="utf-8")
+            html = inject_motion(convert_markdown(src), rel_root(rel.with_suffix(".html")))
+            out.write_text(html, encoding="utf-8")
             md_count += 1
         elif src.suffix == ".html":
             out = DIST / rel
             out.parent.mkdir(parents=True, exist_ok=True)
             # Copy existing hand-made pages, but rewrite their .md links -> .html
-            out.write_text(rewrite_md_links(src.read_text(encoding="utf-8")), encoding="utf-8")
+            html = inject_motion(rewrite_md_links(src.read_text(encoding="utf-8")), rel_root(rel))
+            out.write_text(html, encoding="utf-8")
             html_count += 1
 
     total = md_count + html_count

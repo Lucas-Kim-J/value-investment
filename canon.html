@@ -10,7 +10,7 @@
 <body class="app">
 <div class="app-wrap">
   <div id="vi-nav"></div>
-  <div class="app-head">
+  <div class="app-head" data-reveal>
     <div class="eyebrow">Primary Sources</div>
     <h1>一手内容库</h1>
     <p>letter / AGM / 13F / 季报 / 演讲 —— 大师们的原始思维，是你认知的底层框架，优先学它胜过二手解读。</p>
@@ -50,7 +50,7 @@ function renderList(){
   let xs = ITEMS.filter(i => (curKind==='all'||i.kind===curKind) && (curTier==='all'||i.tier===curTier));
   const readN = ITEMS.filter(i=>i.read).length;
   $('overview').textContent = `共 ${ITEMS.length} 篇 · 你已开始 ${readN} 篇`;
-  $('list').innerHTML = '<div class="vi-grid">' + xs.map(i => `
+  $('list').innerHTML = '<div class="vi-grid vi-rise">' + xs.map(i => `
     <div class="vi-card" style="cursor:pointer" onclick="openItem('${i.slug}')">
       <div style="margin-bottom:8px"><span class="kind-tag">${KINDS[i.kind]||i.kind}</span><span class="cov cov-guide">导读</span> ${i.read?'<span class="read-dot" title="已开始">●</span>':''}</div>
       <h3>${i.title}</h3>

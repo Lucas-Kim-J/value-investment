@@ -1,0 +1,208 @@
+/* ============================================================================
+   motion.css — site-wide "灵动 + 丝滑" layer (vanilla, no framework)
+   Inspired by react-bits (spotlight / shiny-text / count-up / tilt) and
+   designspells.com (button-press physics, modal spring, premium easings).
+
+   Loaded AFTER style.css + app.css on every page (injected by build.py), so
+   same-specificity rules here win. Everything is gated behind `html.vi-motion`
+   (added by a tiny head script) and disabled under prefers-reduced-motion, so
+   content is NEVER dependent on motion to be usable.
+   ========================================================================== */
+
+:root {
+  --ease-out: cubic-bezier(.16, 1, .3, 1);      /* easeOutExpo — snappy, soft landing */
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1); /* subtle overshoot */
+  --ease-elastic: cubic-bezier(.175, .885, .32, 1.275);
+  --t-fast: .15s; --t: .24s; --t-slow: .42s;
+  --bg-elev: #ffffff;
+  --accent-2: #d97706;
+  --glow: rgba(180, 83, 9, .16);
+  --ring: rgba(180, 83, 9, .30);
+  --shadow-1: 0 1px 2px rgba(0,0,0,.04), 0 4px 14px rgba(0,0,0,.05);
+  --shadow-2: 0 10px 34px rgba(0,0,0,.10);
+  --shadow-3: 0 24px 64px rgba(0,0,0,.16);
+  --aurora-1: rgba(245,158,11,.20);
+  --aurora-2: rgba(217,119,6,.16);
+  --aurora-3: rgba(132,90,223,.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-elev: #26262d;
+    --accent-2: #fcd34d;
+    --glow: rgba(245,158,11,.26);
+    --ring: rgba(245,158,11,.40);
+    --shadow-1: 0 1px 2px rgba(0,0,0,.3);
+    --shadow-2: 0 12px 38px rgba(0,0,0,.5);
+    --shadow-3: 0 28px 72px rgba(0,0,0,.6);
+    --aurora-1: rgba(245,158,11,.22);
+    --aurora-2: rgba(120,80,230,.16);
+    --aurora-3: rgba(56,189,160,.12);
+  }
+}
+
+::selection { background: var(--accent-soft); color: var(--accent); }
+
+/* ---------------------------------------------------------------- buttons */
+html.vi-motion .btn,
+html.vi-motion .vi-chip,
+html.vi-motion .kbtn,
+html.vi-motion #vi-chat-send,
+html.vi-motion #vi-sel-toolbar button {
+  position: relative; overflow: hidden;
+  transition: transform var(--t-fast) var(--ease-out), filter var(--t-fast) ease,
+              box-shadow var(--t) var(--ease-out), border-color var(--t) ease, background var(--t) ease;
+}
+html.vi-motion .btn:active,
+html.vi-motion .vi-chip:active,
+html.vi-motion .kbtn:active,
+html.vi-motion #vi-chat-send:active { transform: scale(.96); }
+html.vi-motion .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px var(--glow); }
+html.vi-motion .btn-primary:active { transform: translateY(0) scale(.98); }
+
+/* click ripple (JS appends .vi-ripple at the click point) */
+.vi-ripple {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  transform: translate(-50%, -50%) scale(0); background: currentColor; opacity: .28;
+  animation: vi-ripple .55s var(--ease-out) forwards;
+}
+@keyframes vi-ripple { to { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
+
+/* ------------------------------------------------------------- focus ring */
+html.vi-motion :focus-visible { outline: none; }
+html.vi-motion input:focus-visible,
+html.vi-motion textarea:focus-visible,
+html.vi-motion .vi-in:focus-visible,
+html.vi-motion .vi-ta:focus,
+html.vi-motion .cmdk-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+  transition: box-shadow var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+html.vi-motion a:focus-visible,
+html.vi-motion button:focus-visible { box-shadow: 0 0 0 3px var(--ring); border-radius: 6px; }
+
+/* ------------------------------------------------------- cards: lift + spotlight */
+html.vi-motion .vi-card {
+  position: relative; overflow: hidden; isolation: isolate;
+  transition: transform var(--t) var(--ease-out), box-shadow var(--t) var(--ease-out), border-color var(--t) ease;
+}
+html.vi-motion .vi-card::before {            /* cursor spotlight */
+  content: ""; position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(360px circle at var(--mx, -200px) var(--my, -200px), var(--glow), transparent 62%);
+  opacity: 0; transition: opacity var(--t) ease;
+}
+html.vi-motion .vi-card:hover::before { opacity: 1; }
+html.vi-motion .vi-card > * { position: relative; z-index: 1; }
+html.vi-motion .vi-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-2); border-color: var(--accent); }
+
+/* ------------------------------------------------------------------- nav */
+html.vi-motion .vi-nav a { transition: background var(--t-fast) ease, color var(--t-fast) ease, transform var(--t-fast) var(--ease-out); }
+html.vi-motion .vi-nav a:hover { transform: translateY(-1px); }
+html.vi-motion .vi-nav a.active { box-shadow: inset 0 -2px 0 var(--accent); }
+html.vi-motion .stat { transition: transform var(--t) var(--ease-out), box-shadow var(--t) var(--ease-out), border-color var(--t) ease; }
+html.vi-motion .stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-1); border-color: var(--accent); }
+
+/* --------------------------------------------------------- modal spring */
+html.vi-motion .vi-modal-bg { backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+html.vi-motion .vi-modal-bg.open { animation: vi-fade .2s ease both; }
+html.vi-motion .vi-modal-bg.open .vi-modal { animation: vi-modal-in .3s var(--ease-out) both; }
+@keyframes vi-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes vi-modal-in { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
+html.vi-motion .vi-modal { box-shadow: var(--shadow-3); }
+
+/* ----------------------------------------------------- toast choreography */
+html.vi-motion .toast { transition: opacity var(--t) var(--ease-out), transform var(--t) var(--ease-spring); }
+
+/* chat panel + launcher */
+html.vi-motion #vi-chat-panel.open { animation: vi-chat-in .32s var(--ease-out) both; }
+@keyframes vi-chat-in { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: none; } }
+html.vi-motion #vi-chat-launcher { transition: transform var(--t) var(--ease-spring), box-shadow var(--t) ease; }
+html.vi-motion #vi-chat-launcher::after {           /* gentle attention halo */
+  content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--accent);
+  opacity: 0; animation: vi-halo 3.4s var(--ease-out) infinite;
+}
+@keyframes vi-halo { 0% { opacity: .5; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(1.5); } }
+html.vi-motion #vi-sel-toolbar { animation: vi-pop .18s var(--ease-spring) both; }
+@keyframes vi-pop { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+
+/* --------------------------------------------------------- scroll reveal */
+html.vi-motion [data-reveal] { opacity: 0; transform: translateY(16px); }
+html.vi-motion [data-reveal].is-in {
+  opacity: 1; transform: none;
+  transition: opacity .6s var(--ease-out), transform .6s var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 70ms);
+}
+
+/* dynamic lists (canon/wiki/analyze cards rendered after fetch): gentle entrance */
+html.vi-motion .vi-rise > * { animation: vi-rise .5s var(--ease-out) both; }
+@keyframes vi-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+/* --------------------------------------------------------------- shiny text */
+.vi-shiny {
+  background: linear-gradient(100deg, var(--fg) 30%, var(--accent) 50%, var(--fg) 70%);
+  background-size: 220% auto; -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+html.vi-motion .vi-shiny { animation: vi-shine 5.5s linear infinite; }
+@keyframes vi-shine { from { background-position: 200% center; } to { background-position: -200% center; } }
+.vi-grad {
+  background: linear-gradient(110deg, var(--accent), var(--accent-2) 60%, var(--accent));
+  background-size: 200% auto; -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+html.vi-motion .vi-grad { animation: vi-shine 7s linear infinite; }
+
+/* ---------------------------------------------------------------- aurora bg */
+.vi-aurora { position: relative; }
+.vi-aurora > .vi-aurora-layer {
+  position: absolute; inset: -40% -10% auto -10%; height: 360px; z-index: -1; pointer-events: none;
+  filter: blur(70px); opacity: .9; border-radius: 50%;
+  background:
+    radial-gradient(40% 60% at 20% 30%, var(--aurora-1), transparent 70%),
+    radial-gradient(45% 55% at 75% 25%, var(--aurora-2), transparent 70%),
+    radial-gradient(40% 50% at 50% 60%, var(--aurora-3), transparent 70%);
+}
+html.vi-motion .vi-aurora > .vi-aurora-layer { animation: vi-drift 18s ease-in-out infinite alternate; }
+@keyframes vi-drift {
+  from { transform: translate3d(-3%, 0, 0) scale(1); }
+  to   { transform: translate3d(4%, 2%, 0) scale(1.12); }
+}
+
+/* ----------------------------------------------------------- shimmer / skeleton */
+html.vi-motion .vi-think { position: relative; }
+.vi-skeleton {
+  background: linear-gradient(90deg, var(--bg-soft) 25%, var(--border) 37%, var(--bg-soft) 63%);
+  background-size: 400% 100%; border-radius: 6px; animation: vi-shimmer 1.3s ease infinite;
+}
+@keyframes vi-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+/* count-up uses tabular figures so width doesn't jitter */
+.stat .n, [data-countup] { font-variant-numeric: tabular-nums; }
+
+/* confetti canvas (achievement unlocks) */
+#vi-confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+
+/* ----------------------------------------------- page enter (subtle, once) */
+html.vi-motion body { animation: vi-page .5s var(--ease-out) both; }
+@keyframes vi-page { from { opacity: 0; } to { opacity: 1; } }
+html.vi-motion .vi-nav { animation: vi-nav-in .5s var(--ease-out) both; }
+@keyframes vi-nav-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+/* ===================================================================== a11y
+   Honor reduced-motion: kill all motion, force any hidden reveal target visible.
+   ==================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  html.vi-motion *, html.vi-motion *::before, html.vi-motion *::after {
+    animation-duration: .001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important; scroll-behavior: auto !important;
+  }
+  html.vi-motion [data-reveal] { opacity: 1 !important; transform: none !important; }
+  html.vi-motion .vi-aurora > .vi-aurora-layer,
+  html.vi-motion #vi-chat-launcher::after { animation: none !important; }
+}
+
+/* touch devices: no hover spotlight lift jitter, no magnetic */
+@media (hover: none) {
+  html.vi-motion .vi-card:hover { transform: none; }
+  html.vi-motion .vi-card::before { display: none; }
+}

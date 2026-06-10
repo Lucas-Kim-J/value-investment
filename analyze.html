@@ -10,7 +10,7 @@
 <body class="app">
 <div class="app-wrap">
   <div id="vi-nav"></div>
-  <div class="app-head">
+  <div class="app-head" data-reveal>
     <div class="eyebrow">Company Analysis</div>
     <h1>公司分析</h1>
     <p>一键让 hermes 按价值投资方法论审视一家公司——并<strong>按你的学习阶段</strong>调整详略（新手多解释，进阶更犀利）。不荐股、不编数字，只帮你看「该看什么、缺什么验证」。每次分析自动归档，可回看演进。</p>
@@ -72,7 +72,7 @@ function showReport(d){
 async function loadArchive(){
   const r = await VI.api('/api/analyses'); const xs = (r.data&&r.data.items)||[];
   if(!xs.length){ $('archive').innerHTML = '<p style="color:var(--muted);font-size:14px">还没有分析记录。在上面输入一个公司代码，点「一键分析」。</p>'; return; }
-  $('archive').innerHTML = '<div class="vi-grid">' + xs.map(a=>`
+  $('archive').innerHTML = '<div class="vi-grid vi-rise">' + xs.map(a=>`
     <div class="vi-card" style="cursor:pointer" onclick="openArchive(${a.id})">
       <h3>${VI.esc(a.ticker)} ${a.company_name?'<span style="color:var(--muted);font-size:13px;font-weight:400">'+VI.esc(a.company_name)+'</span>':''}</h3>
       <p>${VI.esc(a.market||'')} · ${a.status==='done'?'已完成':(a.status==='error'?'失败/超时':a.status)}</p>
