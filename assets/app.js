@@ -115,7 +115,8 @@
       '<div class="vi-modal"><div class="vi-modal-head"><h2>' + t.term + (t.term_en ? ' <span style="color:var(--muted);font-size:14px;font-weight:400">' + t.term_en + "</span>" : "") +
       '</h2><button class="x" onclick="document.getElementById(\'vi-term-modal\').classList.remove(\'open\')">✕</button></div>' +
       '<div class="vi-modal-body">' +
-      "<p>" + (t.definition || "") + "</p>" +
+      (t.learned ? '<p style="font-size:12.5px;color:var(--accent);background:var(--accent-soft);padding:8px 10px;border-radius:8px;margin:0 0 10px">⚠️ 划词时 hermes 生成的草稿，涉及数字/事实请先去官方来源核对，再用自己的话标「掌握」。</p>' : "") +
+      "<p>" + esc(t.definition || "") + "</p>" +
       (t.detail_url ? '<p><a href="' + t.detail_url + '">查看详细 →</a></p>' : "") +
       (rel ? '<p style="font-size:13px;color:var(--muted)">相关：' + rel + "</p>" : "") +
       '<hr style="border:none;border-top:1px solid var(--border);margin:16px 0">' +
@@ -234,7 +235,7 @@
 
   // selection mini-toolbar
   function removeToolbar() { const t = $("#vi-sel-toolbar"); if (t) t.remove(); }
-  function showToolbar(text, rect) {
+  function showToolbar(text, rect, ctx) {
     removeToolbar();
     const tb = document.createElement("div"); tb.id = "vi-sel-toolbar";
     tb.innerHTML = '<button data-a="explain">🔍 解释</button><button data-a="ask">💬 问 hermes</button>';
@@ -245,17 +246,69 @@
     if (top + th > window.innerHeight - 8) top = Math.max(8, rect.top - th - 8); // flip above if no room below
     left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));              // clamp to viewport
     tb.style.top = top + "px"; tb.style.left = left + "px";
-    tb.querySelector('[data-a="explain"]').addEventListener("click", () => { explainSel(text); removeToolbar(); });
+    tb.querySelector('[data-a="explain"]').addEventListener("click", () => { VI.explain(text, ctx); removeToolbar(); });
     tb.querySelector('[data-a="ask"]').addEventListener("click", () => { VI.askAbout(text); removeToolbar(); });
   }
-  async function explainSel(text) {
-    await ensureTerms();
-    const lc = text.toLowerCase();
-    let t = TERMS.find(x => (x.term || "").toLowerCase() === lc || (x.en || "").toLowerCase() === lc);
-    if (!t) t = TERMS.find(x => x.term && text.includes(x.term)) || TERMS.find(x => x.en && lc.includes(x.en.toLowerCase()) && x.en.length > 2);
-    if (t) { VI.showTerm(t.slug); return; }
-    sendChat("用一句话解释这个概念，并指出它在价值投资里怎么用：「" + text + "」");
-  }
+
+  // inline 解释 card: hermes explains the selection (grounded on the curated term if any),
+  // then offers to save unknown terms into the wiki ("我划词学的").
+  VI.explain = async function (text, context) {
+    let m = $("#vi-explain-modal");
+    if (!m) {
+      m = document.createElement("div"); m.id = "vi-explain-modal"; m.className = "vi-modal-bg";
+      document.body.appendChild(m); m.addEventListener("click", e => { if (e.target === m) m.classList.remove("open"); });
+    }
+    m.innerHTML =
+      '<div class="vi-modal" style="max-width:520px"><div class="vi-modal-head">' +
+      '<h2>🔍 ' + esc(text.slice(0, 40)) + (text.length > 40 ? "…" : "") + '</h2>' +
+      '<button class="x" id="vi-ex-x">✕</button></div>' +
+      '<div class="vi-modal-body" id="vi-ex-body"><p class="vi-think">解释中…</p></div></div>';
+    m.classList.add("open");
+    $("#vi-ex-x").addEventListener("click", () => m.classList.remove("open"));
+    const body = $("#vi-ex-body");
+    let r;
+    try { r = await VI.api("/api/explain", { body: { text, context: context || "" } }); }
+    catch (e) { body.innerHTML = '<p class="status err">请求失败，请重试</p>'; return; }
+    if (r.status === 401) { body.innerHTML = "请先 <a href='login.html'>登录</a> 再用解释功能。"; return; }
+    if (!r.ok) { body.innerHTML = '<p class="status err">' + esc((r.data && r.data.error) || "出错了") + "</p>"; return; }
+    const curated = r.data.curated, jid = r.data.id;
+    let head = "";
+    if (curated) {
+      head = '<div class="vi-ex-curated"><div class="vi-ex-label"><span class="cov cov-guide">术语库</span> ' +
+        esc(curated.term) + (curated.term_en ? ' <span class="en">' + esc(curated.term_en) + "</span>" : "") + "</div>" +
+        "<p>" + esc(curated.definition || "") + "</p>" +
+        '<a href="#" id="vi-ex-card">查看完整术语卡 →</a></div>';
+    }
+    body.innerHTML = head +
+      '<div class="vi-ex-hermes"><div class="vi-ex-label">💬 hermes 讲解' +
+      (curated ? "" : ' <span class="vi-ex-draft">未收录术语 · AI 草稿</span>') + "</div>" +
+      '<div id="vi-ex-reply"><span class="vi-think">解释中… 0s</span></div></div>' +
+      '<div id="vi-ex-actions" class="vi-ex-actions"></div>';
+    if (curated) $("#vi-ex-card").addEventListener("click", e => { e.preventDefault(); m.classList.remove("open"); VI.showTerm(curated.slug); });
+    // poll for the explanation
+    const reply = $("#vi-ex-reply"); const t0 = Date.now(); let finalReply = "";
+    while (Date.now() - t0 < 240000) {
+      await sleep(2500);
+      if (!document.body.contains(reply)) return; // card closed/replaced
+      let d; try { d = (await VI.api("/api/explain/" + jid)).data; } catch (e) { continue; }
+      if (!d) continue;
+      if (d.status === "done") { finalReply = d.reply || ""; reply.innerHTML = VI.renderMd(finalReply); break; }
+      if (d.status === "error") { reply.innerHTML = '<span class="vi-think">' + esc(d.error || "出错") + "</span>"; break; }
+      reply.innerHTML = '<span class="vi-think">解释中… ' + Math.round((Date.now() - t0) / 1000) + "s</span>";
+    }
+    const actions = $("#vi-ex-actions"); if (!actions) return;
+    let btns = '<button class="btn btn-ghost btn-sm" id="vi-ex-ask">💬 在聊天里追问</button>';
+    if (!curated && finalReply) btns = '<button class="btn btn-primary btn-sm" id="vi-ex-save">📌 收入术语库</button> ' + btns;
+    actions.innerHTML = btns;
+    if ($("#vi-ex-ask")) $("#vi-ex-ask").addEventListener("click", () => { m.classList.remove("open"); VI.askAbout(text); });
+    if ($("#vi-ex-save")) $("#vi-ex-save").addEventListener("click", async () => {
+      const b = $("#vi-ex-save"); b.disabled = true; b.textContent = "收入中…";
+      const res = await VI.api("/api/terms/learned", { body: { term: text, definition: finalReply, context: context || "" } });
+      if (res.ok) { b.textContent = "已收入 ✓"; VI.toast("已收入「我划词学的」——可去术语 Wiki 复习 / 标掌握", "📌"); VI.celebrate(res.data.new_achievements); }
+      else { b.disabled = false; b.textContent = "📌 收入术语库"; VI.toast((res.data && res.data.error) || "收藏失败"); }
+    });
+  };
+
   function initSelection() {
     document.addEventListener("mouseup", e => {
       // skip the chat panel, ⌘K palette and interactive controls — but allow content modals (canon/term)
@@ -264,7 +317,11 @@
         const sel = window.getSelection(); const text = (sel ? sel.toString() : "").trim();
         removeToolbar();
         if (text.length < 2 || text.length > 120 || !sel.rangeCount) return;
-        showToolbar(text, sel.getRangeAt(0).getBoundingClientRect());
+        const range = sel.getRangeAt(0);
+        // capture the surrounding sentence/block as context for a better explanation
+        const node = range.startContainer; const blk = node.nodeType === 3 ? node.parentElement : node;
+        const ctx = (blk ? (blk.textContent || "") : "").trim().slice(0, 300);
+        showToolbar(text, range.getBoundingClientRect(), ctx);
       }, 10);
     });
     document.addEventListener("mousedown", e => { if (!e.target.closest("#vi-sel-toolbar")) removeToolbar(); });
