@@ -17,6 +17,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -213,6 +214,33 @@ def _init_db() -> None:
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now()
             );
             CREATE INDEX IF NOT EXISTS idx_chat_user ON chat_turns(username, created_at DESC);
+            -- terms the user learned by selecting text + asking hermes ("划词学的").
+            -- Kept SEPARATE from the curated glossary_terms — AI drafts, never masquerade as canon.
+            CREATE TABLE IF NOT EXISTS user_terms (
+                username   TEXT NOT NULL,
+                slug       TEXT NOT NULL,
+                term       TEXT NOT NULL,
+                term_en    TEXT,
+                definition TEXT,
+                source     TEXT DEFAULT 'hermes',         -- provenance
+                status     TEXT NOT NULL DEFAULT 'draft',  -- 'draft' | 'confirmed'
+                context    TEXT,                           -- the sentence it was selected from
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                PRIMARY KEY (username, slug)
+            );
+            -- async jobs for the inline 解释 card (same pattern as chat_turns)
+            CREATE TABLE IF NOT EXISTS explain_jobs (
+                id           BIGSERIAL PRIMARY KEY,
+                username     TEXT NOT NULL,
+                status       TEXT NOT NULL DEFAULT 'running',
+                text         TEXT,
+                context      TEXT,
+                matched_slug TEXT,
+                reply        TEXT,
+                error        TEXT,
+                started_at   DOUBLE PRECISION,
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
             """
         )
 
@@ -608,6 +636,35 @@ def read_canon(slug):
 
 # ---------- terms wiki ----------
 
+LEARNED_CATEGORY = "我划词学的（待整理）"
+_SLUG_RE = re.compile(r"[^a-z0-9一-鿿]+")
+
+
+def _slugify(s: str) -> str:
+    s = _SLUG_RE.sub("-", (s or "").strip().lower()).strip("-")
+    return s
+
+
+def _match_curated_term(text: str) -> dict | None:
+    """Find the curated glossary term a selection refers to (for grounding the
+    explanation + linking to the authoritative card). Exact term/EN first, then substring."""
+    t = (text or "").strip().lower()
+    if not t:
+        return None
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT slug,term,term_en,definition FROM glossary_terms")
+        rows = [dict(r) for r in cur.fetchall()]
+    for r in rows:
+        if (r["term"] or "").lower() == t or (r["term_en"] or "").lower() == t:
+            return r
+    for r in rows:
+        if r["term"] and r["term"] in text:
+            return r
+        if r["term_en"] and len(r["term_en"]) > 2 and r["term_en"].lower() in t:
+            return r
+    return None
+
+
 @app.get("/api/terms")
 def list_terms():
     user = _current_user()
@@ -615,8 +672,16 @@ def list_terms():
     with _db() as c, c.cursor(cursor_factory=RDC) as cur:
         cur.execute("SELECT slug,term,term_en,category,definition,detail_url,related FROM glossary_terms ORDER BY category,term")
         items = [dict(r) for r in cur.fetchall()]
+        for t in items:
+            t["learned"] = False
         mastery = {}
         if user:
+            # the user's own 划词-learned terms (AI drafts) — appended as a distinct section
+            cur.execute("SELECT slug,term,term_en,definition,status FROM user_terms WHERE username=%s ORDER BY created_at", (user,))
+            for r in cur.fetchall():
+                d = dict(r)
+                d.update(category=LEARNED_CATEGORY, detail_url=None, related=[], learned=True)
+                items.append(d)
             cur.execute("SELECT term_slug,mastery FROM user_term_mastery WHERE username=%s", (user,))
             mastery = {r["term_slug"]: r["mastery"] for r in cur.fetchall()}
     if q:
@@ -632,9 +697,18 @@ def get_term(slug):
     with _db() as c, c.cursor(cursor_factory=RDC) as cur:
         cur.execute("SELECT slug,term,term_en,category,definition,detail_url,related FROM glossary_terms WHERE slug=%s", (slug,))
         t = cur.fetchone()
-        if not t:
-            return {"error": "not found"}, 404
-        t = dict(t)
+        if t:
+            t = dict(t)
+            t["learned"] = False
+        else:  # fall back to the user's own 划词-learned terms
+            if not user:
+                return {"error": "not found"}, 404
+            cur.execute("SELECT slug,term,term_en,definition,status,context FROM user_terms WHERE username=%s AND slug=%s", (user, slug))
+            ut = cur.fetchone()
+            if not ut:
+                return {"error": "not found"}, 404
+            t = dict(ut)
+            t.update(category=LEARNED_CATEGORY, detail_url=None, related=[], learned=True)
         t["mastery"] = ""
         t["my_restatement"] = ""
         if user:
@@ -643,6 +717,39 @@ def get_term(slug):
             if m:
                 t["mastery"], t["my_restatement"] = m["mastery"], m["my_restatement"] or ""
     return jsonify(t)
+
+
+@app.post("/api/terms/learned")
+def save_learned_term():
+    """Persist a 划词-explained term into the user's wiki as an AI draft (待核实)."""
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    body = request.get_json(force=True, silent=True) or {}
+    term = str(body.get("term", "")).strip()[:120]
+    term_en = str(body.get("term_en", "")).strip()[:120]
+    definition = str(body.get("definition", "")).strip()[:4000]
+    context = str(body.get("context", "")).strip()[:1000]
+    if not term:
+        return {"error": "缺少术语"}, 400
+    if not definition:
+        return {"error": "解释还没生成完，请稍候再收藏"}, 400
+    slug = _slugify(term)
+    if not slug:
+        return {"error": "无法识别这个术语"}, 400
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT slug FROM glossary_terms WHERE slug=%s", (slug,))
+        if cur.fetchone():  # already a curated term — point the user there instead of duplicating
+            return {"ok": True, "slug": slug, "curated": True, "new_achievements": []}
+        cur.execute(
+            """INSERT INTO user_terms(username,slug,term,term_en,definition,source,status,context)
+               VALUES (%s,%s,%s,%s,%s,'hermes','draft',%s)
+               ON CONFLICT (username,slug) DO UPDATE SET
+                 term=EXCLUDED.term, term_en=EXCLUDED.term_en, definition=EXCLUDED.definition, context=EXCLUDED.context""",
+            (user, slug, term, term_en, definition, context))
+        cur.execute("INSERT INTO learning_events(username,item_type,item_slug,action,detail,minutes) VALUES (%s,'term',%s,'learned',%s,0)",
+                    (user, slug, json.dumps({"term": term, "source": "划词"}, ensure_ascii=False)))
+    return {"ok": True, "slug": slug, "curated": False, "new_achievements": _recheck_achievements(user)}
 
 
 @app.put("/api/terms/<slug>/mastery")
@@ -879,6 +986,79 @@ def chat_poll(tid):
     if not r or r["username"] != user:
         return {"error": "not found"}, 404
     return jsonify({"id": r["id"], "status": r["status"], "question": r["question"], "reply": r["reply"], "error": r["error"]})
+
+
+# ---------- inline 解释 (划词 → hermes explanation card) ----------
+
+def compose_explain_prompt(user: str, text: str, context: str, curated: dict | None) -> str:
+    p = _build_learner_profile(user)
+    stage_note = {
+        "novice": "用户是新手，讲得再朴素一点，少堆术语。",
+        "building": "用户在建体系，可以关联他已掌握的术语。",
+        "practitioner": "用户进阶，直接、精炼。",
+    }.get(p["stage"], "")
+    grounding = ""
+    if curated:
+        grounding = (f"\n【术语库已有权威定义，请以它为准、不要偏离它的含义】"
+                     f"{curated['term']}（{curated.get('term_en') or ''}）：{curated.get('definition') or ''}\n")
+    ctx = f"\n【这个词出现在这句话里】「{context}」\n" if context else ""
+    return (
+        "你是 hermes，这个用户的价值投资学习伙伴。他在阅读时划选了一个词/短语，请用中文给一个简短、好懂的解释。\n"
+        "结构：① 一句话说清它是什么；② 一句它在价值投资里怎么用 / 为什么重要；③ 如果合适，给一个简短的例子或类比。\n"
+        "硬约束：**绝不编造具体财务数字、业绩或引文**（涉及具体数字就提示「需去官方原文核对」）；不荐股、不给目标价；不确定就直说不知道。"
+        "全文控制在 180 字内，朴素、不卖弄。\n\n"
+        f"{grounding}{ctx}"
+        f"【用户阶段】{p['stage']}。{stage_note}\n"
+        f"\n要解释的词：「{text}」\nhermes 的解释："
+    )
+
+
+def _run_explain_job(job_id: int, prompt: str) -> None:
+    try:
+        reply = run_hermes(prompt)
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE explain_jobs SET status='done', reply=%s WHERE id=%s", (reply, job_id))
+    except subprocess.TimeoutExpired:
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE explain_jobs SET status='error', error='思考超时，请重试' WHERE id=%s", (job_id,))
+    except Exception as e:  # noqa: BLE001
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE explain_jobs SET status='error', error=%s WHERE id=%s", (str(e)[:300], job_id))
+
+
+@app.post("/api/explain")
+def explain_send():
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    body = request.get_json(force=True, silent=True) or {}
+    text = str(body.get("text", "")).strip()[:200]
+    context = str(body.get("context", "")).strip()[:1000]
+    if not text:
+        return {"error": "没有选中文字"}, 400
+    curated = _match_curated_term(text)
+    _reap_stale("explain_jobs", user)
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("INSERT INTO explain_jobs(username,status,text,context,matched_slug,started_at) VALUES (%s,'running',%s,%s,%s,%s) RETURNING id",
+                    (user, text, context, (curated or {}).get("slug"), time.time()))
+        jid = cur.fetchone()["id"]
+    prompt = compose_explain_prompt(user, text, context, curated)
+    threading.Thread(target=_run_explain_job, args=(jid, prompt), daemon=True).start()
+    return {"id": jid, "status": "running", "curated": curated}
+
+
+@app.get("/api/explain/<int:jid>")
+def explain_poll(jid):
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    _reap_stale("explain_jobs", user)
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT id,username,status,text,reply,error FROM explain_jobs WHERE id=%s", (jid,))
+        r = cur.fetchone()
+    if not r or r["username"] != user:
+        return {"error": "not found"}, 404
+    return jsonify({"id": r["id"], "status": r["status"], "text": r["text"], "reply": r["reply"], "error": r["error"]})
 
 
 if __name__ == "__main__":

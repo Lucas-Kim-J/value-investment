@@ -39,6 +39,7 @@ function render(items){
     <div class="vi-grid">${byCat[cat].map(t => `
       <div class="vi-card" style="cursor:pointer" onclick="VI.showTerm('${t.slug}')">
         <h3>${t.term} ${t.mastery==='mastered' ? '<span class="read-dot" title="已掌握">✓</span>' : ''}
+          ${t.learned ? '<span class="vi-ex-draft" title="划词时让 hermes 解释、自动收藏的草稿，去核对官方来源后再标掌握">划词·草稿</span>' : ''}
           ${t.term_en ? '<span style="color:var(--muted);font-size:13px;font-weight:400">'+t.term_en+'</span>' : ''}</h3>
         <p>${(t.definition||'').slice(0,80)}</p>
       </div>`).join('')}</div>`).join('');
