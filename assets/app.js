@@ -63,6 +63,7 @@
   }
   function buildPalette() {
     palette = document.createElement("div");
+    palette.id = "vi-cmdk";
     palette.className = "vi-modal-bg";
     palette.innerHTML =
       '<div class="vi-modal" style="max-width:560px">' +
@@ -236,10 +237,14 @@
   function showToolbar(text, rect) {
     removeToolbar();
     const tb = document.createElement("div"); tb.id = "vi-sel-toolbar";
-    tb.style.top = (window.scrollY + rect.bottom + 8) + "px";
-    tb.style.left = (window.scrollX + rect.left) + "px";
     tb.innerHTML = '<button data-a="explain">🔍 解释</button><button data-a="ask">💬 问 hermes</button>';
     document.body.appendChild(tb);
+    // fixed (viewport) positioning so it also shows above scrollable / fixed modals
+    const tw = tb.offsetWidth || 150, th = tb.offsetHeight || 34;
+    let top = rect.bottom + 8, left = rect.left;
+    if (top + th > window.innerHeight - 8) top = Math.max(8, rect.top - th - 8); // flip above if no room below
+    left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));              // clamp to viewport
+    tb.style.top = top + "px"; tb.style.left = left + "px";
     tb.querySelector('[data-a="explain"]').addEventListener("click", () => { explainSel(text); removeToolbar(); });
     tb.querySelector('[data-a="ask"]').addEventListener("click", () => { VI.askAbout(text); removeToolbar(); });
   }
@@ -253,7 +258,8 @@
   }
   function initSelection() {
     document.addEventListener("mouseup", e => {
-      if (e.target.closest("#vi-chat-panel, .vi-modal-bg, input, textarea, #vi-sel-toolbar, button, a")) return;
+      // skip the chat panel, ⌘K palette and interactive controls — but allow content modals (canon/term)
+      if (e.target.closest("#vi-chat-panel, #vi-cmdk, input, textarea, #vi-sel-toolbar, button, a")) return;
       setTimeout(() => {
         const sel = window.getSelection(); const text = (sel ? sel.toString() : "").trim();
         removeToolbar();
@@ -262,6 +268,8 @@
       }, 10);
     });
     document.addEventListener("mousedown", e => { if (!e.target.closest("#vi-sel-toolbar")) removeToolbar(); });
+    // fixed toolbar would float away from the selection on scroll → dismiss it (catches modal-body scroll too)
+    window.addEventListener("scroll", removeToolbar, true);
   }
 
   // ---- global hotkeys + init ----
