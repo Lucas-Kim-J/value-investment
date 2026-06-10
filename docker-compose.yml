@@ -1,0 +1,51 @@
+# Local development stack: postgres + api + nginx, mirroring production.
+#   ./dev.sh           # build static site + start everything → http://localhost:8080
+#   docker compose down # stop
+#
+# hermes (the LLM agent) does NOT run locally, so report/analysis use VI_REPORT_MODE=mock.
+# Production runs the same app.py against the server's hermes.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: value_investment
+      POSTGRES_USER: vi_app
+      POSTGRES_PASSWORD: devpass
+    volumes:
+      - vi_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vi_app -d value_investment"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ./server/portfolio-api
+    environment:
+      VI_DATABASE_URL: postgresql://vi_app:devpass@db:5432/value_investment
+      VI_SECRET_KEY: dev-secret-not-for-prod
+      VI_CODES_FILE: /run/codes/access-codes.json
+      VI_REPORT_MODE: mock
+    volumes:
+      - ./dev/access-codes.dev.json:/run/codes/access-codes.json:ro
+      # mount content so `docker compose exec api python seed.py` works locally
+      - ./seed.py:/app/seed.py:ro
+      - ./content_lib.py:/app/content_lib.py:ro
+      - ./content:/app/content:ro
+      - ./routine/glossary.md:/app/routine/glossary.md:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./dist:/usr/share/nginx/html:ro
+      - ./dev/nginx.dev.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+
+volumes:
+  vi_pgdata:

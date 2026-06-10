@@ -18,6 +18,7 @@ Design goals:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import sys
@@ -75,6 +76,7 @@ PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{title} · 价值投资系统</title>
 <link rel="stylesheet" href="{root}assets/style.css">
+<link rel="stylesheet" href="{root}assets/app.css">
 </head>
 <body class="md-page">
 <div class="md-container">
@@ -93,6 +95,7 @@ PAGE = """<!DOCTYPE html>
     <p class="src">源文件：<code>{src}</code> · 由 build.py 生成</p>
   </footer>
 </div>
+<script src="{root}assets/app.js"></script>
 </body>
 </html>
 """
@@ -140,12 +143,26 @@ def iter_files():
 
 
 def build() -> None:
-    if DIST.exists():
-        shutil.rmtree(DIST)
-    DIST.mkdir(parents=True)
+    # clean dist *contents* (not the dir itself) so docker bind-mounts stay valid
+    DIST.mkdir(parents=True, exist_ok=True)
+    for child in DIST.iterdir():
+        shutil.rmtree(child) if child.is_dir() else child.unlink()
 
     # shared assets
     shutil.copytree(ROOT / "assets", DIST / "assets")
+
+    # terms.json for the global ⌘K term search (frontend reads /assets/terms.json)
+    import content_lib
+    _terms = content_lib.parse_glossary()
+    (DIST / "assets" / "terms.json").write_text(
+        json.dumps(
+            [{"slug": t["slug"], "term": t["term"], "en": t.get("en", ""),
+              "definition": t.get("definition", ""), "detail_url": t.get("detail_url", ""),
+              "category": t.get("category", "")} for t in _terms],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
 
     md_count = html_count = 0
     for src in iter_files():

@@ -41,6 +41,14 @@ app.config.update(
 # Users whose generated report may be pushed to *their own* Feishu.
 FEISHU_USERS = {"lucas": "feishu"}
 
+# "hermes" (prod) calls the real LLM; "mock" (local dev) returns a placeholder.
+REPORT_MODE = os.environ.get("VI_REPORT_MODE", "hermes")
+_MOCK_REPORT = (
+    "## 组合总览\n\n（本地 mock 模式）这是本地开发的占位报告——未调用 hermes。\n\n"
+    "- prompt 长度：{n} 字符\n- 生产环境由服务器上的 hermes 按方法论生成真实报告\n\n"
+    "## 下一步\n\n在服务器上 `VI_REPORT_MODE` 为默认 hermes，会生成真实的逐仓位审视报告。\n"
+)
+
 METHODOLOGY_CONTEXT = """【方法论核心 v1.1】
 - B 轨学习者(~10h/周)，起点流派 Pabrai + Marks（先精通这两派 3 年再吸收其他）。
 - 配置重心：美股~50% / A股~30% / 加密≤5%净资产（加密是非对称配置，不是价值投资）。
@@ -110,6 +118,101 @@ def _init_db() -> None:
                 generated_at TIMESTAMPTZ,
                 updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
             );
+            """
+        )
+        # ---- v2: learning OS tables (all additive, never touch holdings/reports) ----
+        cur.execute(
+            """
+            -- content seed tables (rebuildable from content/ via seed.py)
+            CREATE TABLE IF NOT EXISTS glossary_terms (
+                slug       TEXT PRIMARY KEY,
+                term       TEXT NOT NULL,
+                term_en    TEXT,
+                category   TEXT,
+                definition TEXT,
+                detail_url TEXT,
+                related    TEXT[]
+            );
+            CREATE TABLE IF NOT EXISTS canon_items (
+                slug          TEXT PRIMARY KEY,
+                source        TEXT,
+                kind          TEXT,
+                title         TEXT,
+                period        TEXT,
+                official_url  TEXT,
+                coverage      TEXT,
+                tier          TEXT,
+                est_minutes   INTEGER,
+                why           TEXT,
+                guide         TEXT,
+                questions     JSONB,
+                related_terms TEXT[],
+                sort_order    INTEGER DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS achievements (
+                key         TEXT PRIMARY KEY,
+                title       TEXT,
+                description TEXT,
+                tier        INTEGER DEFAULT 1,
+                icon        TEXT,
+                rule        JSONB,
+                sort_order  INTEGER DEFAULT 0
+            );
+            -- user data tables (never overwritten by seed)
+            CREATE TABLE IF NOT EXISTS learning_events (
+                id         BIGSERIAL PRIMARY KEY,
+                username   TEXT NOT NULL,
+                item_type  TEXT NOT NULL,      -- 'canon' | 'term' | 'methodology'
+                item_slug  TEXT NOT NULL,
+                action     TEXT NOT NULL,      -- 'read' | 'noted'
+                detail     JSONB DEFAULT '{}',
+                minutes    INTEGER DEFAULT 0,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_le_user ON learning_events(username, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_le_user_item ON learning_events(username, item_type, item_slug);
+            CREATE TABLE IF NOT EXISTS user_term_mastery (
+                username       TEXT NOT NULL,
+                term_slug      TEXT NOT NULL,
+                mastery        TEXT NOT NULL DEFAULT 'seen',  -- 'seen' | 'mastered'
+                my_restatement TEXT,
+                updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+                PRIMARY KEY (username, term_slug)
+            );
+            CREATE TABLE IF NOT EXISTS user_achievements (
+                username        TEXT NOT NULL,
+                achievement_key TEXT NOT NULL,
+                unlocked_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+                PRIMARY KEY (username, achievement_key)
+            );
+            CREATE TABLE IF NOT EXISTS company_analyses (
+                id           BIGSERIAL PRIMARY KEY,
+                username     TEXT NOT NULL,
+                market       TEXT,
+                ticker       TEXT NOT NULL,
+                company_name TEXT,
+                status       TEXT NOT NULL DEFAULT 'running',
+                report       TEXT,
+                error        TEXT,
+                profile_snap JSONB,
+                started_at   DOUBLE PRECISION,
+                generated_at TIMESTAMPTZ,
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_ca_user ON company_analyses(username, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_ca_user_ticker ON company_analyses(username, ticker, created_at DESC);
+            CREATE TABLE IF NOT EXISTS chat_turns (
+                id         BIGSERIAL PRIMARY KEY,
+                username   TEXT NOT NULL,
+                status     TEXT NOT NULL DEFAULT 'running',
+                question   TEXT,
+                context    TEXT,
+                reply      TEXT,
+                error      TEXT,
+                started_at DOUBLE PRECISION,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_chat_user ON chat_turns(username, created_at DESC);
             """
         )
 
@@ -281,6 +384,10 @@ def _build_report_prompt(data: dict) -> str:
 
 def _run_report_job(user: str, prompt: str) -> None:
     """Background thread; report gen takes ~30-90s. Writes result to DB."""
+    if REPORT_MODE == "mock":
+        time.sleep(2)
+        _write_report_state(user, {"status": "done", "report": _MOCK_REPORT.format(n=len(prompt)), "generated_at": _now()})
+        return
     try:
         r = subprocess.run(["hermes", "-z", prompt], capture_output=True, text=True, timeout=240)
         report = (r.stdout or "").strip()
@@ -302,6 +409,7 @@ def get_report():
     user = _current_user()
     if not user:
         return {"error": "未登录"}, 401
+    _reap_stale("reports", user)
     state = _read_report_state(user)
     if not state:
         return {"status": "none", "report": None, "can_push": user in FEISHU_USERS}
@@ -347,6 +455,430 @@ def push_report():
     if r.returncode != 0:
         return {"error": "推送失败：" + (r.stderr.strip()[-200:] or "unknown")}, 502
     return {"ok": True}
+
+
+# ======================================================================
+# v2: learning OS — canon library, terms wiki, learning trace, achievements,
+# personalized company analysis. All additive; holdings/reports untouched.
+# ======================================================================
+
+RDC = psycopg2.extras.RealDictCursor
+
+
+def _reap_stale(table: str, user: str) -> None:
+    """Mark rows stuck in 'running' >5min as error (worker-restart orphans).
+    `table` is a fixed literal ('company_analyses' / 'reports'), never user input."""
+    try:
+        with _db() as c, c.cursor() as cur:
+            cur.execute(
+                f"UPDATE {table} SET status='error', error=coalesce(nullif(error,''),'超时/任务中断') "
+                "WHERE username=%s AND status='running' AND coalesce(started_at,0) < %s",
+                (user, time.time() - 300),
+            )
+    except Exception:
+        pass
+
+
+def run_hermes(prompt: str) -> str:
+    """Shared LLM runner. mock locally, real hermes on the server."""
+    if REPORT_MODE == "mock":
+        time.sleep(2)
+        return f"## 分析（本地 mock）\n\n本地未调用 hermes（生产环境会用服务器上的 hermes 按方法论生成）。\nprompt 长度：{len(prompt)} 字符。"
+    r = subprocess.run(["hermes", "-z", prompt], capture_output=True, text=True, timeout=240)
+    out = (r.stdout or "").strip()
+    if r.returncode != 0 or not out:
+        raise RuntimeError((r.stderr or "").strip()[-300:] or "hermes 返回空内容")
+    return out
+
+
+# ---------- learner profile + achievements ----------
+
+def _learner_stats(user: str) -> dict:
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT count(*) n FROM holdings WHERE username=%s", (user,)); holdings = cur.fetchone()["n"]
+        cur.execute("SELECT count(DISTINCT item_slug) n FROM learning_events WHERE username=%s AND item_type='canon'", (user,)); canon_read = cur.fetchone()["n"]
+        cur.execute("SELECT count(DISTINCT item_slug) n FROM learning_events WHERE username=%s AND item_type='canon' AND action='noted'", (user,)); canon_noted = cur.fetchone()["n"]
+        cur.execute("""SELECT ci.tier tier, count(DISTINCT le.item_slug) n FROM learning_events le
+                       JOIN canon_items ci ON ci.slug=le.item_slug
+                       WHERE le.username=%s AND le.item_type='canon' AND le.action='noted' GROUP BY ci.tier""", (user,))
+        noted_tier = {r["tier"]: r["n"] for r in cur.fetchall()}
+        cur.execute("SELECT count(*) n FROM user_term_mastery WHERE username=%s AND mastery='mastered'", (user,)); term_mastered = cur.fetchone()["n"]
+        cur.execute("SELECT count(*) n FROM company_analyses WHERE username=%s AND status='done'", (user,)); company_analyzed = cur.fetchone()["n"]
+        cur.execute("SELECT count(DISTINCT market) n FROM company_analyses WHERE username=%s AND status='done' AND coalesce(market,'')<>''", (user,)); markets_analyzed = cur.fetchone()["n"]
+        cur.execute("SELECT count(*) n FROM reports WHERE username=%s AND status='done'", (user,)); report_generated = cur.fetchone()["n"]
+        cur.execute("SELECT coalesce(sum(minutes),0) m FROM learning_events WHERE username=%s", (user,)); total_min = cur.fetchone()["m"]
+    return {"holdings": holdings, "canon_read": canon_read, "canon_noted": canon_noted, "canon_noted_tier": noted_tier,
+            "term_mastered": term_mastered, "company_analyzed": company_analyzed, "markets_analyzed": markets_analyzed,
+            "report_generated": report_generated, "total_min": total_min}
+
+
+def _build_learner_profile(user: str) -> dict:
+    s = _learner_stats(user)
+    if s["canon_read"] < 2 and s["term_mastered"] < 3:
+        stage = "novice"
+    elif s["canon_read"] < 8:
+        stage = "building"
+    else:
+        stage = "practitioner"
+    with _db() as c, c.cursor() as cur:
+        cur.execute("SELECT term_slug FROM user_term_mastery WHERE username=%s AND mastery='mastered'", (user,))
+        mastered = [r[0] for r in cur.fetchall()]
+    return {"stage": stage, "canon_read": s["canon_read"], "term_mastered": s["term_mastered"],
+            "total_hours": round(s["total_min"] / 60, 1), "mastered_terms": mastered, "stats": s}
+
+
+def _eval_rule(rule: dict, s: dict) -> bool:
+    t = rule.get("type")
+    if t == "any":
+        return any(_eval_rule(r, s) for r in rule.get("of", []))
+    gte = rule.get("gte", 1)
+    if t == "canon_noted_tier":
+        return s["canon_noted_tier"].get(rule.get("tier", ""), 0) >= gte
+    return s.get(t, 0) >= gte
+
+
+def _recheck_achievements(user: str) -> list:
+    if not user:
+        return []
+    s = _learner_stats(user)
+    newly = []
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT key, rule FROM achievements")
+        defs = cur.fetchall()
+        cur.execute("SELECT achievement_key FROM user_achievements WHERE username=%s", (user,))
+        have = {r["achievement_key"] for r in cur.fetchall()}
+        for d in defs:
+            if d["key"] in have:
+                continue
+            rule = d["rule"] if isinstance(d["rule"], dict) else json.loads(d["rule"])
+            if _eval_rule(rule, s):
+                cur.execute("INSERT INTO user_achievements(username,achievement_key) VALUES (%s,%s) ON CONFLICT DO NOTHING", (user, d["key"]))
+                newly.append(d["key"])
+    return newly
+
+
+# ---------- canon library ----------
+
+@app.get("/api/canon")
+def list_canon():
+    user = _current_user()
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT slug,source,kind,title,period,official_url,coverage,tier,est_minutes,why,related_terms FROM canon_items ORDER BY tier,sort_order,slug")
+        items = [dict(r) for r in cur.fetchall()]
+        read = set()
+        if user:
+            cur.execute("SELECT DISTINCT item_slug FROM learning_events WHERE username=%s AND item_type='canon'", (user,))
+            read = {r["item_slug"] for r in cur.fetchall()}
+    for it in items:
+        it["read"] = it["slug"] in read
+    return jsonify({"items": items})
+
+
+@app.get("/api/canon/<slug>")
+def get_canon(slug):
+    user = _current_user()
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT * FROM canon_items WHERE slug=%s", (slug,))
+        item = cur.fetchone()
+        if not item:
+            return {"error": "not found"}, 404
+        item = dict(item)
+        events = []
+        if user:
+            cur.execute("SELECT action,detail,created_at FROM learning_events WHERE username=%s AND item_type='canon' AND item_slug=%s ORDER BY created_at", (user, slug))
+            events = [{"action": r["action"], "detail": r["detail"], "created_at": r["created_at"].isoformat()} for r in cur.fetchall()]
+    item["my_events"] = events
+    return jsonify(item)
+
+
+@app.post("/api/canon/<slug>/read")
+def read_canon(slug):
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    body = request.get_json(force=True, silent=True) or {}
+    note = str(body.get("note", "")).strip()[:2000]
+    minutes = int(body.get("minutes", 0) or 0)
+    action = "noted" if note else "read"
+    with _db() as c, c.cursor() as cur:
+        cur.execute("INSERT INTO learning_events(username,item_type,item_slug,action,detail,minutes) VALUES (%s,'canon',%s,%s,%s,%s)",
+                    (user, slug, action, json.dumps({"note": note}, ensure_ascii=False), minutes))
+    return {"ok": True, "action": action, "new_achievements": _recheck_achievements(user)}
+
+
+# ---------- terms wiki ----------
+
+@app.get("/api/terms")
+def list_terms():
+    user = _current_user()
+    q = (request.args.get("q") or "").strip().lower()
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT slug,term,term_en,category,definition,detail_url,related FROM glossary_terms ORDER BY category,term")
+        items = [dict(r) for r in cur.fetchall()]
+        mastery = {}
+        if user:
+            cur.execute("SELECT term_slug,mastery FROM user_term_mastery WHERE username=%s", (user,))
+            mastery = {r["term_slug"]: r["mastery"] for r in cur.fetchall()}
+    if q:
+        items = [t for t in items if q in (t["term"] or "").lower() or q in (t["term_en"] or "").lower() or q in (t["slug"] or "")]
+    for t in items:
+        t["mastery"] = mastery.get(t["slug"], "")
+    return jsonify({"items": items})
+
+
+@app.get("/api/terms/<slug>")
+def get_term(slug):
+    user = _current_user()
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT slug,term,term_en,category,definition,detail_url,related FROM glossary_terms WHERE slug=%s", (slug,))
+        t = cur.fetchone()
+        if not t:
+            return {"error": "not found"}, 404
+        t = dict(t)
+        t["mastery"] = ""
+        t["my_restatement"] = ""
+        if user:
+            cur.execute("SELECT mastery,my_restatement FROM user_term_mastery WHERE username=%s AND term_slug=%s", (user, slug))
+            m = cur.fetchone()
+            if m:
+                t["mastery"], t["my_restatement"] = m["mastery"], m["my_restatement"] or ""
+    return jsonify(t)
+
+
+@app.put("/api/terms/<slug>/mastery")
+def set_mastery(slug):
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    body = request.get_json(force=True, silent=True) or {}
+    mastery = body.get("mastery", "seen")
+    if mastery not in ("seen", "mastered"):
+        return {"error": "bad mastery"}, 400
+    restatement = str(body.get("restatement", "")).strip()[:1000]
+    if mastery == "mastered" and len(restatement) < 8:
+        return {"error": "请用自己的话复述这个术语（至少一句）——讲得出才算掌握"}, 400
+    with _db() as c, c.cursor() as cur:
+        cur.execute("""INSERT INTO user_term_mastery(username,term_slug,mastery,my_restatement,updated_at)
+            VALUES (%s,%s,%s,%s,now()) ON CONFLICT (username,term_slug)
+            DO UPDATE SET mastery=EXCLUDED.mastery, my_restatement=EXCLUDED.my_restatement, updated_at=now()""",
+            (user, slug, mastery, restatement))
+    return {"ok": True, "mastery": mastery, "new_achievements": _recheck_achievements(user)}
+
+
+# ---------- learning summary + achievements ----------
+
+@app.get("/api/learning/summary")
+def learning_summary():
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    p = _build_learner_profile(user)
+    return jsonify({"stage": p["stage"], "canon_read": p["canon_read"], "term_mastered": p["term_mastered"],
+                    "total_hours": p["total_hours"], "stats": p["stats"]})
+
+
+@app.get("/api/achievements")
+def list_achievements():
+    user = _current_user()
+    if user:
+        _recheck_achievements(user)
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT key,title,description,tier,icon FROM achievements ORDER BY tier,sort_order,key")
+        defs = [dict(r) for r in cur.fetchall()]
+        have = {}
+        if user:
+            cur.execute("SELECT achievement_key,unlocked_at FROM user_achievements WHERE username=%s", (user,))
+            have = {r["achievement_key"]: r["unlocked_at"].isoformat() for r in cur.fetchall()}
+    for d in defs:
+        d["unlocked"] = d["key"] in have
+        d["unlocked_at"] = have.get(d["key"])
+    return jsonify({"items": defs, "unlocked_count": len(have)})
+
+
+# ---------- company analysis (one-click + archive) ----------
+
+def compose_analysis_prompt(user: str, company: dict) -> str:
+    p = _build_learner_profile(user)
+    if p["stage"] == "novice":
+        stance = "用户是新手（一手内容读得还少）。多解释*为什么*，每用一个术语就一句话点明定义；强调先验证再深研；不要假设他懂反向 DCF / Owner Earnings。"
+    elif p["stage"] == "building":
+        stance = "用户在建体系期。可直接用已掌握的术语，对未掌握的补一句定义；重点放在四工具三角验证的落地。"
+    else:
+        stance = "用户是进阶者。术语直接用、不解释；拔高到组合层面与 thesis 可证伪性，犀利、省略基础。"
+    mastered = "、".join(p["mastered_terms"][:30]) or "（暂无）"
+    return (
+        f"{METHODOLOGY_CONTEXT}\n\n"
+        f"【用户学习画像】阶段={p['stage']} 已读一手内容={p['canon_read']} 已掌握术语：{mastered}\n\n"
+        f"【交流策略】{stance}\n\n"
+        f"【本次分析公司】{company.get('ticker')} {company.get('name', '')} 市场={company.get('market', '')}\n"
+        "任务：按价值投资方法论对这家公司做一次审视报告。结构固定为："
+        "## 生意是什么 / ## 护城河与质量 / ## 该看哪些估值信号（四工具）/ ## 风险与价值陷阱红旗 / ## 我该补哪些验证（Pabrai 三问 + 可证伪 thesis + 退出条件）。\n"
+        "硬约束：不给买卖建议/目标价；**绝不编造任何具体财务数字**——涉及数字一律写「→ 去官方原文核对」；数据不足就说数据不足，不要编。"
+    )
+
+
+def _run_analysis_job(analysis_id: int, prompt: str) -> None:
+    try:
+        report = run_hermes(prompt)
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE company_analyses SET status='done', report=%s, generated_at=now() WHERE id=%s", (report, analysis_id))
+    except subprocess.TimeoutExpired:
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE company_analyses SET status='error', error='生成超时（>240s）' WHERE id=%s", (analysis_id,))
+    except Exception as e:  # noqa: BLE001
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE company_analyses SET status='error', error=%s WHERE id=%s", (str(e)[:300], analysis_id))
+
+
+@app.post("/api/analyses")
+def start_analysis():
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    body = request.get_json(force=True, silent=True) or {}
+    ticker = str(body.get("ticker", "")).strip()[:32]
+    if not ticker:
+        return {"error": "缺 ticker / 公司代码"}, 400
+    market = str(body.get("market", ""))[:16]
+    name = str(body.get("name", ""))[:64]
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT id,started_at FROM company_analyses WHERE username=%s AND ticker=%s AND status='running' ORDER BY id DESC LIMIT 1", (user, ticker))
+        run = cur.fetchone()
+        if run and run["started_at"] and time.time() - run["started_at"] < 300:
+            return {"id": run["id"], "status": "running"}
+    profile = _build_learner_profile(user)
+    prompt = compose_analysis_prompt(user, {"ticker": ticker, "name": name, "market": market})
+    with _db() as c, c.cursor() as cur:
+        cur.execute("""INSERT INTO company_analyses(username,market,ticker,company_name,status,profile_snap,started_at)
+            VALUES (%s,%s,%s,%s,'running',%s,%s) RETURNING id""",
+            (user, market, ticker, name, json.dumps({"stage": profile["stage"]}), time.time()))
+        aid = cur.fetchone()[0]
+    threading.Thread(target=_run_analysis_job, args=(aid, prompt), daemon=True).start()
+    return {"id": aid, "status": "running"}
+
+
+@app.get("/api/analyses")
+def list_analyses():
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    _reap_stale("company_analyses", user)
+    ticker = request.args.get("ticker")
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        if ticker:
+            cur.execute("SELECT id,market,ticker,company_name,status,created_at,generated_at FROM company_analyses WHERE username=%s AND ticker=%s ORDER BY created_at DESC", (user, ticker))
+        else:
+            cur.execute("SELECT DISTINCT ON (ticker) id,market,ticker,company_name,status,created_at,generated_at FROM company_analyses WHERE username=%s ORDER BY ticker, created_at DESC", (user,))
+        rows = []
+        for r in cur.fetchall():
+            d = dict(r)
+            d["created_at"] = d["created_at"].isoformat() if d.get("created_at") else None
+            d["generated_at"] = d["generated_at"].isoformat() if d.get("generated_at") else None
+            rows.append(d)
+    return jsonify({"items": rows})
+
+
+@app.get("/api/analyses/<int:aid>")
+def get_analysis(aid):
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    _reap_stale("company_analyses", user)
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT id,username,market,ticker,company_name,status,report,error,created_at,generated_at FROM company_analyses WHERE id=%s", (aid,))
+        r = cur.fetchone()
+    if not r or r["username"] != user:
+        return {"error": "not found"}, 404
+    d = dict(r)
+    d.pop("username", None)
+    d["created_at"] = d["created_at"].isoformat() if d.get("created_at") else None
+    d["generated_at"] = d["generated_at"].isoformat() if d.get("generated_at") else None
+    return jsonify(d)
+
+
+# ---------- hermes chat (global learning companion) ----------
+
+def compose_chat_prompt(user: str, question: str, context: str, history: list) -> str:
+    p = _build_learner_profile(user)
+    stage_note = {
+        "novice": "用户是新手，多解释、少堆术语、鼓励先打基础。",
+        "building": "用户在建体系，可直接用他已掌握的术语，对未掌握的补一句定义。",
+        "practitioner": "用户进阶，直接、犀利、省略基础。",
+    }.get(p["stage"], "")
+    hist = "\n".join(f"用户：{h['q']}\nhermes：{h['r']}" for h in history[-5:] if h.get("r"))
+    ctx = f"\n【用户正在看 / 选中的文字】「{context}」\n" if context else ""
+    return (
+        "你是 hermes，这个用户的价值投资学习伙伴。用中文、简洁、像同行对话。"
+        "目标是帮他真正学懂：多用反问引导、鼓励他用自己的话复述、必要时关联他的方法论与持仓。\n"
+        "硬约束：不荐股、不给目标价；**绝不编造具体财务数字**（涉及具体数字就提示「去官方原文核对」）；不知道就说不知道。回答控制在 250 字内，除非他要求展开。\n\n"
+        f"{METHODOLOGY_CONTEXT}\n\n"
+        f"【用户画像】阶段={p['stage']}；已掌握术语：{('、'.join(p['mastered_terms'][:20]) or '暂无')}。{stage_note}\n"
+        f"{ctx}"
+        + (f"\n【最近对话】\n{hist}\n" if hist else "")
+        + f"\n用户：{question}\nhermes："
+    )
+
+
+def _run_chat_job(turn_id: int, prompt: str) -> None:
+    try:
+        reply = run_hermes(prompt)
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE chat_turns SET status='done', reply=%s WHERE id=%s", (reply, turn_id))
+    except subprocess.TimeoutExpired:
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE chat_turns SET status='error', error='思考超时，请重试' WHERE id=%s", (turn_id,))
+    except Exception as e:  # noqa: BLE001
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE chat_turns SET status='error', error=%s WHERE id=%s", (str(e)[:300], turn_id))
+
+
+@app.get("/api/chat")
+def chat_history():
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT id,status,question,context,reply,error,created_at FROM chat_turns WHERE username=%s ORDER BY id DESC LIMIT 16", (user,))
+        rows = list(cur.fetchall())[::-1]
+    items = [{"id": r["id"], "status": r["status"], "question": r["question"], "context": r["context"],
+              "reply": r["reply"], "error": r["error"]} for r in rows]
+    return jsonify({"items": items})
+
+
+@app.post("/api/chat")
+def chat_send():
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    body = request.get_json(force=True, silent=True) or {}
+    question = str(body.get("question", "")).strip()[:2000]
+    context = str(body.get("context", "")).strip()[:1500]
+    if not question:
+        return {"error": "请输入问题"}, 400
+    _reap_stale("chat_turns", user)
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT question q, reply r FROM chat_turns WHERE username=%s AND status='done' ORDER BY id DESC LIMIT 5", (user,))
+        history = list(cur.fetchall())[::-1]
+        cur.execute("INSERT INTO chat_turns(username,status,question,context,started_at) VALUES (%s,'running',%s,%s,%s) RETURNING id",
+                    (user, question, context, time.time()))
+        tid = cur.fetchone()["id"]
+    prompt = compose_chat_prompt(user, question, context, history)
+    threading.Thread(target=_run_chat_job, args=(tid, prompt), daemon=True).start()
+    return {"id": tid, "status": "running"}
+
+
+@app.get("/api/chat/<int:tid>")
+def chat_poll(tid):
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    _reap_stale("chat_turns", user)
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT id,username,status,question,reply,error FROM chat_turns WHERE id=%s", (tid,))
+        r = cur.fetchone()
+    if not r or r["username"] != user:
+        return {"error": "not found"}, 404
+    return jsonify({"id": r["id"], "status": r["status"], "question": r["question"], "reply": r["reply"], "error": r["error"]})
 
 
 if __name__ == "__main__":

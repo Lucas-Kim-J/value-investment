@@ -1,0 +1,5 @@
+{
+  "_comment": "LOCAL DEV codes only — these only work on localhost:8080 against a throwaway local DB. Real codes live on the server, gitignored.",
+  "dev": "dev",
+  "lucas-dev": "lucas"
+}

@@ -3,282 +3,79 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard · 价值投资学习系统</title>
-<style>
-:root { --bg: #faf9f7; --bg-soft: #f3f1ec; --fg: #1a1a1a; --fg-soft: #3d3d3d;
-  --muted: #767676; --accent: #b45309; --accent-soft: rgba(180,83,9,0.08);
-  --good: #4d7c0f; --good-soft: rgba(77,124,15,0.10); --warn: #c0421a; --warn-soft: rgba(220,80,40,0.08);
-  --border: #e5e2dc; --code-bg: #f0ede6; }
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #16161a; --bg-soft: #1f1f24; --fg: #f0eee8; --fg-soft: #cfcdc6;
-    --muted: #8b8b85; --accent: #f59e0b; --accent-soft: rgba(245,158,11,0.12);
-    --good: #a3e635; --good-soft: rgba(163,230,53,0.10); --warn: #fb7185; --warn-soft: rgba(251,113,133,0.12);
-    --border: #2d2d33; --code-bg: #232328; }
-}
-* { box-sizing: border-box; }
-body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-  line-height: 1.7; color: var(--fg); background: var(--bg); font-size: 15.5px; padding: 40px 24px; -webkit-font-smoothing: antialiased; }
-.container { max-width: 1080px; margin: 0 auto; }
-.hero { margin-bottom: 48px; }
-.eyebrow { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 12px; font-weight: 600; }
-h1 { font-size: 38px; margin: 0 0 12px; letter-spacing: -0.014em; }
-.greet { color: var(--fg-soft); font-size: 17px; margin: 8px 0 0; }
-.phase-card { background: var(--accent-soft); border: 1px solid var(--border); border-left: 3px solid var(--accent); padding: 16px 22px; border-radius: 6px; margin-top: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
-.phase-card strong { color: var(--accent); }
-.phase-actions { display: flex; gap: 12px; }
-.phase-actions a { color: var(--accent); font-size: 13.5px; padding: 6px 14px; border: 1px solid var(--accent); border-radius: 4px; text-decoration: none; }
-.phase-actions a:hover { background: var(--accent); color: white; }
-.section-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; margin: 40px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-.card { background: var(--bg-soft); padding: 22px 24px; border-radius: 8px; border: 1px solid var(--border); transition: transform 0.15s, box-shadow 0.15s; text-decoration: none; color: inherit; display: block; }
-.card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.06); border-color: var(--accent); }
-.card-icon { font-size: 22px; margin-bottom: 8px; }
-.card h3 { margin: 4px 0 8px; font-size: 16.5px; color: var(--fg); }
-.card p { color: var(--fg-soft); font-size: 13.5px; margin: 0; line-height: 1.55; }
-.card .meta { color: var(--muted); font-size: 12px; margin-top: 10px; }
-.daily-flow { background: var(--bg-soft); padding: 22px 24px; border-radius: 8px; border: 1px solid var(--border); }
-.daily-flow h3 { margin: 0 0 14px; font-size: 16.5px; }
-.flow-step { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px dashed var(--border); }
-.flow-step:last-child { border-bottom: none; }
-.flow-time { color: var(--accent); font-family: "SF Mono", Menlo, monospace; font-size: 13px; flex-shrink: 0; min-width: 90px; font-weight: 600; }
-.flow-action { color: var(--fg-soft); font-size: 14px; }
-.flow-action a { color: var(--accent); border-bottom: 1px dotted var(--accent); text-decoration: none; }
-.warning-card { background: var(--warn-soft); border-left: 3px solid var(--warn); padding: 14px 18px; border-radius: 0 6px 6px 0; margin-top: 24px; font-size: 14px; color: var(--fg-soft); }
-.warning-card strong { color: var(--warn); }
-.footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; text-align: center; }
-.footer a { color: var(--accent); border-bottom: 1px dotted var(--accent); text-decoration: none; }
-@media (max-width: 600px) { h1 { font-size: 28px; } .phase-actions { width: 100%; } }
-</style>
+<title>价值投资学习 OS</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/app.css">
 </head>
-<body>
-<div class="container">
+<body class="app">
+<div class="app-wrap">
+  <div id="vi-nav"></div>
 
-  <div class="hero">
-    <div class="eyebrow">Value Investing System · B 轨</div>
-    <h1>Dashboard</h1>
-    <p class="greet">为 lucas（在校 + 实习，~10h/周）设计的端到端学习与交易系统。<br>
-    所有内容都是 living document，会随实战迭代。</p>
-
-    <div class="phase-card">
-      <div>
-        <strong>当前 Phase：Week 0（开始之前）</strong><br>
-        <span style="color: var(--fg-soft); font-size: 14px;">完成 onboarding 7 天后进入 Phase 1 · Day 1-90 "跑通第一家公司"</span>
-      </div>
-      <div class="phase-actions">
-        <a href="routine/onboarding-week-0.md">Week 0 Guide →</a>
-        <a href="learning/progress-tracker.html">Progress</a>
-      </div>
-    </div>
+  <div class="app-head" style="margin-top:14px">
+    <div class="eyebrow">Value Investing Learning OS</div>
+    <h1 id="greet">价值投资学习 OS</h1>
+    <p>学一手内容 → 留痕 + 验证 → 这些成为你分析持仓与公司的认知底座 → hermes 随你成长给个性化审视。<a href="product-vision.html">产品理念 →</a></p>
   </div>
 
-  <div class="section-title">输入端口 · Input（私有，需访问码）</div>
-  <div class="grid">
-    <a href="portfolio.html" class="card" style="border-left:3px solid var(--accent);">
-      <div class="card-icon">🔒</div>
-      <h3>持仓输入</h3>
-      <p>记录「我现在买了哪些股」——代码 / 市场 / 成本价 / 仓位 / thesis。数据存服务器、按访问码隔离，跨设备同步。</p>
-      <div class="meta">系统的输入端口 · 之后喂 hermes 生成规范报告</div>
-    </a>
+  <div id="progress"></div>
+
+  <div class="section-t">你想做什么？</div>
+  <div class="vi-grid">
+    <a class="vi-card" href="learn.html" style="border-left:3px solid var(--accent)"><div style="font-size:24px">📖</div><h3>我要学</h3><p>方法论 + 一手内容库（letter/AGM/13F/季报/演讲）。先建框架，再学大师原始思维。</p><div class="meta">学习区 →</div></a>
+    <a class="vi-card" href="wiki.html"><div style="font-size:24px">🔍</div><h3>我要查一个词</h3><p>术语 Wiki，即点即查；用自己的话讲对才算掌握。全站 ⌘K 速查。</p><div class="meta">术语 Wiki →</div></a>
+    <a class="vi-card" href="portfolio.html"><div style="font-size:24px">💼</div><h3>我要管我的仓</h3><p>录入持仓 + 生成规范报告（hermes 按方法论审视你的流程与纪律）。</p><div class="meta">我的持仓 →</div></a>
+    <a class="vi-card" href="analyze.html"><div style="font-size:24px">🏢</div><h3>我要分析一家公司</h3><p>一键分析 + 归档。按你的学习阶段调整详略，可回看演进。</p><div class="meta">公司分析 →</div></a>
   </div>
 
-  <div class="section-title">方法论 (Source of Truth)</div>
-  <div class="grid">
-    <a href="index.html" class="card">
-      <div class="card-icon">📖</div>
-      <h3>方法论 v1.1</h3>
-      <p>21 章核心方法论。Pabrai + Marks 起点。经典文本 vs 信号流分类。每个执行细节都源自这里。</p>
-      <div class="meta">最近更新：2026-06 · v1.1</div>
-    </a>
-    <a href="learning/valuation-cheatsheet.html" class="card">
-      <div class="card-icon">📐</div>
-      <h3>估值 4 工具 Cheatsheet</h3>
-      <p>前 180 天禁 DCF。反向 DCF + 历史 P/E 百分位 + EV/EBIT + Owner Earnings Yield vs 10Y。</p>
-      <div class="meta">每季度刷新一遍</div>
-    </a>
-    <a href="routine/glossary.md" class="card">
-      <div class="card-icon">📚</div>
-      <h3>术语表 Glossary</h3>
-      <p>专有名词一句话定义 + 链到详细解释。新手必读。Living document。</p>
-      <div class="meta">遇生词随时回查</div>
-    </a>
+  <div id="achPreview"></div>
+
+  <div class="section-t" style="margin-top:40px">全部模块</div>
+  <div class="vi-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+    <a class="vi-card" href="index.html"><h3>📖 方法论 v1.1</h3><p style="font-size:12.5px">21 章核心方法论</p></a>
+    <a class="vi-card" href="canon.html"><h3>📚 一手内容库</h3><p style="font-size:12.5px">25 篇认知底座</p></a>
+    <a class="vi-card" href="learning/valuation-cheatsheet.html"><h3>📐 估值 4 工具</h3><p style="font-size:12.5px">前 180 天禁 DCF</p></a>
+    <a class="vi-card" href="learning/failure-cases.html"><h3>⚠️ 失败案例</h3><p style="font-size:12.5px">尸检 6 个崩盘</p></a>
+    <a class="vi-card" href="learning/progress-tracker.html"><h3>📊 学习路径</h3><p style="font-size:12.5px">90/270/720</p></a>
+    <a class="vi-card" href="achievements.html"><h3>🏅 成就与进度</h3><p style="font-size:12.5px">证据驱动</p></a>
+    <a class="vi-card" href="routine/glossary.html"><h3>📑 Routine 模板</h3><p style="font-size:12.5px">日/周/月/季 + 熔断</p></a>
+    <a class="vi-card" href="automation/daily-briefing/README.html"><h3>🤖 每日早报</h3><p style="font-size:12.5px">飞书 via hermes</p></a>
   </div>
 
-  <div class="section-title">学习层 · Learning</div>
-  <div class="grid">
-    <a href="learning/progress-tracker.html" class="card">
-      <div class="card-icon">📊</div>
-      <h3>90/270/720 学习追踪</h3>
-      <p>三个 Phase 的进度勾选 + 本周时间投入计量。进度本地存储，每月手动备份。</p>
-      <div class="meta">每周日更新</div>
-    </a>
-    <a href="learning/canon-reading.html" class="card">
-      <div class="card-icon">📕</div>
-      <h3>经典文本清单</h3>
-      <p>13 本 / 套，~230h，6 个月并行完成。Tier 0 起点 → Tier 1 必读 → Tier 2 选读 → Tier 3 工具书。</p>
-      <div class="meta">"读完归档"，不是订阅</div>
-    </a>
-    <a href="learning/failure-cases.html" class="card">
-      <div class="card-icon">⚠️</div>
-      <h3>失败案例研究</h3>
-      <p>Bill Miller / Einhorn / Lampert / 中国明星私募 / LUNA / FTX。每月 1 个，500 字归因笔记。</p>
-      <div class="meta">不读失败者的方法论永远是宣传册</div>
-    </a>
+  <div class="footer" style="margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:13px">
+    <p>价值投资学习 OS · v2 · 数据存 PostgreSQL + 每日备份 · <a href="product-vision.html" style="color:var(--accent)">产品理念</a> · <a href="index.html" style="color:var(--accent)">方法论</a></p>
   </div>
-
-  <div class="section-title">Routine · 每日 / 每周 / 每月 / 每季</div>
-  <div class="grid">
-    <a href="routine/daily-journal.md" class="card">
-      <div class="card-icon">📅</div>
-      <h3>每日 Journal</h3>
-      <p>工作日精简版 3 min + 周末完整版 15 min + 决策日附加版。<strong>不允许跳过 2 天</strong>。</p>
-      <div class="meta">写完不修改</div>
-    </a>
-    <a href="routine/weekly-review.md" class="card">
-      <div class="card-icon">🔄</div>
-      <h3>周复盘</h3>
-      <p>每周日 1.5-2h。时间审计 + 内容产出 + 决策归因 + 行为统计 + 方法论反馈。</p>
-      <div class="meta">B 轨 ≥ 8h/周才能写</div>
-    </a>
-    <a href="routine/monthly-attribution.md" class="card">
-      <div class="card-icon">🪞</div>
-      <h3>月度归因</h3>
-      <p>每月末 4h。回报归因 + 运气 vs 能力 + 行为复盘 + 失败案例 + 思维模型更新。</p>
-      <div class="meta">诚实归因是核心训练</div>
-    </a>
-    <a href="routine/quarterly-rebalance.md" class="card">
-      <div class="card-icon">⚖️</div>
-      <h3>季度持仓重审</h3>
-      <p>每季末 8h（两周末）。零基预算式重审每个仓位 + 组合再平衡 + 季度自我评估。</p>
-      <div class="meta">仓位偏离 > 20% 必须调整</div>
-    </a>
-    <a href="routine/watchlist.md" class="card">
-      <div class="card-icon">👀</div>
-      <h3>Watchlist 跟踪</h3>
-      <p>现役 + 已离开 + Hot list + Anti-watchlist。同时深度研究 ≤ 2 家。</p>
-      <div class="meta">每月扫一次</div>
-    </a>
-    <a href="routine/circuit-breaker.md" class="card">
-      <div class="card-icon">🚨</div>
-      <h3>自动熔断 Circuit Breaker</h3>
-      <p>Tier 1 行为 / Tier 2 组合 / Tier 3 战略。规则不可 override。触发即写复盘。</p>
-      <div class="meta">没有这个 = 没有 governance</div>
-    </a>
-    <a href="routine/track-a-routine.md" class="card">
-      <div class="card-icon">🛤️</div>
-      <h3>A 轨 Routine（备选）</h3>
-      <p>3-5h/周 简化版。降级路径——多数人本来就该在 A 轨。Buffett 给妻子的遗嘱就是 A 轨。</p>
-      <div class="meta">不是 plan B，是 plan A 的简化版</div>
-    </a>
-  </div>
-
-  <div class="section-title">研究层 · 公司深度研究</div>
-  <div class="grid">
-    <a href="research/first-company-guide.md" class="card">
-      <div class="card-icon">🚀</div>
-      <h3>第一家公司 SOP</h3>
-      <p>6-8 周 / 30-50h。从选公司到 thesis 完成的逐周节奏。常见卡点 + 应对。</p>
-      <div class="meta">Phase 1 核心交付物</div>
-    </a>
-    <a href="research/company-template.md" class="card">
-      <div class="card-icon">📝</div>
-      <h3>公司研究模板</h3>
-      <p>12 节完整模板：Snapshot → 商业模式 → 行业 → 财报 → 护城河 → 管理层 → 估值 → Pabrai → Thesis → 风险 → 仓位 → 自我审查。</p>
-      <div class="meta">每家公司一份</div>
-    </a>
-    <a href="research/decision-log-template.md" class="card">
-      <div class="card-icon">🎯</div>
-      <h3>决策日志模板</h3>
-      <p>每次买卖前必填。Pabrai 三问 + 反 thesis + 情绪状态 + 退出条件 + 24 个月回看机制。</p>
-      <div class="meta">写完不修改</div>
-    </a>
-  </div>
-
-  <div class="section-title">反馈层 · 批判性反馈循环</div>
-  <div class="grid">
-    <a href="feedback/README.md" class="card">
-      <div class="card-icon">💬</div>
-      <h3>Feedback System 说明</h3>
-      <p>每日 / 每周 / 每月反馈节奏。你提交 status，Claude 用 7 维度批判性反馈。</p>
-      <div class="meta">"我不会替你决策"</div>
-    </a>
-    <a href="feedback/status-template.md" class="card">
-      <div class="card-icon">📋</div>
-      <h3>Daily Status 提交模板</h3>
-      <p>每天 3 min 填好 → 粘到对话 → 自动得到 1 页反馈。</p>
-      <div class="meta">每天发一次给 Claude</div>
-    </a>
-    <a href="feedback/critical-feedback-framework.md" class="card">
-      <div class="card-icon">🎯</div>
-      <h3>Claude 评估框架</h3>
-      <p>7 维度透明给你看。知道 Claude 怎么评估，你也能自评。</p>
-      <div class="meta">不夸奖，不安慰</div>
-    </a>
-  </div>
-
-  <div class="section-title">自动化层 · M1-M3</div>
-  <div class="grid">
-    <a href="automation/daily-briefing/README.md" class="card">
-      <div class="card-icon">🤖</div>
-      <h3>M1 · 每日早报飞书 Bot</h3>
-      <p>每日早报自动化 MVP。yfinance + akshare + Claude 摘要 + 飞书（via hermes send）。hermes cron 定时。</p>
-      <div class="meta">完成后预计 30 min / 天 → 5 min</div>
-    </a>
-    <div class="card" style="opacity: 0.5;">
-      <div class="card-icon">📅</div>
-      <h3>M2 · 13F 监控（30 天后）</h3>
-      <p>每周扫 Dataroma diff，新增 / 减仓推飞书。配合 Insider cluster buying。</p>
-      <div class="meta">M1 跑稳后启动</div>
-    </div>
-    <div class="card" style="opacity: 0.5;">
-      <div class="card-icon">📰</div>
-      <h3>M3 · 财报日历 highlight（60 天后）</h3>
-      <p>未来 7 天财报 + 关键 vs consensus 数字 + Claude 总结。<strong>非 RAG</strong>。</p>
-      <div class="meta">M2 跑稳后启动</div>
-    </div>
-  </div>
-
-  <div class="section-title">每日工作流（示意）</div>
-  <div class="daily-flow">
-    <h3>B 轨 ~10h+ /周</h3>
-
-    <div class="flow-step">
-      <span class="flow-time">工作日 07:30</span>
-      <span class="flow-action">收 M1 早报推送（搭好后 5 min 扫读）</span>
-    </div>
-    <div class="flow-step">
-      <span class="flow-time">工作日 早晨</span>
-      <span class="flow-action">填工作日精简 <a href="routine/daily-journal.md">daily journal</a>（3 min）</span>
-    </div>
-    <div class="flow-step">
-      <span class="flow-time">工作日 晚 45-90 min</span>
-      <span class="flow-action">推进 <a href="research/first-company-guide.md">第一家公司研究</a> + 经典文本一章</span>
-    </div>
-    <div class="flow-step">
-      <span class="flow-time">提交反馈</span>
-      <span class="flow-action">粘 <a href="feedback/status-template.md">status</a> 给 Claude → 得 1 页反馈</span>
-    </div>
-    <div class="flow-step">
-      <span class="flow-time">周六 3-4h</span>
-      <span class="flow-action">公司深度研究 chunk + 写 thesis 一段</span>
-    </div>
-    <div class="flow-step">
-      <span class="flow-time">周日 1.5-2h</span>
-      <span class="flow-action">填 <a href="routine/weekly-review.md">weekly-review</a> + 提交月度反馈（如果是月末）</span>
-    </div>
-  </div>
-
-  <div class="warning-card">
-    <strong>governance 提醒：</strong>这套系统的最大失败模式不是"做不到"，是<strong>"做了但不诚实"</strong>。
-    每个模板里"写完不修改"的原则、circuit-breaker 的"不允许 override"、feedback 框架的"不放过形式主义"——这些是同一件事的三个面。
-    如果某天发现自己在"美化 status"或"忽略熔断"，回去读 <a href="routine/circuit-breaker.md">circuit-breaker §反熔断陷阱</a>。
-  </div>
-
-  <div class="footer">
-    <p>v1.1 · 2026-06 · 端到端学习系统</p>
-    <p><a href="index.html">方法论 v1.1</a> · <a href="WAKE-UP.md">起步指南</a> · <a href="TODO-v1.2.md">v1.2 TODO</a> · <a href="methodology-patches.md">修订队列</a> · <a href="routine/glossary.md">术语表</a></p>
-    <p>这套系统是 living document。修订建议进 <code>methodology-patches.md</code> 队列，季度末统一合入 <code>index.html</code> 升 v1.x。</p>
-  </div>
-
 </div>
+
+<style>.section-t{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:600;margin:36px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border)}</style>
+<script src="assets/app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+async function load(){
+  const u = await VI.me(); VI.nav('home', u);
+  if(u){
+    $('greet').textContent = '欢迎回来，' + u;
+    const s = (await VI.api('/api/learning/summary')).data;
+    const a = (await VI.api('/api/achievements')).data;
+    const stageCn = {novice:'学徒',building:'践行者',practitioner:'审视者'};
+    if(s){
+      $('progress').innerHTML = '<div class="stat-row">'+
+        `<div class="stat"><div class="n"><span class="stage-chip">${stageCn[s.stage]||s.stage}</span></div><div class="l">段位</div></div>`+
+        `<div class="stat"><div class="n">${s.canon_read}</div><div class="l">读过一手内容</div></div>`+
+        `<div class="stat"><div class="n">${s.term_mastered}</div><div class="l">掌握术语</div></div>`+
+        `<div class="stat"><div class="n">${(a&&a.unlocked_count)||0}</div><div class="l">解锁成就</div></div>`+
+        '</div>';
+    }
+    if(a && a.items){
+      const recent = a.items.filter(x=>x.unlocked).slice(-4);
+      if(recent.length) $('achPreview').innerHTML = '<div class="section-t" style="margin-top:34px">最近解锁</div>'+
+        '<div style="display:flex;gap:10px;flex-wrap:wrap">'+recent.map(x=>`<span style="background:var(--good-soft);color:var(--good);padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600">${x.icon} ${x.title}</span>`).join('')+'</div>';
+    }
+  } else {
+    $('progress').innerHTML = '<div style="background:var(--accent-soft);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:14px 18px;font-size:14px">'+
+      '🔒 <a href="login.html" style="color:var(--accent);font-weight:600">登录</a> 后开启学习留痕、成就与个性化分析。只读学习内容无需登录。</div>';
+  }
+}
+load();
+</script>
 </body>
 </html>
