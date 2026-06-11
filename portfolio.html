@@ -385,11 +385,13 @@ async function syncExchange(id){
 function renderSnapshot(id, s){
   const chips=Object.entries(s.by_account||{}).map(([k,v])=>`<span class="ex-chip">${esc(k)} $${v}</span>`).join('');
   const spot=(s.spot||[]).filter(x=>x.usd>=0.01).map(x=>`<tr><td>${esc(x.coin)}</td><td style="text-align:right">${(+x.amount).toLocaleString(undefined,{maximumFractionDigits:6})}</td><td style="text-align:right">$${x.usd}</td></tr>`).join('');
+  const fin=(s.finance||[]).map(x=>`<tr><td>${esc(x.coin)}</td><td style="color:var(--muted)">${esc(x.product||'')}</td><td style="text-align:right">${(+x.amount).toLocaleString(undefined,{maximumFractionDigits:6})}</td><td style="text-align:right">$${x.usd}</td></tr>`).join('');
   const fut=(s.futures||[]).map(x=>`<tr><td>${esc(x.contract)}</td><td style="text-align:right">${x.size}</td><td style="text-align:right">$${x.value}</td><td style="text-align:right;color:${x.upnl>=0?'var(--good)':'var(--warn)'}">${x.upnl>=0?'+':''}${x.upnl}</td></tr>`).join('');
   $('exSnapshot').innerHTML =
     `<div class="ex-total">总资产 ≈ <b>$${s.total_usdt}</b></div>`+
     (chips?`<div class="ex-chips">${chips}</div>`:'')+
     (spot?`<div class="ex-section-h">现货</div><table class="ex-snap-table"><thead><tr><th>币种</th><th style="text-align:right">数量</th><th style="text-align:right">≈USD</th></tr></thead><tbody>${spot}</tbody></table>`:'')+
+    (fin?`<div class="ex-section-h">理财</div><table class="ex-snap-table"><thead><tr><th>币种</th><th>产品</th><th style="text-align:right">数量</th><th style="text-align:right">≈USD</th></tr></thead><tbody>${fin}</tbody></table>`:'')+
     (fut?`<div class="ex-section-h">合约持仓</div><table class="ex-snap-table"><thead><tr><th>合约</th><th style="text-align:right">数量</th><th style="text-align:right">价值</th><th style="text-align:right">未实现盈亏</th></tr></thead><tbody>${fut}</tbody></table>`:'')+
     `<button class="btn btn-primary" id="exImport">⬇ 导入到持仓表</button> <span class="status" id="exImpSt"></span>`;
   $('exImport').addEventListener('click', ()=>importExchange(id));

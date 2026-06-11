@@ -1188,7 +1188,49 @@ def gate_snapshot(key: str, secret: str) -> dict:
             })
     except Exception:  # noqa: BLE001
         pass  # futures may be disabled / empty
-    return {"total_usdt": total_usdt, "by_account": by_account, "spot": spot, "futures": futures}
+
+    # 理财 / Earn holdings (itemizes the wallet's `finance` bucket; needs Earn read perm)
+    finance = []
+    try:
+        for l in _gate_get(key, secret, "/earn/uni/lends"):  # 活期 / Simple Earn
+            coin = l.get("currency"); amt = float(l.get("amount") or 0); u = usd(coin, amt)
+            if amt > 0 and u >= _DUST_USD:
+                finance.append({"coin": coin, "amount": amt, "usd": round(u, 2), "product": "活期"})
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        for d in _gate_get(key, secret, "/earn/dual/orders"):  # 双币赢 (open only)
+            if d.get("status") not in ("INIT", "SETTLEMENT_PROCESSING"):
+                continue
+            coin = d.get("invest_currency"); amt = float(d.get("invest_amount") or 0); u = usd(coin, amt)
+            if u >= _DUST_USD:
+                finance.append({"coin": coin, "amount": amt, "usd": round(u, 2), "product": "双币"})
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        for st in _gate_get(key, secret, "/earn/structured/orders"):  # 结构化 (active)
+            if st.get("status") != "SUCCESS":
+                continue
+            coin = st.get("lock_coin"); amt = float(st.get("amount") or 0); u = usd(coin, amt)
+            if u >= _DUST_USD:
+                finance.append({"coin": coin, "amount": amt, "usd": round(u, 2), "product": "结构化"})
+    except Exception:  # noqa: BLE001
+        pass
+    finance.sort(key=lambda x: x["usd"], reverse=True)
+
+    # TradFi (MT5) account — its equity is NOT in /wallet/total_balance, add it separately
+    tradfi = 0.0
+    try:
+        ta = _gate_get(key, secret, "/tradfi/users/assets")
+        tradfi = round(float((ta.get("data") or {}).get("equity") or 0), 2)
+    except Exception:  # noqa: BLE001
+        pass
+    if tradfi >= _DUST_USD:
+        by_account["tradfi"] = tradfi
+
+    grand_total = round(total_usdt + tradfi, 2)  # wallet rollup already covers spot+finance; tradfi is extra
+    return {"total_usdt": grand_total, "wallet_usdt": total_usdt, "tradfi_usdt": tradfi,
+            "by_account": by_account, "spot": spot, "finance": finance, "futures": futures}
 
 
 def fetch_exchange_snapshot(exchange: str, key: str, secret: str) -> dict:
@@ -1289,16 +1331,18 @@ def import_exchange(kid):
     src = SUPPORTED_EXCHANGES.get(r["exchange"], r["exchange"])
     added = 0
     rows = list(existing)
-    for s in snap.get("spot", []):
-        if s["usd"] < 0.1:  # skip true dust only
-            continue
-        tk = (s["coin"] or "").upper()
-        if not tk or tk in have:
-            continue
-        rows.append({"market": "加密", "ticker": tk, "name": f"{src} 现货",
-                     "buy_date": None, "cost": None, "position_pct": None,
-                     "note": f"{src}现货 {round(s['amount'], 6)} {tk} ≈ ${s['usd']}（{datetime.date.today().isoformat()} 同步）"})
-        have.add(tk); added += 1
+    today = datetime.date.today().isoformat()
+    for area, items in (("现货", snap.get("spot", [])), ("理财", snap.get("finance", []))):
+        for s in items:
+            if s["usd"] < _DUST_USD:
+                continue
+            tk = (s["coin"] or "").upper()
+            if not tk or tk in have:
+                continue
+            rows.append({"market": "加密", "ticker": tk, "name": f"{src} {area}",
+                         "buy_date": None, "cost": None, "position_pct": None,
+                         "note": f"{src}{area} {round(s['amount'], 6)} {tk} ≈ ${s['usd']}（{today} 同步）"})
+            have.add(tk); added += 1
     if added:
         _save(user, rows)
     return {"ok": True, "added": added}
