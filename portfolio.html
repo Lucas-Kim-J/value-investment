@@ -393,8 +393,26 @@ function renderSnapshot(id, s){
     (spot?`<div class="ex-section-h">现货</div><table class="ex-snap-table"><thead><tr><th>币种</th><th style="text-align:right">数量</th><th style="text-align:right">≈USD</th></tr></thead><tbody>${spot}</tbody></table>`:'')+
     (fin?`<div class="ex-section-h">理财</div><table class="ex-snap-table"><thead><tr><th>币种</th><th>产品</th><th style="text-align:right">数量</th><th style="text-align:right">≈USD</th></tr></thead><tbody>${fin}</tbody></table>`:'')+
     (fut?`<div class="ex-section-h">合约持仓</div><table class="ex-snap-table"><thead><tr><th>合约</th><th style="text-align:right">数量</th><th style="text-align:right">价值</th><th style="text-align:right">未实现盈亏</th></tr></thead><tbody>${fut}</tbody></table>`:'')+
+    `<div class="ex-section-h" title="Gate 公开 API 不提供 TradFi 股票账户，只能手填">TradFi 股票（API 拉不到 · 手填净值）</div>
+     <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+       <input id="exManual" class="vi-sel" type="number" step="any" min="0" placeholder="0" value="${s.manual_usd||''}" style="width:120px">
+       <span style="color:var(--muted);font-size:13px">USDT</span>
+       <button class="btn btn-ghost btn-sm" id="exManualSave">保存并计入总额</button>
+       <span class="status" id="exManualSt"></span>
+     </div>`+
     `<button class="btn btn-primary" id="exImport">⬇ 导入到持仓表</button> <span class="status" id="exImpSt"></span>`;
   $('exImport').addEventListener('click', ()=>importExchange(id));
+  $('exManualSave').addEventListener('click', async ()=>{
+    const v = parseFloat($('exManual').value)||0;
+    $('exManualSt').textContent='保存中…'; $('exManualSt').className='status';
+    const res = await exApi('/api/exchange/keys/'+id+'/manual', {body:{usd:v}});
+    if(res.ok){
+      const base = (s.total_usdt||0) - (s.manual_usd||0);
+      s.manual_usd = v; s.total_usdt = Math.round((base+v)*100)/100;
+      document.querySelector('#exSnapshot .ex-total b').textContent = '$'+s.total_usdt;
+      $('exManualSt').textContent='已保存，已计入总额 ✓'; $('exManualSt').className='status ok';
+    } else { $('exManualSt').textContent=(res.data&&res.data.error)||'失败'; $('exManualSt').className='status err'; }
+  });
 }
 
 async function importExchange(id){

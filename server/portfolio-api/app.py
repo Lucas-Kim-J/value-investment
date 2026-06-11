@@ -259,6 +259,8 @@ def _init_db() -> None:
                 created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
             );
             CREATE INDEX IF NOT EXISTS idx_ek_user ON exchange_keys(username);
+            -- manual net value for balances the public API can't read (e.g. Gate TradFi 股票)
+            ALTER TABLE exchange_keys ADD COLUMN IF NOT EXISTS manual_usd NUMERIC DEFAULT 0;
             """
         )
 
@@ -1245,11 +1247,12 @@ def list_exchange_keys():
     if not user:
         return {"error": "未登录"}, 401
     with _db() as c, c.cursor(cursor_factory=RDC) as cur:
-        cur.execute("SELECT id,exchange,label,api_key,created_at FROM exchange_keys WHERE username=%s ORDER BY id", (user,))
+        cur.execute("SELECT id,exchange,label,api_key,manual_usd,created_at FROM exchange_keys WHERE username=%s ORDER BY id", (user,))
         rows = cur.fetchall()
     items = [{
         "id": r["id"], "exchange": r["exchange"], "label": r["label"],
         "key_masked": (r["api_key"][:5] + "…" + r["api_key"][-4:]) if len(r["api_key"] or "") > 11 else "••••",
+        "manual_usd": float(r["manual_usd"] or 0),
         "created_at": r["created_at"].isoformat() if r["created_at"] else None,
     } for r in rows]
     return jsonify({"items": items, "supported": SUPPORTED_EXCHANGES})
@@ -1281,6 +1284,22 @@ def add_exchange_key():
     return {"ok": True, "id": kid}
 
 
+@app.post("/api/exchange/keys/<int:kid>/manual")
+def set_exchange_manual(kid):
+    """Hand-filled net value for balances Gate's public API can't read (TradFi 股票)."""
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    body = request.get_json(force=True, silent=True) or {}
+    try:
+        usd = max(0.0, float(body.get("usd") or 0))
+    except (TypeError, ValueError):
+        return {"error": "金额无效"}, 400
+    with _db() as c, c.cursor() as cur:
+        cur.execute("UPDATE exchange_keys SET manual_usd=%s WHERE id=%s AND username=%s", (usd, kid, user))
+    return {"ok": True, "manual_usd": round(usd, 2)}
+
+
 @app.delete("/api/exchange/keys/<int:kid>")
 def del_exchange_key(kid):
     user = _current_user()
@@ -1293,7 +1312,7 @@ def del_exchange_key(kid):
 
 def _load_key_row(user, kid):
     with _db() as c, c.cursor(cursor_factory=RDC) as cur:
-        cur.execute("SELECT exchange,api_key,api_secret_enc FROM exchange_keys WHERE id=%s AND username=%s", (kid, user))
+        cur.execute("SELECT exchange,api_key,api_secret_enc,manual_usd FROM exchange_keys WHERE id=%s AND username=%s", (kid, user))
         return cur.fetchone()
 
 
@@ -1309,6 +1328,11 @@ def sync_exchange(kid):
         snap = fetch_exchange_snapshot(r["exchange"], r["api_key"], _dec_secret(r["api_secret_enc"]))
     except Exception as e:  # noqa: BLE001
         return {"error": "同步失败：" + str(e)[:200]}, 502
+    manual = float(r.get("manual_usd") or 0)
+    snap["manual_usd"] = round(manual, 2)
+    if manual >= _DUST_USD:  # un-fetchable balance the user hand-filled (Gate TradFi 股票)
+        snap["by_account"]["tradfi股票·手填"] = round(manual, 2)
+        snap["total_usdt"] = round(snap["total_usdt"] + manual, 2)
     return jsonify({"snapshot": snap})
 
 
