@@ -42,6 +42,8 @@ td input:focus, td select:focus { outline:none; border-color:var(--accent); back
 td.num input { text-align:right; font-variant-numeric:tabular-nums; }
 .del { background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; padding:4px 8px; border-radius:6px; }
 .del:hover { color:var(--warn); background:var(--warn-soft); }
+.anz { background:none; border:none; color:var(--muted); cursor:pointer; font-size:15px; padding:4px 6px; border-radius:6px; }
+.anz:hover { color:var(--accent); background:var(--accent-soft); }
 .actions { display:flex; gap:12px; align-items:center; margin-top:18px; flex-wrap:wrap; }
 .btn { padding:10px 18px; border-radius:8px; border:none; font-size:14px; font-weight:600; cursor:pointer; }
 .btn-primary { background:var(--accent); color:#fff; }
@@ -96,7 +98,7 @@ td.num input { text-align:right; font-variant-numeric:tabular-nums; }
           <th style="width:110px">成本价</th>
           <th style="width:90px">仓位%</th>
           <th>备注 / thesis 一句话</th>
-          <th style="width:40px"></th>
+          <th style="width:74px"></th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
@@ -142,13 +144,19 @@ function rowHtml(h){
     <td class="num"><input class="f-cost" type="number" step="any" placeholder="0.00" value="${v(h.cost)}"></td>
     <td class="num"><input class="f-position_pct" type="number" step="any" placeholder="0" value="${v(h.position_pct)}"></td>
     <td><input class="f-note" placeholder="为什么买 / thesis" value="${v(h.note)}"></td>
-    <td><button class="del" title="删除">✕</button></td>
+    <td style="white-space:nowrap"><button class="anz" title="分析这家公司">📊</button><button class="del" title="删除">✕</button></td>
   </tr>`;
 }
 
 function addRow(h){
   const tb=$('rows'); tb.insertAdjacentHTML('beforeend', rowHtml(h));
   tb.lastElementChild.querySelector('.del').addEventListener('click', e=>{ e.target.closest('tr').remove(); toggleEmpty(); });
+  tb.lastElementChild.querySelector('.anz').addEventListener('click', e=>{
+    const tr=e.target.closest('tr'); const t=tr.querySelector('.f-ticker').value.trim();
+    if(!t){ setStatus('先填代码再分析','err'); return; }
+    const n=tr.querySelector('.f-name').value.trim(), mk=tr.querySelector('.f-market').value;
+    location.href='analyze.html?ticker='+encodeURIComponent(t)+'&name='+encodeURIComponent(n)+'&market='+encodeURIComponent(mk);
+  });
   toggleEmpty();
 }
 function toggleEmpty(){ $('empty').style.display = $('rows').children.length ? 'none' : 'block'; }

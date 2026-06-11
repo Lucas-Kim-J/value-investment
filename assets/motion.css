@@ -59,6 +59,10 @@ html.vi-motion #vi-chat-send:active { transform: scale(.96); }
 html.vi-motion .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px var(--glow); }
 html.vi-motion .btn-primary:active { transform: translateY(0) scale(.98); }
 
+/* attention pulse (e.g. analyze button after a holding is brought in) */
+html.vi-motion .btn-pulse { animation: vi-btnpulse 1.5s var(--ease-out) 3; }
+@keyframes vi-btnpulse { 0%, 100% { box-shadow: 0 0 0 0 var(--glow); } 50% { box-shadow: 0 0 0 7px transparent; } }
+
 /* click ripple (JS appends .vi-ripple at the click point) */
 .vi-ripple {
   position: absolute; border-radius: 50%; pointer-events: none;

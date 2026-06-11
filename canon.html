@@ -31,7 +31,7 @@
 <script src="assets/app.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-let ITEMS = [], USER = null, curKind = 'all', curTier = 'all';
+let ITEMS = [], USER = null, curKind = 'all', curTier = 'all', HOLDINGS = [];
 const KINDS = {letter:'Letter 信',agm:'AGM 股东会','13f':'13F 持仓',quarterly:'季报/10-K',talk:'演讲/访谈',book:'书',memo:'备忘录',tool:'工具源'};
 const TIERS = {tier0:'起点必读',tier1:'核心',tier2:'拓展'};
 const ZLIB = 'https://z-lib.io/s/';  // 书类条目的可读链接（域名变动时改这一处即可）
@@ -91,6 +91,10 @@ async function openItem(slug){
       <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
         <button class="btn btn-primary btn-sm" id="mark">${USER?'记下 + 标为已读':'登录后可留痕'}</button>
         <span class="status" id="markst"></span></div>
+      <div id="readNext"></div>
+      ${(USER && HOLDINGS.length)?`<div class="handoff" style="background:var(--accent-soft);border-left-color:var(--accent);margin-top:10px">📌 把这条收获挂到某个持仓的 thesis：
+        <select id="thesisSel" class="vi-in" style="padding:5px 8px;margin:0 4px">${HOLDINGS.map(h=>`<option value="${VI.esc(h.ticker)}">${VI.esc(h.ticker)}${h.name?' '+VI.esc(h.name):''}</option>`).join('')}</select>
+        <button class="btn btn-ghost btn-sm" id="thesisBtn">挂上</button> <span class="status" id="thesisSt"></span></div>`:''}
     </div></div>`;
   m.classList.add('open');
   m.onclick = e => { if(e.target===m) m.classList.remove('open'); };
@@ -100,14 +104,36 @@ async function openItem(slug){
     const res = await VI.api('/api/canon/'+slug+'/read', {body:{note, minutes: 30}});
     const st = $('markst');
     if(res.ok){ st.textContent = note?'已记下 ✓':'已标为已读 ✓'; st.className='status ok'; VI.celebrate(res.data.new_achievements);
-      const item = ITEMS.find(x=>x.slug===slug); if(item) item.read=true; renderList(); }
+      const item = ITEMS.find(x=>x.slug===slug); if(item) item.read=true; renderList();
+      const rn = $('readNext');
+      if(rn && (it.related_terms||[]).length){
+        rn.className='handoff';
+        rn.innerHTML = `👉 下一步：这篇关联 ${it.related_terms.length} 个术语，去把它们打底 → ` +
+          it.related_terms.map(s=>`<a href="#" onclick="VI.showTerm('${s}');return false">${s}</a>`).join('　');
+      }
+    }
     else { st.textContent = (res.data&&res.data.error)||'失败'; st.className='status err'; }
+  });
+  const tb = $('thesisBtn');
+  if(tb) tb.addEventListener('click', async ()=>{
+    const note = $('note').value.trim(); const tst = $('thesisSt');
+    if(!note){ tst.textContent='先在上面写一句收获'; tst.className='status err'; return; }
+    const tk = $('thesisSel').value; tb.disabled=true; tst.textContent='挂上中…'; tst.className='status';
+    try{
+      const cur = (((await VI.api('/api/holdings')).data||{}).holdings)||[];
+      const h = cur.find(x=>x.ticker===tk);
+      if(h) h.note = (h.note?h.note+' / ':'') + `[${it.title}] ${note}`;
+      const rr = await VI.api('/api/holdings', {method:'PUT', body:{holdings:cur}});
+      if(rr.ok){ tst.textContent='已挂到 '+tk+' 的 thesis ✓'; tst.className='status ok'; }
+      else { tb.disabled=false; tst.textContent=(rr.data&&rr.data.error)||'失败'; tst.className='status err'; }
+    }catch(e){ tb.disabled=false; tst.textContent='网络错误'; tst.className='status err'; }
   });
 }
 window.openItem = openItem;
 
 async function load(){
   USER = await VI.me(); VI.nav('canon', USER); await VI.loadAchTitles();
+  try{ if(USER) HOLDINGS = (((await VI.api('/api/holdings')).data||{}).holdings)||[]; }catch(e){}
   const r = await VI.api('/api/canon'); ITEMS = (r.data&&r.data.items)||[];
   renderFilters(); renderList();
   window.VI = window.VI || {};

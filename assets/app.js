@@ -111,6 +111,7 @@
     let m = $("#vi-term-modal");
     if (!m) { m = document.createElement("div"); m.id = "vi-term-modal"; m.className = "vi-modal-bg"; document.body.appendChild(m); m.addEventListener("click", e => { if (e.target === m) m.classList.remove("open"); }); }
     const rel = (t.related || []).map(s => `<a href="#" onclick="VI.showTerm('${s}');return false">${s}</a>`).join("　");
+    const appears = (t.appears_in || []).map(c => "《" + esc(c.title) + "》").join("、");
     m.innerHTML =
       '<div class="vi-modal"><div class="vi-modal-head"><h2>' + t.term + (t.term_en ? ' <span style="color:var(--muted);font-size:14px;font-weight:400">' + t.term_en + "</span>" : "") +
       '</h2><button class="x" onclick="document.getElementById(\'vi-term-modal\').classList.remove(\'open\')">✕</button></div>' +
@@ -119,6 +120,7 @@
       "<p>" + esc(t.definition || "") + "</p>" +
       (t.detail_url ? '<p><a href="' + t.detail_url + '">查看详细 →</a></p>' : "") +
       (rel ? '<p style="font-size:13px;color:var(--muted)">相关：' + rel + "</p>" : "") +
+      (appears ? '<p style="font-size:13px;color:var(--muted)">📚 出现在你的一手内容：' + appears + ' · <a href="canon.html">去一手内容库 →</a></p>' : "") +
       '<hr style="border:none;border-top:1px solid var(--border);margin:16px 0">' +
       '<p style="font-size:13px;color:var(--muted)">用你自己的话讲一遍（讲得出才算掌握）：</p>' +
       '<textarea class="vi-ta" id="vi-restate" placeholder="我的复述…">' + esc(t.my_restatement || "") + "</textarea>" +

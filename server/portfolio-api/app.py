@@ -716,6 +716,9 @@ def get_term(slug):
             m = cur.fetchone()
             if m:
                 t["mastery"], t["my_restatement"] = m["mastery"], m["my_restatement"] or ""
+        # connective tissue: which canon pieces reference this term
+        cur.execute("SELECT slug,title FROM canon_items WHERE %s = ANY(related_terms) ORDER BY sort_order LIMIT 6", (slug,))
+        t["appears_in"] = [dict(r) for r in cur.fetchall()]
     return jsonify(t)
 
 

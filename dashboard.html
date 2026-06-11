@@ -48,39 +48,45 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function rescan(){ if(window.VI && VI.motion) VI.motion.scan(document); }
 
-// 非线性「学习地图」：每个板块都可随时跳转，进度用真实数据，只软性高亮「现在最值得做」。
-function renderRoadmap(s){
+// 首页只给「一个下一步」：用学习数据算出此刻最该做的一件事，配一句为什么 + 一个出口。
+// 完整学习地图在二级「学习路线」(learn.html)。
+async function renderNextStep(s){
   const st = (s && s.stats) || {};
-  const canon = (s&&s.canon_read)||0, terms=(s&&s.term_mastered)||0, holds=st.holdings||0, comp=st.company_analyzed||0;
-  let suggest = 'frame';
-  if (canon===0) suggest='frame';
-  else if (terms<3) suggest='terms';
-  else if (holds===0) suggest='hold';
-  else if (comp===0) suggest='analyze';
-  else suggest='canon';
-  const zones = [
-    {key:'frame', icon:'🧭', name:'建立框架', prog:'起点', why:'先有地图再上路：方法论 + 估值工具 + 失败案例，建立判断的底层框架。',
-      links:[['index.html','方法论 v1.1'],['learning/valuation-cheatsheet.html','估值 4 工具'],['learning/failure-cases.html','失败案例研究']]},
-    {key:'canon', icon:'📚', name:'学一手内容', prog: canon?`已开始 ${canon} 篇`:'0 篇', why:'大师原始思维是认知底座。从「起点必读」里挑一篇短的开始，读完写一句你自己的话。',
-      links:[['canon.html','一手内容库'],['canon.html','起点必读：先读这几篇 →']]},
-    {key:'terms', icon:'🔍', name:'打术语底座', prog:`已掌握 ${terms} 个`, why:'不懂的词全站 ⌘K 即点即查；用自己的话讲对了才算掌握。',
-      links:[['wiki.html','术语 Wiki'],['wiki.html','划词→解释→收入术语库']]},
-    {key:'hold', icon:'💼', name:'管你的仓', prog: holds?`${holds} 个持仓`:'未录入', why:'记录你买了什么 + 让 hermes 按方法论审视你的纪律（缺 thesis / 缺估值 / 没过 Pabrai 三问）。',
-      links:[['portfolio.html','录入持仓 / 生成规范报告']]},
-    {key:'analyze', icon:'🏢', name:'做公司分析', prog: comp?`${comp} 次分析`:'未开始', why:'一键按你的学习阶段分析一家公司，自动归档可回看演进。',
-      links:[['analyze.html','公司分析']]},
-  ];
-  $('roadmap').innerHTML =
-    '<div class="section-t" data-reveal style="display:flex;align-items:center;gap:10px">你的学习地图 <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)">· 想从哪开始都行，下面只是建议顺序</span></div>'+
-    '<div class="vi-grid vi-rise" style="grid-template-columns:repeat(auto-fill,minmax(290px,1fr))">'+
-    zones.map(z=>`<div class="vi-card zone${z.key===suggest?' zone-sug':''}" data-reveal>
-        ${z.key===suggest?'<div class="zone-now">👉 现在最值得做</div>':''}
-        <div style="font-size:22px">${z.icon}</div>
-        <h3>${z.name}<span class="zone-prog">${esc(z.prog)}</span></h3>
-        <p>${esc(z.why)}</p>
-        <div class="zone-links">${z.links.map(l=>`<a href="${l[0]}">${esc(l[1])}</a>`).join('')}</div>
-      </div>`).join('')+'</div>'+
-    '<div data-reveal style="margin-top:12px;font-size:13px;color:var(--muted)">💡 不确定先看哪个？点右下角 💬 →「📄 看这一页」，让 hermes 按你的水平排个顺序。</div>';
+  const canon=(s&&s.canon_read)||0, terms=(s&&s.term_mastered)||0, holds=st.holdings||0, comp=st.company_analyzed||0;
+  let key = 'canon';
+  if (canon===0) key='canon';
+  else if (terms<3) key='terms';
+  else if (holds===0) key='hold';
+  else if (comp===0) key='analyze';
+  else key='canon';
+  let kicker='', title='', body='', cta='', href='canon.html';
+  if (key==='canon'){
+    let pick=null;
+    try { const cs=((await VI.api('/api/canon')).data||{}).items||[]; pick=cs.filter(i=>i.tier==='tier0'&&!i.read).sort((a,b)=>(a.est_minutes||0)-(b.est_minutes||0))[0] || cs.filter(i=>i.tier==='tier0')[0]; } catch(e){}
+    kicker = canon===0 ? '从这里开始 · 打地基' : '继续打地基';
+    title  = canon===0 ? '读一篇大师原始思维，写一句你自己的话' : '再读一篇起点必读，写一句你的话';
+    body   = '这是整套系统的地基——之后分析持仓和公司都靠它。';
+    cta    = pick ? `打开《${pick.title}》约 ${Math.round((pick.est_minutes||0)/60)}h →` : '打开一手内容库 →';
+    href   = 'canon.html';
+  } else if (key==='terms'){
+    kicker='打术语底座'; title='把不懂的词查清楚——讲得出才算掌握';
+    body='读一手内容时遇到生词，全站 ⌘K 即查 / 划词→解释→收入术语库。'; cta='去术语 Wiki →'; href='wiki.html';
+  } else if (key==='hold'){
+    kicker='把学到的用起来'; title='把你的实仓录进来';
+    body='记录你买了什么 + thesis，让 hermes 按方法论审视你的纪律。'; cta='录入持仓 →'; href='portfolio.html';
+  } else if (key==='analyze'){
+    let tk=null; try{ tk=(((await VI.api('/api/holdings')).data||{}).holdings||[])[0]; }catch(e){}
+    kicker='产出'; title= tk?`分析 ${tk.ticker}——你已经持有它`:'分析你的第一家公司';
+    body='hermes 按你现在的水平指出「该看什么、缺什么验证」，自动归档可回看。';
+    cta= tk?`分析 ${tk.ticker} →`:'去公司分析 →'; href= tk?`analyze.html?ticker=${encodeURIComponent(tk.ticker)}&name=${encodeURIComponent(tk.name||'')}&market=${encodeURIComponent(tk.market||'')}`:'analyze.html';
+  }
+  $('roadmap').innerHTML = `<div class="next-card" data-reveal>
+      <div class="next-kicker">👉 ${esc(kicker)}</div>
+      <h2 class="next-title">${esc(title)}</h2>
+      <p class="next-body">${esc(body)}</p>
+      <div class="next-cta"><a class="btn btn-primary" href="${href}">${esc(cta)}</a>
+        <a class="next-alt" href="learn.html">看完整学习路线 →</a></div>
+    </div>`;
 }
 
 async function load(){
@@ -98,7 +104,7 @@ async function load(){
         `<div class="stat"><div class="n" data-countup="${(a&&a.unlocked_count)||0}">0</div><div class="l">解锁成就</div></div>`+
         '</div>';
     }
-    renderRoadmap(s);
+    await renderNextStep(s);
     if(a && a.items){
       const recent = a.items.filter(x=>x.unlocked).slice(-4);
       if(recent.length) $('achPreview').innerHTML = '<div class="section-t" style="margin-top:34px" data-reveal>最近解锁</div>'+
@@ -108,7 +114,7 @@ async function load(){
   } else {
     $('progress').innerHTML = '<div data-reveal style="background:var(--accent-soft);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:14px 18px;font-size:14px">'+
       '🔒 <a href="login.html" style="color:var(--accent);font-weight:600">登录</a> 后开启学习留痕、成就与个性化分析。只读学习内容无需登录。</div>';
-    renderRoadmap(null);
+    await renderNextStep(null);
     rescan();
   }
 }

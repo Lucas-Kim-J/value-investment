@@ -102,7 +102,13 @@ $('go').addEventListener('click', ()=>{
   analyze(t, $('name').value.trim(), $('market').value);
 });
 
-async function load(){ const u = await VI.requireAuth(); if(!u) return; VI.nav('analyze', u); await VI.loadAchTitles(); loadHoldings(); loadArchive(); }
+async function load(){
+  const u = await VI.requireAuth(); if(!u) return; VI.nav('analyze', u); await VI.loadAchTitles();
+  const p = new URLSearchParams(location.search);   // prefill from holding / dashboard handoff
+  if(p.get('ticker')){ $('ticker').value=p.get('ticker'); if(p.get('name'))$('name').value=p.get('name'); if(p.get('market'))$('market').value=p.get('market');
+    $('go').classList.add('btn-pulse'); $('st').textContent='已带入 '+p.get('ticker')+'，点「一键分析」开始'; }
+  loadHoldings(); loadArchive();
+}
 load();
 </script>
 </body>
