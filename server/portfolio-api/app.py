@@ -1088,6 +1088,7 @@ def explain_poll(jid):
 SUPPORTED_EXCHANGES = {"gate": "Gate.io"}  # others scaffolded in the UI, not yet wired
 GATE_HOST = "https://api.gateio.ws"
 _STABLES = {"USDT", "USDC", "DAI", "BUSD", "TUSD", "FDUSD"}
+_DUST_USD = 1.0  # hide / skip assets worth less than this (USD)
 
 
 def _fernet() -> Fernet:
@@ -1165,7 +1166,10 @@ def gate_snapshot(key: str, secret: str) -> dict:
             if amt <= 0:
                 continue
             coin = b.get("currency")
-            spot.append({"coin": coin, "amount": amt, "usd": round(usd(coin, amt), 2)})
+            u = usd(coin, amt)
+            if u < _DUST_USD:  # hide sub-$1 dust
+                continue
+            spot.append({"coin": coin, "amount": amt, "usd": round(u, 2)})
     except Exception:  # noqa: BLE001
         pass
     spot.sort(key=lambda x: x["usd"], reverse=True)
