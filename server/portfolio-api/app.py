@@ -913,10 +913,11 @@ def compose_chat_prompt(user: str, question: str, context: str, history: list) -
         "practitioner": "用户进阶，直接、犀利、省略基础。",
     }.get(p["stage"], "")
     hist = "\n".join(f"用户：{h['q']}\nhermes：{h['r']}" for h in history[-5:] if h.get("r"))
-    ctx = f"\n【用户正在看 / 选中的文字】「{context}」\n" if context else ""
+    ctx = f"\n【用户正在看的页面内容 / 选中文字】\n{context}\n" if context else ""
     return (
         "你是 hermes，这个用户的价值投资学习伙伴。用中文、简洁、像同行对话。"
         "目标是帮他真正学懂：多用反问引导、鼓励他用自己的话复述、必要时关联他的方法论与持仓。\n"
+        "如果给了他正在看的页面内容，请据此 + 他的学习阶段给出有依据的建议（比如先读/先做哪个、顺序、为什么），优先推荐「起点必读」和短而高杠杆的内容；不要泛泛而谈。\n"
         "硬约束：不荐股、不给目标价；**绝不编造具体财务数字**（涉及具体数字就提示「去官方原文核对」）；不知道就说不知道。回答控制在 250 字内，除非他要求展开。\n\n"
         f"{METHODOLOGY_CONTEXT}\n\n"
         f"【用户画像】阶段={p['stage']}；已掌握术语：{('、'.join(p['mastered_terms'][:20]) or '暂无')}。{stage_note}\n"
@@ -959,7 +960,7 @@ def chat_send():
         return {"error": "未登录"}, 401
     body = request.get_json(force=True, silent=True) or {}
     question = str(body.get("question", "")).strip()[:2000]
-    context = str(body.get("context", "")).strip()[:1500]
+    context = str(body.get("context", "")).strip()[:6000]  # large enough for a page digest ("看这一页")
     if not question:
         return {"error": "请输入问题"}, 400
     _reap_stale("chat_turns", user)

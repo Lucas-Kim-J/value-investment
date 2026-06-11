@@ -157,7 +157,7 @@
 
   // ================= global hermes chat + selection-to-ask =================
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  let chatOpen = false, chatUser = null, chatLoaded = false, pendingCtx = "";
+  let chatOpen = false, chatUser = null, chatLoaded = false, pendingCtx = "", pendingCtxLabel = "";
   const CHIPS = ["用我的水平解释一下", "这和我的持仓有什么关系", "出一道应用题考我"];
 
   function buildChat() {
@@ -179,13 +179,14 @@
     $("#vi-chat-send").addEventListener("click", () => sendChat());
     const ta = $("#vi-chat-in");
     ta.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } });
-    $("#vi-chat-chips").innerHTML = CHIPS.map(c => '<button class="vi-chip">' + c + "</button>").join("");
-    [...$("#vi-chat-chips").querySelectorAll(".vi-chip")].forEach((b, i) => b.addEventListener("click", () => sendChat(CHIPS[i])));
+    $("#vi-chat-chips").innerHTML = '<button class="vi-chip vi-chip-page" id="vi-chip-page">📄 看这一页</button>' + CHIPS.map(c => '<button class="vi-chip">' + c + "</button>").join("");
+    $("#vi-chip-page").addEventListener("click", () => VI.askPage());
+    [...$("#vi-chat-chips").querySelectorAll(".vi-chip:not(.vi-chip-page)")].forEach((b, i) => b.addEventListener("click", () => sendChat(CHIPS[i])));
   }
-  function setCtx(text) {
-    pendingCtx = text || "";
+  function setCtx(text, label) {
+    pendingCtx = text || ""; pendingCtxLabel = label || "";
     const el = $("#vi-chat-ctx"); if (!el) return;
-    if (pendingCtx) { el.style.display = "flex"; el.innerHTML = '<span>📎 ' + esc(pendingCtx.slice(0, 50)) + '</span><button id="vi-ctx-x">✕</button>'; $("#vi-ctx-x").addEventListener("click", () => setCtx("")); }
+    if (pendingCtx) { el.style.display = "flex"; el.innerHTML = '<span>📎 ' + esc(pendingCtxLabel || pendingCtx.slice(0, 50)) + '</span><button id="vi-ctx-x">✕</button>'; $("#vi-ctx-x").addEventListener("click", () => setCtx("")); }
     else { el.style.display = "none"; el.innerHTML = ""; }
   }
   function addMsg(role, html) {
@@ -210,9 +211,10 @@
     chatUser = chatUser || await VI.me();
     if (!chatUser) { addMsg("bot", "请先 <a href='login.html'>登录</a> 再和我聊。"); return; }
     const q = (text != null ? text : $("#vi-chat-in").value).trim(); if (!q) return;
-    const ctx = pendingCtx;
+    const ctx = pendingCtx, ctxLabel = pendingCtxLabel;
     $("#vi-chat-in").value = ""; setCtx("");
-    addMsg("user", (ctx ? '<span class="vi-ctx-tag">关于「' + esc(ctx.slice(0, 50)) + '」</span> ' : "") + esc(q));
+    const tag = ctx ? '<span class="vi-ctx-tag">关于' + esc(ctxLabel || ("「" + ctx.slice(0, 50) + "」")) + "</span> " : "";
+    addMsg("user", tag + esc(q));
     const thinking = addMsg("bot", '<span class="vi-think">思考中…</span>');
     const r = await VI.api("/api/chat", { body: { question: q, context: ctx } });
     if (r.status === 401) { thinking.innerHTML = "请先登录"; return; }
@@ -231,6 +233,24 @@
   VI.askAbout = async function (sel) {
     buildChat(); if (!chatOpen) await VI.toggleChat();
     setCtx(sel); const i = $("#vi-chat-in"); if (i) i.focus();
+  };
+
+  // page-aware: each page may expose VI.pageContext() returning a concise digest of
+  // what's on screen + the user's state; otherwise we fall back to the visible text.
+  function gatherPageContext() {
+    try { if (typeof VI.pageContext === "function") { const s = VI.pageContext(); if (s) return String(s).slice(0, 2800); } } catch (e) {}
+    const title = (document.querySelector(".app-head h1, h1") || {}).textContent || document.title || "";
+    const main = document.querySelector(".app-wrap, main, body");
+    const txt = main ? (main.innerText || "").replace(/\n{2,}/g, "\n").trim() : "";
+    return ("【页面】" + title + "\n" + txt).slice(0, 2500);
+  }
+  VI.askPage = async function () {
+    buildChat(); if (!chatOpen) await VI.toggleChat();
+    const ctx = gatherPageContext();
+    const name = ((document.querySelector(".app-head h1, h1") || {}).textContent || document.title || "本页").trim().slice(0, 16);
+    setCtx(ctx, "本页：" + name);
+    const i = $("#vi-chat-in");
+    if (i) { if (!i.value.trim()) i.value = "结合这一页和我的水平，我该先读 / 先做哪个？给个顺序和理由"; i.focus(); }
   };
 
   // selection mini-toolbar

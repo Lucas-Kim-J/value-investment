@@ -20,13 +20,7 @@
 
   <div id="progress"></div>
 
-  <div class="section-t" data-reveal>你想做什么？</div>
-  <div class="vi-grid">
-    <a class="vi-card" href="learn.html" data-reveal style="--i:0;border-left:3px solid var(--accent)"><div style="font-size:24px">📖</div><h3>我要学</h3><p>方法论 + 一手内容库（letter/AGM/13F/季报/演讲）。先建框架，再学大师原始思维。</p><div class="meta">学习区 →</div></a>
-    <a class="vi-card" href="wiki.html" data-reveal style="--i:1"><div style="font-size:24px">🔍</div><h3>我要查一个词</h3><p>术语 Wiki，即点即查；用自己的话讲对才算掌握。全站 ⌘K 速查。</p><div class="meta">术语 Wiki →</div></a>
-    <a class="vi-card" href="portfolio.html" data-reveal style="--i:2"><div style="font-size:24px">💼</div><h3>我要管我的仓</h3><p>录入持仓 + 生成规范报告（hermes 按方法论审视你的流程与纪律）。</p><div class="meta">我的持仓 →</div></a>
-    <a class="vi-card" href="analyze.html" data-reveal style="--i:3"><div style="font-size:24px">🏢</div><h3>我要分析一家公司</h3><p>一键分析 + 归档。按你的学习阶段调整详略，可回看演进。</p><div class="meta">公司分析 →</div></a>
-  </div>
+  <div id="roadmap"></div>
 
   <div id="achPreview"></div>
 
@@ -51,7 +45,44 @@
 <script src="assets/app.js"></script>
 <script>
 const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function rescan(){ if(window.VI && VI.motion) VI.motion.scan(document); }
+
+// 非线性「学习地图」：每个板块都可随时跳转，进度用真实数据，只软性高亮「现在最值得做」。
+function renderRoadmap(s){
+  const st = (s && s.stats) || {};
+  const canon = (s&&s.canon_read)||0, terms=(s&&s.term_mastered)||0, holds=st.holdings||0, comp=st.company_analyzed||0;
+  let suggest = 'frame';
+  if (canon===0) suggest='frame';
+  else if (terms<3) suggest='terms';
+  else if (holds===0) suggest='hold';
+  else if (comp===0) suggest='analyze';
+  else suggest='canon';
+  const zones = [
+    {key:'frame', icon:'🧭', name:'建立框架', prog:'起点', why:'先有地图再上路：方法论 + 估值工具 + 失败案例，建立判断的底层框架。',
+      links:[['index.html','方法论 v1.1'],['learning/valuation-cheatsheet.html','估值 4 工具'],['learning/failure-cases.html','失败案例研究']]},
+    {key:'canon', icon:'📚', name:'学一手内容', prog: canon?`已开始 ${canon} 篇`:'0 篇', why:'大师原始思维是认知底座。从「起点必读」里挑一篇短的开始，读完写一句你自己的话。',
+      links:[['canon.html','一手内容库'],['canon.html','起点必读：先读这几篇 →']]},
+    {key:'terms', icon:'🔍', name:'打术语底座', prog:`已掌握 ${terms} 个`, why:'不懂的词全站 ⌘K 即点即查；用自己的话讲对了才算掌握。',
+      links:[['wiki.html','术语 Wiki'],['wiki.html','划词→解释→收入术语库']]},
+    {key:'hold', icon:'💼', name:'管你的仓', prog: holds?`${holds} 个持仓`:'未录入', why:'记录你买了什么 + 让 hermes 按方法论审视你的纪律（缺 thesis / 缺估值 / 没过 Pabrai 三问）。',
+      links:[['portfolio.html','录入持仓 / 生成规范报告']]},
+    {key:'analyze', icon:'🏢', name:'做公司分析', prog: comp?`${comp} 次分析`:'未开始', why:'一键按你的学习阶段分析一家公司，自动归档可回看演进。',
+      links:[['analyze.html','公司分析']]},
+  ];
+  $('roadmap').innerHTML =
+    '<div class="section-t" data-reveal style="display:flex;align-items:center;gap:10px">你的学习地图 <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)">· 想从哪开始都行，下面只是建议顺序</span></div>'+
+    '<div class="vi-grid vi-rise" style="grid-template-columns:repeat(auto-fill,minmax(290px,1fr))">'+
+    zones.map(z=>`<div class="vi-card zone${z.key===suggest?' zone-sug':''}" data-reveal>
+        ${z.key===suggest?'<div class="zone-now">👉 现在最值得做</div>':''}
+        <div style="font-size:22px">${z.icon}</div>
+        <h3>${z.name}<span class="zone-prog">${esc(z.prog)}</span></h3>
+        <p>${esc(z.why)}</p>
+        <div class="zone-links">${z.links.map(l=>`<a href="${l[0]}">${esc(l[1])}</a>`).join('')}</div>
+      </div>`).join('')+'</div>'+
+    '<div data-reveal style="margin-top:12px;font-size:13px;color:var(--muted)">💡 不确定先看哪个？点右下角 💬 →「📄 看这一页」，让 hermes 按你的水平排个顺序。</div>';
+}
+
 async function load(){
   const u = await VI.me(); VI.nav('home', u);
   if(u){
@@ -67,6 +98,7 @@ async function load(){
         `<div class="stat"><div class="n" data-countup="${(a&&a.unlocked_count)||0}">0</div><div class="l">解锁成就</div></div>`+
         '</div>';
     }
+    renderRoadmap(s);
     if(a && a.items){
       const recent = a.items.filter(x=>x.unlocked).slice(-4);
       if(recent.length) $('achPreview').innerHTML = '<div class="section-t" style="margin-top:34px" data-reveal>最近解锁</div>'+
@@ -76,6 +108,7 @@ async function load(){
   } else {
     $('progress').innerHTML = '<div data-reveal style="background:var(--accent-soft);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:14px 18px;font-size:14px">'+
       '🔒 <a href="login.html" style="color:var(--accent);font-weight:600">登录</a> 后开启学习留痕、成就与个性化分析。只读学习内容无需登录。</div>';
+    renderRoadmap(null);
     rescan();
   }
 }

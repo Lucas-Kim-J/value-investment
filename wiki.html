@@ -48,6 +48,12 @@ function render(items){
 async function load(){
   const u = await VI.me(); VI.nav('wiki', u); await VI.loadAchTitles();
   const r = await VI.api('/api/terms'); ALL = (r.data && r.data.items) || []; render(ALL);
+  window.VI = window.VI || {};
+  window.VI.pageContext = () => {
+    const cats = {}; ALL.forEach(t=>{(cats[t.category||'其他']=cats[t.category||'其他']||[]).push(t.term);});
+    const mastered = ALL.filter(t=>t.mastery==='mastered').length;
+    return `页面：术语 Wiki。共 ${ALL.length} 个术语，已掌握 ${mastered}。分类与术语：\n` + Object.keys(cats).map(c=>`- ${c}：${cats[c].slice(0,14).join('、')}`).join('\n');
+  };
 }
 $('q').addEventListener('input', () => {
   const q = $('q').value.trim().toLowerCase();

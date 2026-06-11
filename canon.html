@@ -22,6 +22,7 @@
   </div>
 
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px" id="filters"></div>
+  <div id="startHint"></div>
   <div id="list"></div>
 </div>
 
@@ -33,6 +34,7 @@ const $ = id => document.getElementById(id);
 let ITEMS = [], USER = null, curKind = 'all', curTier = 'all';
 const KINDS = {letter:'Letter 信',agm:'AGM 股东会','13f':'13F 持仓',quarterly:'季报/10-K',talk:'演讲/访谈',book:'书',memo:'备忘录',tool:'工具源'};
 const TIERS = {tier0:'起点必读',tier1:'核心',tier2:'拓展'};
+const ZLIB = 'https://z-lib.io/s/';  // 书类条目的可读链接（域名变动时改这一处即可）
 
 function tierLabel(t){ return TIERS[t]||t||''; }
 
@@ -50,6 +52,15 @@ function renderList(){
   let xs = ITEMS.filter(i => (curKind==='all'||i.kind===curKind) && (curTier==='all'||i.tier===curTier));
   const readN = ITEMS.filter(i=>i.read).length;
   $('overview').textContent = `共 ${ITEMS.length} 篇 · 你已开始 ${readN} 篇`;
+  const sh = $('startHint');
+  if (sh) {
+    const fp = ITEMS.filter(i=>i.tier==='tier0').sort((a,b)=>(a.est_minutes||0)-(b.est_minutes||0))[0];
+    if (readN===0 && fp) {
+      sh.className = 'start-hint';
+      sh.innerHTML = `📍 不知道从哪开始？先挑一篇短的「起点必读」：<a href="#" id="fpLink">${fp.title}（约 ${Math.round((fp.est_minutes||0)/60)}h）</a>，读完写一句你自己的话就能留痕。也可以点右下角 💬 →「📄 看这一页」让 hermes 按你的水平给你排个顺序。`;
+      const fl = $('fpLink'); if (fl) fl.addEventListener('click', e=>{ e.preventDefault(); openItem(fp.slug); });
+    } else { sh.className=''; sh.innerHTML=''; }
+  }
   $('list').innerHTML = '<div class="vi-grid vi-rise">' + xs.map(i => `
     <div class="vi-card" style="cursor:pointer" onclick="openItem('${i.slug}')">
       <div style="margin-bottom:8px"><span class="kind-tag">${KINDS[i.kind]||i.kind}</span><span class="cov cov-guide">导读</span> ${i.read?'<span class="read-dot" title="已开始">●</span>':''}</div>
@@ -72,6 +83,7 @@ async function openItem(slug){
       <p><strong>导读：</strong>${it.guide||''}</p>
       ${qs?`<p><strong>读完应能回答：</strong></p><ul style="color:var(--fg-soft);padding-left:20px">${qs}</ul>`:''}
       ${it.official_url?`<p><a href="${it.official_url}" target="_blank" rel="noopener">📎 官方原文 / 权威链接 →</a></p>`:'<p style="color:var(--muted);font-size:13px">官方链接待核实——请自行搜索权威来源。</p>'}
+      ${it.kind==='book'?`<p><a href="${ZLIB}${encodeURIComponent((it.title||'').split('（')[0].split('(')[0].trim())}" target="_blank" rel="noopener">📚 在 Z-Library 找这本书读 →</a></p>`:''}
       ${(it.related_terms||[]).length?`<p style="font-size:13px;color:var(--muted)">相关术语：${it.related_terms.map(s=>`<a href="#" onclick="VI.showTerm('${s}');return false">${s}</a>`).join('　')}</p>`:''}
       <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
       <p style="font-size:13px;color:var(--muted)">读完写一句你的收获（不是摘抄，是你自己的话）→ 留痕 + 可能解锁成就：</p>
@@ -98,6 +110,11 @@ async function load(){
   USER = await VI.me(); VI.nav('canon', USER); await VI.loadAchTitles();
   const r = await VI.api('/api/canon'); ITEMS = (r.data&&r.data.items)||[];
   renderFilters(); renderList();
+  window.VI = window.VI || {};
+  window.VI.pageContext = () => {
+    const lines = ITEMS.map(i => `- [${tierLabel(i.tier)}] ${i.title}（${KINDS[i.kind]||i.kind}，约${Math.round((i.est_minutes||0)/60)}h）${i.read?'[已开始]':''}：${(i.why||'').replace(/\s+/g,' ').slice(0,55)}`);
+    return `页面：一手内容库（大师一手内容清单，按层级，越前越基础）。用户已开始 ${ITEMS.filter(x=>x.read).length}/${ITEMS.length} 篇。\n清单：\n${lines.join('\n')}`;
+  };
 }
 load();
 </script>
