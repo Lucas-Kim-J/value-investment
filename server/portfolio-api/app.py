@@ -14,18 +14,24 @@ Secrets live ONLY on the server (never in the repo):
 """
 from __future__ import annotations
 
+import base64
 import datetime
+import hashlib
+import hmac
 import json
 import os
 import re
 import subprocess
 import threading
 import time
+import urllib.error
+import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 
 import psycopg2
 import psycopg2.extras
+from cryptography.fernet import Fernet
 from flask import Flask, jsonify, request, session
 
 CODES_FILE = Path(os.environ.get("VI_CODES_FILE", "/etc/value-investment/access-codes.json"))
@@ -241,6 +247,18 @@ def _init_db() -> None:
                 started_at   DOUBLE PRECISION,
                 created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
             );
+            -- read-only exchange API keys (crypto portfolio import). api_secret is
+            -- encrypted at rest (Fernet) — critical because pg_dump backups exist.
+            CREATE TABLE IF NOT EXISTS exchange_keys (
+                id             BIGSERIAL PRIMARY KEY,
+                username       TEXT NOT NULL,
+                exchange       TEXT NOT NULL,
+                label          TEXT,
+                api_key        TEXT NOT NULL,
+                api_secret_enc TEXT NOT NULL,
+                created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_ek_user ON exchange_keys(username);
             """
         )
 
@@ -1063,6 +1081,223 @@ def explain_poll(jid):
     if not r or r["username"] != user:
         return {"error": "not found"}, 404
     return jsonify({"id": r["id"], "status": r["status"], "text": r["text"], "reply": r["reply"], "error": r["error"]})
+
+
+# ---------- crypto exchange import (read-only) ----------
+
+SUPPORTED_EXCHANGES = {"gate": "Gate.io"}  # others scaffolded in the UI, not yet wired
+GATE_HOST = "https://api.gateio.ws"
+_STABLES = {"USDT", "USDC", "DAI", "BUSD", "TUSD", "FDUSD"}
+
+
+def _fernet() -> Fernet:
+    # derive a Fernet key from the existing session secret — no extra env var,
+    # and secrets in the DB / pg_dump backups are never plaintext.
+    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(app.secret_key.encode()).digest()))
+
+
+def _enc_secret(s: str) -> str:
+    return _fernet().encrypt(s.encode()).decode()
+
+
+def _dec_secret(s: str) -> str:
+    return _fernet().decrypt(s.encode()).decode()
+
+
+def _http_get_json(url: str, headers: dict, timeout: int = 12):
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "ignore")
+        raise RuntimeError(f"HTTP {e.code}: {body[:160]}")
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"网络错误：{getattr(e, 'reason', e)}")
+
+
+def _gate_headers(key: str, secret: str, method: str, path: str, query: str = "", body: str = "") -> dict:
+    t = str(int(time.time()))
+    payload_hash = hashlib.sha512((body or "").encode()).hexdigest()
+    sig_str = f"{method}\n{path}\n{query}\n{payload_hash}\n{t}"
+    sign = hmac.new(secret.encode(), sig_str.encode(), hashlib.sha512).hexdigest()
+    return {"KEY": key, "Timestamp": t, "SIGN": sign, "Accept": "application/json", "Content-Type": "application/json"}
+
+
+def _gate_get(key: str, secret: str, path: str, query: str = ""):
+    full = "/api/v4" + path
+    headers = _gate_headers(key, secret, "GET", full, query)
+    url = GATE_HOST + full + (("?" + query) if query else "")
+    return _http_get_json(url, headers)
+
+
+def _gate_public_get(path: str, query: str = ""):
+    url = GATE_HOST + "/api/v4" + path + (("?" + query) if query else "")
+    return _http_get_json(url, {"Accept": "application/json"})
+
+
+def gate_snapshot(key: str, secret: str) -> dict:
+    """Read-only portfolio snapshot from Gate.io v4."""
+    total = _gate_get(key, secret, "/wallet/total_balance", "currency=USDT")  # also validates the key
+    by_account = {}
+    for name, v in (total.get("details") or {}).items():
+        amt = float(v.get("amount") or 0)
+        if amt > 0.5:
+            by_account[name] = round(amt, 2)
+    total_usdt = round(float((total.get("total") or {}).get("amount") or 0), 2)
+    # spot prices (public) for per-coin USD valuation
+    prices = {}
+    try:
+        for tk in _gate_public_get("/spot/tickers"):
+            prices[tk.get("currency_pair")] = float(tk.get("last") or 0)
+    except Exception:  # noqa: BLE001
+        pass
+
+    def usd(coin, amt):
+        if coin in _STABLES:
+            return amt
+        return amt * (prices.get(coin + "_USDT") or 0)
+
+    spot = []
+    try:
+        for b in _gate_get(key, secret, "/spot/accounts"):
+            amt = float(b.get("available") or 0) + float(b.get("locked") or 0)
+            if amt <= 0:
+                continue
+            coin = b.get("currency")
+            spot.append({"coin": coin, "amount": amt, "usd": round(usd(coin, amt), 2)})
+    except Exception:  # noqa: BLE001
+        pass
+    spot.sort(key=lambda x: x["usd"], reverse=True)
+
+    futures = []
+    try:
+        for p in _gate_get(key, secret, "/futures/usdt/positions"):
+            size = float(p.get("size") or 0)
+            if size == 0:
+                continue
+            futures.append({
+                "contract": p.get("contract"), "size": size,
+                "value": round(float(p.get("value") or 0), 2),
+                "upnl": round(float(p.get("unrealised_pnl") or 0), 2),
+                "entry": float(p.get("entry_price") or 0), "mark": float(p.get("mark_price") or 0),
+            })
+    except Exception:  # noqa: BLE001
+        pass  # futures may be disabled / empty
+    return {"total_usdt": total_usdt, "by_account": by_account, "spot": spot, "futures": futures}
+
+
+def fetch_exchange_snapshot(exchange: str, key: str, secret: str) -> dict:
+    if exchange == "gate":
+        return gate_snapshot(key, secret)
+    raise RuntimeError("暂不支持该交易所")
+
+
+@app.get("/api/exchange/keys")
+def list_exchange_keys():
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT id,exchange,label,api_key,created_at FROM exchange_keys WHERE username=%s ORDER BY id", (user,))
+        rows = cur.fetchall()
+    items = [{
+        "id": r["id"], "exchange": r["exchange"], "label": r["label"],
+        "key_masked": (r["api_key"][:5] + "…" + r["api_key"][-4:]) if len(r["api_key"] or "") > 11 else "••••",
+        "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+    } for r in rows]
+    return jsonify({"items": items, "supported": SUPPORTED_EXCHANGES})
+
+
+@app.post("/api/exchange/keys")
+def add_exchange_key():
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    body = request.get_json(force=True, silent=True) or {}
+    exchange = str(body.get("exchange", "")).strip().lower()
+    api_key = str(body.get("api_key", "")).strip()
+    api_secret = str(body.get("api_secret", "")).strip()
+    label = str(body.get("label", "")).strip()[:60]
+    if exchange not in SUPPORTED_EXCHANGES:
+        return {"error": "目前只支持 Gate.io"}, 400
+    if not api_key or not api_secret:
+        return {"error": "缺少 API key 或 secret"}, 400
+    # validate the key by doing one read before saving
+    try:
+        fetch_exchange_snapshot(exchange, api_key, api_secret)
+    except Exception as e:  # noqa: BLE001
+        return {"error": "连接失败（请确认 key 正确、已开只读权限）：" + str(e)[:160]}, 400
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("INSERT INTO exchange_keys(username,exchange,label,api_key,api_secret_enc) VALUES (%s,%s,%s,%s,%s) RETURNING id",
+                    (user, exchange, label or SUPPORTED_EXCHANGES[exchange], api_key, _enc_secret(api_secret)))
+        kid = cur.fetchone()["id"]
+    return {"ok": True, "id": kid}
+
+
+@app.delete("/api/exchange/keys/<int:kid>")
+def del_exchange_key(kid):
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    with _db() as c, c.cursor() as cur:
+        cur.execute("DELETE FROM exchange_keys WHERE id=%s AND username=%s", (kid, user))
+    return {"ok": True}
+
+
+def _load_key_row(user, kid):
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT exchange,api_key,api_secret_enc FROM exchange_keys WHERE id=%s AND username=%s", (kid, user))
+        return cur.fetchone()
+
+
+@app.post("/api/exchange/keys/<int:kid>/sync")
+def sync_exchange(kid):
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    r = _load_key_row(user, kid)
+    if not r:
+        return {"error": "not found"}, 404
+    try:
+        snap = fetch_exchange_snapshot(r["exchange"], r["api_key"], _dec_secret(r["api_secret_enc"]))
+    except Exception as e:  # noqa: BLE001
+        return {"error": "同步失败：" + str(e)[:200]}, 502
+    return jsonify({"snapshot": snap})
+
+
+@app.post("/api/exchange/keys/<int:kid>/import")
+def import_exchange(kid):
+    """Add the snapshot's spot coins (+ futures) into the user's holdings table
+    (market=加密), deduped by ticker — never clobbers existing manual rows."""
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    r = _load_key_row(user, kid)
+    if not r:
+        return {"error": "not found"}, 404
+    try:
+        snap = fetch_exchange_snapshot(r["exchange"], r["api_key"], _dec_secret(r["api_secret_enc"]))
+    except Exception as e:  # noqa: BLE001
+        return {"error": "同步失败：" + str(e)[:200]}, 502
+    existing = _load(user)["holdings"]
+    have = {(h.get("ticker") or "").upper() for h in existing}
+    src = SUPPORTED_EXCHANGES.get(r["exchange"], r["exchange"])
+    added = 0
+    rows = list(existing)
+    for s in snap.get("spot", []):
+        if s["usd"] < 0.1:  # skip true dust only
+            continue
+        tk = (s["coin"] or "").upper()
+        if not tk or tk in have:
+            continue
+        rows.append({"market": "加密", "ticker": tk, "name": f"{src} 现货",
+                     "buy_date": None, "cost": None, "position_pct": None,
+                     "note": f"{src}现货 {round(s['amount'], 6)} {tk} ≈ ${s['usd']}（{datetime.date.today().isoformat()} 同步）"})
+        have.add(tk); added += 1
+    if added:
+        _save(user, rows)
+    return {"ok": True, "added": added}
 
 
 if __name__ == "__main__":

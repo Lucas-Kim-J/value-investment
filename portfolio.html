@@ -71,6 +71,30 @@ td.num input { text-align:right; font-variant-numeric:tabular-nums; }
 .report-body strong { color:var(--fg); }
 .report-body code { background:var(--code-bg); padding:1px 6px; border-radius:4px; font-size:0.86em; }
 .report-body hr { border:none; border-top:1px solid var(--border); margin:20px 0; }
+/* 交易所导入 */
+.exchange-section { margin-top:40px; padding-top:24px; border-top:1px solid var(--border); }
+.exchange-section h2 { font-size:20px; margin:0 0 6px; }
+.ex-intro { color:var(--fg-soft); font-size:13.5px; margin:0 0 14px; line-height:1.6; }
+.ex-hint { color:var(--muted); font-size:12.5px; margin:10px 0 0; }
+#exAddBox { margin-top:6px; }
+#exAddBox summary { cursor:pointer; color:var(--accent); font-size:14px; font-weight:600; padding:6px 0; }
+.ex-form { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+.ex-form input, .vi-sel { padding:8px 11px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--fg); font-size:14px; font-family:inherit; }
+.ex-form input { min-width:230px; flex:1; }
+.vi-sel:focus, .ex-form input:focus { outline:none; border-color:var(--accent); }
+.ex-card { display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:var(--bg-soft); border:1px solid var(--border); border-radius:10px; padding:11px 16px; margin-bottom:10px; }
+.ex-card .ex-name { font-weight:600; }
+.ex-card .ex-key { color:var(--muted); font-size:12.5px; font-family:"SF Mono",Menlo,monospace; }
+.ex-card .sp { margin-left:auto; }
+.btn-sm { padding:5px 11px; font-size:12.5px; }
+.ex-total { font-size:15px; margin:18px 0 10px; }
+.ex-total b { color:var(--accent); font-size:24px; font-variant-numeric:tabular-nums; }
+.ex-chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+.ex-chip { background:var(--bg-soft); border:1px solid var(--border); border-radius:20px; padding:3px 12px; font-size:12.5px; color:var(--fg-soft); }
+.ex-section-h { font-size:12px; color:var(--muted); margin:10px 0 6px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+.ex-snap-table { width:100%; border-collapse:collapse; font-size:13.5px; margin-bottom:8px; }
+.ex-snap-table th { text-align:left; padding:7px 10px; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border-bottom:1px solid var(--border); }
+.ex-snap-table td { padding:7px 10px; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums; }
 </style>
 </head>
 <body>
@@ -110,6 +134,29 @@ td.num input { text-align:right; font-variant-numeric:tabular-nums; }
     <button class="btn btn-ghost" id="add">+ 添加一行</button>
     <button class="btn btn-primary" id="save">保存</button>
     <span class="status" id="status"></span>
+  </div>
+
+  <div class="exchange-section">
+    <h2>🔗 交易所导入（加密）</h2>
+    <p class="ex-intro">连接交易所<strong>只读</strong> API，一键拉取你的加密持仓。secret 加密存服务器、绝不外泄，只做读操作。</p>
+    <div id="exList"></div>
+    <details id="exAddBox">
+      <summary>+ 连接一个交易所</summary>
+      <div class="ex-form">
+        <select class="vi-sel" id="exSel">
+          <option value="gate">Gate.io</option>
+          <option value="okx" disabled>OKX（即将支持）</option>
+          <option value="binance" disabled>Binance（即将支持）</option>
+          <option value="bybit" disabled>Bybit（即将支持）</option>
+        </select>
+        <input id="exKey" placeholder="API Key" autocomplete="off" spellcheck="false">
+        <input id="exSecret" type="password" placeholder="API Secret" autocomplete="off" spellcheck="false">
+        <button class="btn btn-primary" id="exAdd">连接并验证</button>
+        <span class="status" id="exStatus"></span>
+      </div>
+      <p class="ex-hint">⚠️ 创建 key 时只勾选「只读 / 读取」（现货 / 合约 / 钱包 / 理财），<strong>不要开提现</strong>。</p>
+    </details>
+    <div id="exSnapshot"></div>
   </div>
 
   <div class="report-section">
@@ -290,15 +337,87 @@ async function loadReport(){
   }catch{}
 }
 
+// ---- 交易所导入（加密）----
+async function exApi(path, opts){
+  opts=opts||{}; const o={credentials:'same-origin',headers:{}};
+  if(opts.body!==undefined){ o.method=opts.method||'POST'; o.headers['Content-Type']='application/json'; o.body=JSON.stringify(opts.body); }
+  else if(opts.method) o.method=opts.method;
+  const r=await fetch(path,o); let d=null; try{ d=await r.json(); }catch(e){}
+  return {ok:r.ok,status:r.status,data:d};
+}
+function exSt(t,c){ const s=$('exStatus'); if(s){ s.textContent=t; s.className='status '+(c||''); } }
+
+async function loadExchanges(){
+  const r=await exApi('/api/exchange/keys'); const items=(r.data&&r.data.items)||[];
+  if(!items.length){ $('exList').innerHTML=''; return; }
+  $('exList').innerHTML = items.map(it=>`
+    <div class="ex-card" data-id="${it.id}">
+      <span class="ex-name">${esc(it.label||it.exchange)}</span>
+      <span class="ex-key">${esc(it.key_masked||'')}</span>
+      <span class="sp"></span>
+      <button class="btn btn-primary btn-sm ex-sync">🔄 同步</button>
+      <button class="btn btn-ghost btn-sm ex-del">🗑</button>
+    </div>`).join('');
+  $('exList').querySelectorAll('.ex-card').forEach(card=>{
+    const id=card.dataset.id;
+    card.querySelector('.ex-sync').addEventListener('click', ()=>syncExchange(id));
+    card.querySelector('.ex-del').addEventListener('click', ()=>delExchange(id));
+  });
+}
+
+async function addExchange(){
+  const exchange=$('exSel').value, api_key=$('exKey').value.trim(), api_secret=$('exSecret').value.trim();
+  if(!api_key||!api_secret){ exSt('请填 API Key 和 Secret','err'); return; }
+  $('exAdd').disabled=true; exSt('验证中…（会做一次只读拉取）');
+  const r=await exApi('/api/exchange/keys',{body:{exchange,api_key,api_secret}});
+  $('exAdd').disabled=false;
+  if(r.ok){ exSt('已连接 ✓','ok'); $('exKey').value=''; $('exSecret').value=''; await loadExchanges(); }
+  else exSt((r.data&&r.data.error)||'连接失败','err');
+}
+
+async function syncExchange(id){
+  $('exSnapshot').innerHTML='<p class="status">同步中…</p>';
+  const r=await exApi('/api/exchange/keys/'+id+'/sync',{body:{}});
+  if(!r.ok){ $('exSnapshot').innerHTML='<p class="status err">'+esc((r.data&&r.data.error)||'同步失败')+'</p>'; return; }
+  renderSnapshot(id, r.data.snapshot||{});
+}
+
+function renderSnapshot(id, s){
+  const chips=Object.entries(s.by_account||{}).map(([k,v])=>`<span class="ex-chip">${esc(k)} $${v}</span>`).join('');
+  const spot=(s.spot||[]).filter(x=>x.usd>=0.01).map(x=>`<tr><td>${esc(x.coin)}</td><td style="text-align:right">${(+x.amount).toLocaleString(undefined,{maximumFractionDigits:6})}</td><td style="text-align:right">$${x.usd}</td></tr>`).join('');
+  const fut=(s.futures||[]).map(x=>`<tr><td>${esc(x.contract)}</td><td style="text-align:right">${x.size}</td><td style="text-align:right">$${x.value}</td><td style="text-align:right;color:${x.upnl>=0?'var(--good)':'var(--warn)'}">${x.upnl>=0?'+':''}${x.upnl}</td></tr>`).join('');
+  $('exSnapshot').innerHTML =
+    `<div class="ex-total">总资产 ≈ <b>$${s.total_usdt}</b></div>`+
+    (chips?`<div class="ex-chips">${chips}</div>`:'')+
+    (spot?`<div class="ex-section-h">现货</div><table class="ex-snap-table"><thead><tr><th>币种</th><th style="text-align:right">数量</th><th style="text-align:right">≈USD</th></tr></thead><tbody>${spot}</tbody></table>`:'')+
+    (fut?`<div class="ex-section-h">合约持仓</div><table class="ex-snap-table"><thead><tr><th>合约</th><th style="text-align:right">数量</th><th style="text-align:right">价值</th><th style="text-align:right">未实现盈亏</th></tr></thead><tbody>${fut}</tbody></table>`:'')+
+    `<button class="btn btn-primary" id="exImport">⬇ 导入到持仓表</button> <span class="status" id="exImpSt"></span>`;
+  $('exImport').addEventListener('click', ()=>importExchange(id));
+}
+
+async function importExchange(id){
+  const b=$('exImport'); b.disabled=true; $('exImpSt').textContent='导入中…'; $('exImpSt').className='status';
+  const r=await exApi('/api/exchange/keys/'+id+'/import',{body:{}});
+  if(r.ok){ $('exImpSt').textContent='已导入 '+(r.data.added||0)+' 个新币种 ✓（在上面的持仓表里）'; $('exImpSt').className='status ok'; $('rows').innerHTML=''; await init(); }
+  else { b.disabled=false; $('exImpSt').textContent=(r.data&&r.data.error)||'失败'; $('exImpSt').className='status err'; }
+}
+
+async function delExchange(id){
+  if(!confirm('删除这个交易所连接？(不影响已导入的持仓)')) return;
+  await exApi('/api/exchange/keys/'+id, {method:'DELETE'});
+  $('exSnapshot').innerHTML=''; loadExchanges();
+}
+
 $('add').addEventListener('click', ()=>addRow());
 $('save').addEventListener('click', save);
 $('gen').addEventListener('click', gen);
 $('push').addEventListener('click', pushReport);
+$('exAdd').addEventListener('click', addExchange);
 $('logout').addEventListener('click', async ()=>{
   try{ await fetch('/api/logout',{method:'POST',credentials:'same-origin'}); }catch{}
   location.replace('login.html');
 });
-init().then(loadReport);
+init().then(()=>{ loadReport(); loadExchanges(); });
 </script>
 </body>
 </html>
