@@ -1,5 +1,11 @@
-import { defineConfig } from "vite";
+/// <reference types="vitest/config" />
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+// TDD Guard reporters write to <repoRoot>/.claude/tdd-guard/data/ — repoRoot is web/'s parent.
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 // SPA that deploys as static files (vite build → dist → rsync to nginx).
 // In dev, proxy /api to the running backend (docker stack at :8080) so session
@@ -11,6 +17,15 @@ export default defineConfig({
     proxy: {
       "/api": { target: "http://localhost:8080", changeOrigin: true },
     },
+  },
+  test: {
+    globals: true,
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    reporters: [
+      "default",
+      ["tdd-guard-vitest", { projectRoot: repoRoot }],
+    ],
   },
   build: {
     outDir: "dist",

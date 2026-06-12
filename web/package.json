@@ -7,7 +7,9 @@
     "dev": "vite",
     "sync-content": "node scripts/sync-content.mjs",
     "build": "node scripts/sync-content.mjs && tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "framer-motion": "^11.11.0",
@@ -19,10 +21,17 @@
     "remark-gfm": "^4.0.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.9.3",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
+    "jsdom": "^29.1.1",
+    "tdd-guard-vitest": "^0.2.0",
     "typescript": "^5.6.3",
-    "vite": "^5.4.10"
+    "vite": "^5.4.10",
+    "vitest": "^4.1.8"
   }
 }
