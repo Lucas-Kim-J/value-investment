@@ -29,6 +29,7 @@ def main() -> int:
     terms = content_lib.parse_glossary()
     canon = content_lib.load_canon()
     achs = content_lib.load_achievements()
+    skills = content_lib.load_skills()
 
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
@@ -70,9 +71,18 @@ def main() -> int:
              json.dumps(a.get("rule", {}), ensure_ascii=False), i),
         )
 
+    for s in skills:
+        cur.execute(
+            """INSERT INTO official_skills(name,version,description,skill_md,updated_at)
+               VALUES (%s,%s,%s,%s,now())
+               ON CONFLICT (name) DO UPDATE SET version=EXCLUDED.version,
+                 description=EXCLUDED.description, skill_md=EXCLUDED.skill_md, updated_at=now()""",
+            (s["name"], s.get("version", ""), s.get("description", ""), s["skill_md"]),
+        )
+
     conn.commit()
     conn.close()
-    print(f"✅ seeded: {len(terms)} terms · {len(canon)} canon · {len(achs)} achievements")
+    print(f"✅ seeded: {len(terms)} terms · {len(canon)} canon · {len(achs)} achievements · {len(skills)} skills")
     return 0
 
 

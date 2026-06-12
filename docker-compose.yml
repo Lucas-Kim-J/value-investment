@@ -33,6 +33,7 @@ services:
       - ./content_lib.py:/app/content_lib.py:ro
       - ./content:/app/content:ro
       - ./routine/glossary.md:/app/routine/glossary.md:ro
+      - ./skills:/app/skills:ro
     depends_on:
       db:
         condition: service_healthy

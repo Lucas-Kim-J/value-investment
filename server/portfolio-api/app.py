@@ -22,6 +22,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import threading
 import time
 import urllib.error
@@ -261,6 +262,15 @@ def _init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_ek_user ON exchange_keys(username);
             -- manual net value for balances the public API can't read (e.g. Gate TradFi 股票)
             ALTER TABLE exchange_keys ADD COLUMN IF NOT EXISTS manual_usd NUMERIC DEFAULT 0;
+            -- official skills registry: admin-curated per feature, seeded from skills/*/SKILL.md,
+            -- then distributed into each tenant's Hermes profile. PG is the source of truth.
+            CREATE TABLE IF NOT EXISTS official_skills (
+                name        TEXT PRIMARY KEY,
+                version     TEXT,
+                description TEXT,
+                skill_md    TEXT NOT NULL,
+                updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
             """
         )
 
@@ -1370,6 +1380,134 @@ def import_exchange(kid):
     if added:
         _save(user, rows)
     return {"ok": True, "added": added}
+
+
+# ---------- Hermes skills: official skill → distribute to profiles → invoke ----------
+
+HERMES_HOME = os.environ.get("HERMES_HOME", "/root/.hermes")
+app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024  # 12MB upload cap
+
+
+def _profile_name(user: str) -> str:
+    return "app-" + re.sub(r"[^a-z0-9_-]", "", (user or "").lower())[:48]
+
+
+def _extract_json(text: str):
+    """Pull the first balanced JSON value out of model output (tolerates fences/prose)."""
+    if not text:
+        return None
+    t = text.strip()
+    m = re.search(r"```(?:json)?\s*(.*?)```", t, re.S)
+    if m:
+        t = m.group(1).strip()
+    start = next((i for i, ch in enumerate(t) if ch in "{["), None)
+    if start is None:
+        return None
+    depth, instr, esc = 0, False, False
+    for i in range(start, len(t)):
+        c = t[i]
+        if esc:
+            esc = False; continue
+        if c == "\\":
+            esc = True; continue
+        if c == '"':
+            instr = not instr
+        if instr:
+            continue
+        if c in "{[":
+            depth += 1
+        elif c in "}]":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(t[start:i + 1])
+                except Exception:  # noqa: BLE001
+                    return None
+    return None
+
+
+def run_skill(user: str, skill: str, task: str, image_path: str = None, inject: str = None, timeout: int = 240):
+    """Invoke an official skill under the user's Hermes profile (`hermes -p app-<user> --skills <skill>`).
+    Structured facts are injected per-call (Postgres = source of truth). Returns parsed JSON or None."""
+    if REPORT_MODE == "mock":
+        return {"holdings": [{"symbol": "BTC", "name": "(mock)", "market": "加密", "quantity": 0.1, "value_usd": 4200, "dust": False}],
+                "warnings": ["本地 mock：未调用 hermes"]}
+    profile = _profile_name(user)
+    parts = [task]
+    if inject:
+        parts.append("【相关数据】\n" + inject)
+    if image_path:
+        parts.append("图片文件：" + image_path)
+    prompt = "\n\n".join(parts)
+    r = subprocess.run(
+        ["hermes", "-p", profile, "-z", prompt, "--skills", skill],
+        capture_output=True, text=True, timeout=timeout,
+        env={**os.environ, "HERMES_HOME": HERMES_HOME},
+    )
+    out = (r.stdout or "").strip()
+    if r.returncode != 0 and not out:
+        raise RuntimeError((r.stderr or "").strip()[-200:] or "skill 返回空")
+    return _extract_json(out)
+
+
+def provision_hermes():
+    """Deploy step (run as root): ensure each tenant has a Hermes profile (with auth) and the
+    official skills (from PG) distributed into it. Idempotent."""
+    try:
+        users = sorted(set(json.loads(CODES_FILE.read_text(encoding="utf-8")).values()))
+    except Exception:  # noqa: BLE001
+        users = []
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT name, skill_md FROM official_skills")
+        skills = cur.fetchall()
+    base = Path(HERMES_HOME)
+    report = []
+    for user in users:
+        prof = _profile_name(user)
+        pdir = base / "profiles" / prof
+        if not pdir.exists():
+            subprocess.run(["hermes", "profile", "create", prof, "--clone", "--no-alias",
+                            "--description", f"value-investment tenant {user}"],
+                           env={**os.environ, "HERMES_HOME": HERMES_HOME}, capture_output=True, text=True, timeout=120)
+        auth = base / "auth.json"  # --clone doesn't copy provider auth
+        if auth.exists() and not (pdir / "auth.json").exists():
+            (pdir / "auth.json").write_bytes(auth.read_bytes())
+        for s in skills:
+            sdir = pdir / "skills" / s["name"]
+            sdir.mkdir(parents=True, exist_ok=True)
+            (sdir / "SKILL.md").write_text(s["skill_md"], encoding="utf-8")
+        report.append({"user": user, "profile": prof, "exists": pdir.exists(), "skills": len(skills)})
+    return report
+
+
+@app.post("/api/holdings/parse-image")
+def parse_holdings_image():
+    """Photo → holdings preview, via the vi-parse-holdings official skill (Hermes vision)."""
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    f = request.files.get("image")
+    if not f or not f.filename:
+        return {"error": "没有收到图片"}, 400
+    fd, path = tempfile.mkstemp(prefix="vi-upload-", suffix=".img", dir="/tmp")
+    os.close(fd)
+    f.save(path)
+    try:
+        data = run_skill(user, "vi-parse-holdings",
+                         "用 vi-parse-holdings 技能，从这张持仓/资产截图里提取所有持仓。严格只输出该 SKILL 定义的 JSON，不要解释、不要代码块围栏。",
+                         image_path=path)
+    except subprocess.TimeoutExpired:
+        return {"error": "识别超时，请重试或换张更清晰的图"}, 502
+    except Exception as e:  # noqa: BLE001
+        return {"error": "识别失败：" + str(e)[:160]}, 502
+    finally:
+        try:
+            os.remove(path)
+        except Exception:  # noqa: BLE001
+            pass
+    if not data or not isinstance(data, dict):
+        return {"error": "没认出持仓——换一张更清晰、含币种和数量的截图试试"}, 502
+    return jsonify({"holdings": data.get("holdings") or [], "warnings": data.get("warnings") or []})
 
 
 if __name__ == "__main__":

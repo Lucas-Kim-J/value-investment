@@ -33,7 +33,7 @@ ROOT = Path(__file__).parent.resolve()
 DIST = ROOT / "dist"
 
 # Directories never included in the site
-SKIP_DIRS = {".git", "dist", "node_modules", ".github", "journals", "__pycache__", ".venv", "venv", "assets"}
+SKIP_DIRS = {".git", "dist", "node_modules", ".github", "journals", "__pycache__", ".venv", "venv", "assets", "skills"}
 # Files we never publish as pages
 SKIP_FILES = {".gitignore", "requirements-build.txt"}
 

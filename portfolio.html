@@ -137,6 +137,17 @@ td.num input { text-align:right; font-variant-numeric:tabular-nums; }
   </div>
 
   <div class="exchange-section">
+    <h2>📷 拍照 / 截图识别持仓</h2>
+    <p class="ex-intro">上传任意账户的持仓截图（交易所 / 券商 / 钱包都行）—— hermes 自动读图识别成持仓，绕开所有 API 限制（比如 Gate 那个 API 拉不到的 TradFi 股票，截个图就进来了）。</p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input type="file" id="photoFile" accept="image/*" style="display:none">
+      <button class="btn btn-primary" id="photoBtn">📷 选图 / 拍照识别</button>
+      <span class="status" id="photoSt"></span>
+    </div>
+    <div id="photoResult" style="margin-top:14px"></div>
+  </div>
+
+  <div class="exchange-section">
     <h2>🔗 交易所导入（加密）</h2>
     <p class="ex-intro">连接交易所<strong>只读</strong> API，一键拉取你的加密持仓。secret 加密存服务器、绝不外泄，只做读操作。</p>
     <div id="exList"></div>
@@ -428,6 +439,35 @@ async function delExchange(id){
   $('exSnapshot').innerHTML=''; loadExchanges();
 }
 
+// ---- 拍照 / 截图识别持仓（vi-parse-holdings skill）----
+async function parsePhoto(file){
+  $('photoSt').textContent='识别中…（hermes 读图，约 30-60 秒）'; $('photoSt').className='status'; $('photoResult').innerHTML='';
+  const fd = new FormData(); fd.append('image', file);
+  try{
+    const r = await fetch('/api/holdings/parse-image', {method:'POST', credentials:'same-origin', body:fd});
+    const d = await r.json().catch(()=>({}));
+    if(r.status===401){ location.replace('login.html'); return; }
+    if(!r.ok){ $('photoSt').textContent=(d.error)||('识别失败 '+r.status); $('photoSt').className='status err'; return; }
+    renderPhotoResult(d.holdings||[], d.warnings||[]);
+    $('photoSt').textContent='识别完成 ✓ 核对后加入'; $('photoSt').className='status ok';
+  }catch(err){ $('photoSt').textContent='网络错误：'+err.message; $('photoSt').className='status err'; }
+}
+function renderPhotoResult(holdings, warnings){
+  if(!holdings.length){ $('photoResult').innerHTML='<p class="status">没认出持仓，换张更清晰、含币种和数量的截图试试。</p>'; return; }
+  const rows = holdings.map(h=>`<tr><td>${esc(h.symbol||'')}</td><td>${esc(h.market||'')}</td><td style="text-align:right">${h.quantity!=null?h.quantity:''}</td><td style="text-align:right">${h.value_usd!=null?'$'+h.value_usd:''}</td></tr>`).join('');
+  $('photoResult').innerHTML =
+    (warnings.length?`<p class="status">⚠️ ${esc(warnings.join('；'))}</p>`:'')+
+    `<table class="ex-snap-table"><thead><tr><th>代码</th><th>市场</th><th style="text-align:right">数量</th><th style="text-align:right">≈USD</th></tr></thead><tbody>${rows}</tbody></table>
+     <button class="btn btn-primary" id="photoImport">⬇ 加入持仓表（可再编辑）</button> <span class="status" id="photoImpSt"></span>`;
+  $('photoImport').addEventListener('click', ()=>{
+    holdings.forEach(h=> addRow({market:h.market||'加密', ticker:(h.symbol||'').toUpperCase(), name:h.name||'',
+      note:((h.quantity!=null?h.quantity+' ':'')+(h.value_usd!=null?'≈$'+h.value_usd:'')).trim()+'（拍照识别）'}));
+    $('photoResult').innerHTML=''; $('photoSt').textContent='已加入 '+holdings.length+' 行——核对后点上面「保存」'; $('photoSt').className='status ok';
+  });
+}
+
+$('photoBtn').addEventListener('click', ()=> $('photoFile').click());
+$('photoFile').addEventListener('change', e=>{ const f=e.target.files[0]; if(f) parsePhoto(f); e.target.value=''; });
 $('add').addEventListener('click', ()=>addRow());
 $('save').addEventListener('click', save);
 $('gen').addEventListener('click', gen);
