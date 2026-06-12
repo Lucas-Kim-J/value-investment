@@ -141,7 +141,8 @@ td.num input { text-align:right; font-variant-numeric:tabular-nums; }
     <p class="ex-intro">上传任意账户的持仓截图（交易所 / 券商 / 钱包都行）—— hermes 自动读图识别成持仓，绕开所有 API 限制（比如 Gate 那个 API 拉不到的 TradFi 股票，截个图就进来了）。</p>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <input type="file" id="photoFile" accept="image/*" style="display:none">
-      <button class="btn btn-primary" id="photoBtn">📷 选图 / 拍照识别</button>
+      <button class="btn btn-primary" id="photoBtn">📷 选图 / 拍照</button>
+      <span style="color:var(--muted);font-size:13px">或在本页直接 <kbd style="font-family:monospace;border:1px solid var(--border);border-radius:3px;padding:0 5px">⌘V</kbd> / <kbd style="font-family:monospace;border:1px solid var(--border);border-radius:3px;padding:0 5px">Ctrl+V</kbd> 粘贴截图</span>
       <span class="status" id="photoSt"></span>
     </div>
     <div id="photoResult" style="margin-top:14px"></div>
@@ -468,6 +469,17 @@ function renderPhotoResult(holdings, warnings){
 
 $('photoBtn').addEventListener('click', ()=> $('photoFile').click());
 $('photoFile').addEventListener('change', e=>{ const f=e.target.files[0]; if(f) parsePhoto(f); e.target.value=''; });
+// 直接粘贴剪贴板里的截图（⌘V / Ctrl+V）
+document.addEventListener('paste', e=>{
+  const items = (e.clipboardData && e.clipboardData.items) || [];
+  for(const it of items){
+    if(it.type && it.type.indexOf('image')===0){
+      const f = it.getAsFile();
+      if(f){ e.preventDefault(); $('photoSt').scrollIntoView({behavior:'smooth',block:'center'}); parsePhoto(f); }
+      return;
+    }
+  }
+});
 $('add').addEventListener('click', ()=>addRow());
 $('save').addEventListener('click', save);
 $('gen').addEventListener('click', gen);
