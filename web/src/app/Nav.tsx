@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useMe } from "../lib/hooks";
+import { useShell } from "../shell/ShellContext";
 
 const ITEMS: ReadonlyArray<readonly [string, string]> = [
   ["/", "🏠 首页"],
@@ -13,6 +14,7 @@ const ITEMS: ReadonlyArray<readonly [string, string]> = [
 
 export function Nav() {
   const user = useMe();
+  const { openCmdk } = useShell();
   return (
     <nav className="vi-nav">
       {ITEMS.map(([to, label]) => (
@@ -21,6 +23,9 @@ export function Nav() {
         </NavLink>
       ))}
       <span className="sp" />
+      <span className="kbtn" onClick={openCmdk}>
+        🔍 术语速查 <kbd>⌘K</kbd>
+      </span>
       {user && (
         <span className="who">
           👤 <b>{user}</b>

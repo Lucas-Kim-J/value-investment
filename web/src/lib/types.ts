@@ -52,3 +52,30 @@ export interface Holding {
   position_pct: number | null;
   note: string;
 }
+
+export interface GlossaryTerm {
+  slug: string;
+  term: string;
+  term_en?: string;
+  category?: string;
+  definition?: string;
+  mastery?: "" | "seen" | "mastered";
+  learned?: boolean;
+}
+
+export interface TermDetail extends GlossaryTerm {
+  detail_url?: string | null;
+  related?: string[];
+  appears_in?: { slug: string; title: string }[];
+  my_restatement?: string;
+  error?: string;
+}
+
+/** the compact terms.json used by ⌘K (one entry per glossary term) */
+export interface TermLite {
+  slug: string;
+  term: string;
+  en?: string;
+  definition?: string;
+  category?: string;
+}
