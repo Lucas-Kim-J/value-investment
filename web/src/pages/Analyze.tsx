@@ -145,11 +145,11 @@ export default function Analyze() {
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
           <div>
             <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 4 }}>代码 *</label>
-            <input className="vi-in" value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="COST" style={{ width: 120 }} onKeyDown={(e) => e.key === "Enter" && go()} />
+            <input className="vi-in" value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="COST" style={{ width: 120 }} onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && go()} />
           </div>
           <div>
             <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 4 }}>名称</label>
-            <input className="vi-in" value={name} onChange={(e) => setName(e.target.value)} placeholder="Costco" style={{ width: 140 }} onKeyDown={(e) => e.key === "Enter" && go()} />
+            <input className="vi-in" value={name} onChange={(e) => setName(e.target.value)} placeholder="Costco" style={{ width: 140 }} onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && go()} />
           </div>
           <div>
             <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 4 }}>市场</label>

@@ -196,7 +196,7 @@ export function Chat({
           <textarea
             ref={inputRef} rows={1} value={input} placeholder="问 hermes 任何问题… (Enter 发送)"
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); sendChat(); } }}
           />
           <button onClick={() => sendChat()}>↑</button>
         </div>
