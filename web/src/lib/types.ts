@@ -38,9 +38,26 @@ export interface CanonItem {
   title: string;
   tier: string;
   kind: string;
+  source?: string;
+  period?: string;
   est_minutes: number;
   why?: string;
   read?: boolean;
+}
+
+export interface CanonEvent {
+  action: string;
+  detail?: { note?: string };
+  created_at?: string;
+}
+
+export interface CanonDetail extends CanonItem {
+  official_url?: string | null;
+  guide?: string;
+  questions?: string[];
+  related_terms?: string[];
+  my_events?: CanonEvent[];
+  error?: string;
 }
 
 export interface Holding {
