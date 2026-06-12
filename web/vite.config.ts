@@ -12,5 +12,20 @@ export default defineConfig({
       "/api": { target: "http://localhost:8080", changeOrigin: true },
     },
   },
-  build: { outDir: "dist", sourcemap: false },
+  build: {
+    outDir: "dist",
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Split rarely-changing vendor cores into their own long-cache chunks.
+        // react-markdown's ecosystem is intentionally left auto-split so it stays a
+        // deferred chunk (loaded with the chat / doc / markdown routes, not on first paint).
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("framer-motion") || id.includes("/motion-dom/") || id.includes("/motion-utils/")) return "motion";
+          if (id.includes("/react-dom/") || id.includes("/scheduler/") || id.includes("react-router") || id.includes("@remix-run")) return "react";
+        },
+      },
+    },
+  },
 });

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiGet } from "../lib/api";
 import { useMe } from "../lib/hooks";
-import { useShell } from "../shell/ShellContext";
+import { useShell, usePageContext } from "../shell/ShellContext";
 import type { CanonItem, Holding } from "../lib/types";
 import { CanonModal } from "./CanonModal";
 
@@ -24,6 +24,12 @@ export default function Canon() {
   useEffect(() => {
     if (user) apiGet<{ holdings: Holding[] }>("/api/holdings").then((r) => setHoldings(r.data?.holdings ?? []));
   }, [user]);
+
+  usePageContext(() => {
+    const lines = items.map((i) =>
+      `- [${TIERS[i.tier] || i.tier}] ${i.title}（${KINDS[i.kind] || i.kind}，约${Math.round((i.est_minutes || 0) / 60)}h）${i.read ? "[已开始]" : ""}：${(i.why || "").replace(/\s+/g, " ").slice(0, 55)}`);
+    return `页面：一手内容库（大师一手内容清单，按层级，越前越基础）。用户已开始 ${items.filter((x) => x.read).length}/${items.length} 篇。\n清单：\n${lines.join("\n")}`;
+  });
 
   const kinds = useMemo(() => ["all", ...Array.from(new Set(items.map((i) => i.kind)))], [items]);
   const filtered = items.filter((i) => (kind === "all" || i.kind === kind) && (tier === "all" || i.tier === tier));

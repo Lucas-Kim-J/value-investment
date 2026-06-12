@@ -8,7 +8,7 @@ import type { AchievementsResp, CanonItem, LearningSummary } from "../lib/types"
 const STAGE_CN: Record<string, string> = { novice: "学徒", building: "践行者", practitioner: "审视者" };
 
 const MODULES: ReadonlyArray<{ href: string; title: string; sub: string }> = [
-  { href: "/", title: "📖 方法论 v1.1", sub: "21 章核心方法论" },
+  { href: "/doc/index", title: "📖 方法论 v1.1", sub: "21 章核心方法论" },
   { href: "/canon", title: "📚 一手内容库", sub: "25 篇认知底座" },
   { href: "/doc/learning/valuation-cheatsheet", title: "📐 估值 4 工具", sub: "前 180 天禁 DCF" },
   { href: "/doc/learning/failure-cases", title: "⚠️ 失败案例", sub: "尸检 6 个崩盘" },

@@ -40,7 +40,7 @@ export function Cmdk({ onClose, onPick }: { onClose: () => void; onPick: (s: str
 
   return (
     <motion.div
-      className="vi-modal-bg"
+      className="vi-modal-bg vi-cmdk"
       style={{ alignItems: "flex-start", paddingTop: 80 }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}

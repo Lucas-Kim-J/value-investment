@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "sync-content": "node scripts/sync-content.mjs",
+    "build": "node scripts/sync-content.mjs && tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -14,6 +15,7 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.1",
     "react-router-dom": "^6.27.0",
+    "rehype-slug": "^6.0.0",
     "remark-gfm": "^4.0.0"
   },
   "devDependencies": {

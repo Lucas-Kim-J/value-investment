@@ -1,16 +1,23 @@
+import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { Layout } from "./app/Layout";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import Wiki from "./pages/Wiki";
-import Achievements from "./pages/Achievements";
-import Learn from "./pages/Learn";
-import Canon from "./pages/Canon";
-import Stub from "./pages/Stub";
 
-// Pages migrate to React incrementally; not-yet-migrated routes render a Stub.
+// Route-level code splitting: each page is its own chunk, fetched on navigation.
+const Login = lazy(() => import("./pages/Login"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Wiki = lazy(() => import("./pages/Wiki"));
+const Achievements = lazy(() => import("./pages/Achievements"));
+const Learn = lazy(() => import("./pages/Learn"));
+const Canon = lazy(() => import("./pages/Canon"));
+const Portfolio = lazy(() => import("./pages/Portfolio"));
+const Analyze = lazy(() => import("./pages/Analyze"));
+const Doc = lazy(() => import("./pages/Doc"));
+const Stub = lazy(() => import("./pages/Stub"));
+
+const Loading = () => <div style={{ padding: "40px 0", color: "var(--muted)", fontSize: 14 }}>加载中…</div>;
+
 export const router = createBrowserRouter([
-  { path: "/login", element: <Login /> },
+  { path: "/login", element: <Suspense fallback={<Loading />}><Login /></Suspense> },
   {
     element: <Layout />,
     children: [
@@ -20,9 +27,9 @@ export const router = createBrowserRouter([
       { path: "/achievements", element: <Achievements /> },
       { path: "/learn", element: <Learn /> },
       { path: "/canon", element: <Canon /> },
-      { path: "/portfolio", element: <Stub /> },
-      { path: "/analyze", element: <Stub /> },
-      { path: "/doc/*", element: <Stub /> },
+      { path: "/portfolio", element: <Portfolio /> },
+      { path: "/analyze", element: <Analyze /> },
+      { path: "/doc/*", element: <Doc /> },
       { path: "*", element: <Stub /> },
     ],
   },

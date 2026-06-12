@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { apiGet } from "../lib/api";
 import { useMe } from "../lib/hooks";
+import { usePageContext } from "../shell/ShellContext";
 import type { LearningSummary } from "../lib/types";
 
 interface Stage { n: string; key: string; name: string; prog: string; why: string; links: [string, string][] }
@@ -10,6 +11,7 @@ interface Stage { n: string; key: string; name: string; prog: string; why: strin
 export default function Learn() {
   const user = useMe();
   const [s, setS] = useState<LearningSummary | null>(null);
+  usePageContext(() => "页面：学习路线（建立框架的建议顺序：① 建立框架 → ② 学一手内容 → ③ 打术语底座 → ④ 管你的仓 → ⑤ 做公司分析）。①②③ 是认知底座，喂给 ④⑤。");
   useEffect(() => {
     if (user) apiGet<LearningSummary>("/api/learning/summary").then((r) => setS(r.data));
   }, [user]);
@@ -27,7 +29,7 @@ export default function Learn() {
 
   const stages: Stage[] = [
     { n: "①", key: "frame", name: "🧭 建立框架", prog: "基本盘 · 随时可读", why: "先有地图再上路：方法论 + 估值工具 + 失败案例，建立判断的底层框架。",
-      links: [["/", "方法论 v1.1"], ["/doc/learning/valuation-cheatsheet", "估值 4 工具（前 180 天禁 DCF）"], ["/doc/learning/failure-cases", "失败案例研究"]] },
+      links: [["/doc/index", "方法论 v1.1"], ["/doc/learning/valuation-cheatsheet", "估值 4 工具（前 180 天禁 DCF）"], ["/doc/learning/failure-cases", "失败案例研究"]] },
     { n: "②", key: "canon", name: "📚 学一手内容", prog: canon ? `已开始 ${canon} 篇` : "0 篇", why: "大师原始思维 = 认知底座。从 Tier0 起点必读挑短的开始，读完写一句你自己的话。",
       links: [["/canon", "一手内容库"], ["/doc/learning/canon-reading", "经典文本清单（13 本/套）"]] },
     { n: "③", key: "terms", name: "🔍 打术语底座", prog: `已掌握 ${terms} 个`, why: "读到不懂的词 ⌘K 即查 / 划词→解释→收入术语库。用自己的话讲对了才算掌握。",

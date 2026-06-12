@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { apiGet } from "../lib/api";
-import { useShell } from "../shell/ShellContext";
+import { useShell, usePageContext } from "../shell/ShellContext";
 import type { GlossaryTerm } from "../lib/types";
 
 export default function Wiki() {
   const { openTerm } = useShell();
   const [all, setAll] = useState<GlossaryTerm[]>([]);
   const [q, setQ] = useState("");
+
+  usePageContext(() => {
+    const cats: Record<string, string[]> = {};
+    all.forEach((t) => (cats[t.category || "其他"] ||= []).push(t.term));
+    const mastered = all.filter((t) => t.mastery === "mastered").length;
+    return `页面：术语 Wiki。共 ${all.length} 个术语，已掌握 ${mastered}。分类与术语：\n` +
+      Object.keys(cats).map((c) => `- ${c}：${cats[c].slice(0, 14).join("、")}`).join("\n");
+  });
 
   useEffect(() => {
     apiGet<{ items: GlossaryTerm[] }>("/api/terms").then((r) => setAll(r.data?.items ?? []));

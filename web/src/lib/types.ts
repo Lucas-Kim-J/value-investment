@@ -96,3 +96,59 @@ export interface TermLite {
   definition?: string;
   category?: string;
 }
+
+export interface ParsedHolding {
+  symbol: string;
+  name?: string | null;
+  quantity?: number | null;
+  value_usd?: number | null;
+  market?: string | null;
+  dust?: boolean;
+}
+
+export interface ExchangeKeyInfo {
+  id: number;
+  exchange: string;
+  label: string;
+  key_masked: string;
+  manual_usd: number;
+}
+
+export interface ExchangeSnapshot {
+  total_usdt: number;
+  wallet_usdt?: number;
+  tradfi_usdt?: number;
+  manual_usd?: number;
+  by_account: Record<string, number>;
+  spot: { coin: string; amount: number; usd: number }[];
+  finance?: { coin: string; product: string; amount: number; usd: number }[];
+  futures: { contract: string; size: number; value: number; upnl: number }[];
+}
+
+export interface ReportState {
+  status: "idle" | "running" | "done" | "error" | string;
+  report?: string;
+  generated_at?: string | null;
+  can_push?: boolean;
+  error?: string;
+}
+
+export interface AnalysisItem {
+  id: number;
+  ticker: string;
+  company_name?: string;
+  market?: string;
+  status: "running" | "done" | "error" | string;
+  created_at?: string;
+}
+
+export interface AnalysisDetail extends AnalysisItem {
+  report?: string;
+  generated_at?: string | null;
+  error?: string;
+}
+
+export interface ChatTurn { question?: string; reply?: string }
+export interface AsyncJob { status: "running" | "done" | "error" | string; reply?: string; error?: string }
+export interface CuratedTerm { term: string; term_en?: string; definition?: string; slug: string }
+export interface ExplainResp { id: number; curated?: CuratedTerm | null; error?: string }

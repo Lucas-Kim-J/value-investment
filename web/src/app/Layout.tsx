@@ -1,7 +1,10 @@
+import { Suspense } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Nav } from "./Nav";
 import { ShellProvider } from "../shell/ShellContext";
+
+const Loading = () => <div style={{ padding: "40px 0", color: "var(--muted)", fontSize: 14 }}>加载中…</div>;
 
 export function Layout() {
   const loc = useLocation();
@@ -15,7 +18,9 @@ export function Layout() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
         >
-          <Outlet />
+          <Suspense fallback={<Loading />}>
+            <Outlet />
+          </Suspense>
         </motion.main>
       </div>
     </ShellProvider>
