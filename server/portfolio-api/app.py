@@ -321,6 +321,12 @@ def _init_db() -> None:
                 canon_slug     TEXT
             )""")
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS kb_sources_uq ON kb_sources (username, lower(title))")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS notion_tokens (
+                username   TEXT PRIMARY KEY,
+                token_enc  TEXT NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )""")
 
 
 def _load(user: str) -> dict:
@@ -1167,8 +1173,6 @@ def _dec_secret(s: str) -> str:
 
 def set_notion_token(user: str, token: str) -> None:
     with _db() as c, c.cursor() as cur:
-        cur.execute("""CREATE TABLE IF NOT EXISTS notion_tokens (
-            username TEXT PRIMARY KEY, token_enc TEXT NOT NULL, updated_at TIMESTAMPTZ DEFAULT now())""")
         cur.execute("INSERT INTO notion_tokens (username, token_enc) VALUES (%s,%s) "
                     "ON CONFLICT (username) DO UPDATE SET token_enc=EXCLUDED.token_enc, updated_at=now()",
                     (user, _enc_secret(token)))
