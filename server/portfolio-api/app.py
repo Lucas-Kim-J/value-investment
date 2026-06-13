@@ -273,6 +273,40 @@ def _init_db() -> None:
             );
             """
         )
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS captures (
+                id             SERIAL PRIMARY KEY,
+                username       TEXT NOT NULL,
+                raw            TEXT NOT NULL,
+                title          TEXT,
+                note_type      TEXT,
+                situation      TEXT,
+                tags           JSONB DEFAULT '[]',
+                notion_page_id TEXT,
+                status         TEXT NOT NULL DEFAULT 'pending',   -- pending | written | error
+                error          TEXT,
+                created_at     TIMESTAMPTZ DEFAULT now(),
+                written_at     TIMESTAMPTZ
+            )""")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS kb_concepts (
+                id             SERIAL PRIMARY KEY,
+                username       TEXT NOT NULL,
+                name           TEXT NOT NULL,
+                notion_page_id TEXT,
+                term_slug      TEXT
+            )""")
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS kb_concepts_uq ON kb_concepts (username, lower(name))")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS kb_sources (
+                id             SERIAL PRIMARY KEY,
+                username       TEXT NOT NULL,
+                title          TEXT NOT NULL,
+                kind TEXT, author TEXT, url TEXT,
+                notion_page_id TEXT,
+                canon_slug     TEXT
+            )""")
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS kb_sources_uq ON kb_sources (username, lower(title))")
 
 
 def _load(user: str) -> dict:
