@@ -294,6 +294,7 @@ def _init_db() -> None:
                 situation      TEXT,
                 tags           JSONB DEFAULT '[]',
                 concept_names  JSONB NOT NULL DEFAULT '[]',
+                raw_cap        JSONB NOT NULL DEFAULT '{}',
                 notion_page_id TEXT,
                 status         TEXT NOT NULL DEFAULT 'pending',   -- pending | written | error
                 error          TEXT,
@@ -436,6 +437,19 @@ def get_holdings():
     if not user:
         return {"error": "未登录"}, 401
     return jsonify(_load(user))
+
+
+@app.post("/api/notion/token")
+def connect_notion():
+    """Store the user's Notion integration token (Fernet-encrypted) so captures can be filed."""
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    token = ((request.get_json(silent=True) or {}).get("token") or "").strip()
+    if not token:
+        return {"error": "缺少 token"}, 400
+    set_notion_token(user, token)
+    return {"ok": True}
 
 
 @app.put("/api/holdings")
@@ -1630,11 +1644,11 @@ def do_capture(user: str, cap: dict) -> dict:
     """Persist a capture (buffer-first so it's never lost), then file into Notion."""
     with _db() as c, c.cursor() as cur:
         concept_names = [con["name"] for con in (cap.get("concepts") or []) if con.get("name")]
-        cur.execute("INSERT INTO captures (username, raw, title, note_type, situation, tags, concept_names) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+        cur.execute("INSERT INTO captures (username, raw, title, note_type, situation, tags, concept_names, raw_cap) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                     (user, cap.get("clean_content") or cap.get("raw", ""), cap.get("title"),
                      cap.get("note_type"), cap.get("situation"), json.dumps(cap.get("tags") or []),
-                     json.dumps(concept_names)))
+                     json.dumps(concept_names), json.dumps(cap)))
         cap_id = cur.fetchone()[0]
     token = get_notion_token(user)
     if not token:
@@ -1646,6 +1660,10 @@ def do_capture(user: str, cap: dict) -> dict:
             with c.cursor() as cur:
                 cur.execute("UPDATE captures SET status='written', notion_page_id=%s, written_at=now() WHERE id=%s",
                             (res["notion_page_id"], cap_id))
+        try:
+            retry_pending_captures(user)  # Notion is reachable now → drain any buffered backlog
+        except Exception:  # noqa: BLE001 — backlog drain is best-effort, never fail the live capture
+            pass
         return {"ok": True, "capture_id": cap_id, **res}
     except Exception as e:  # noqa: BLE001 — Notion down/limited: leave status=pending, retry later
         with _db() as c, c.cursor() as cur:
@@ -1659,12 +1677,10 @@ def retry_pending_captures(user: str) -> int:
         return 0
     n = 0
     with _db() as c, c.cursor() as cur:
-        cur.execute("SELECT id, raw, title, note_type, situation, tags FROM captures "
-                    "WHERE username=%s AND status='pending' ORDER BY id", (user,))
+        cur.execute("SELECT id, raw_cap FROM captures WHERE username=%s AND status='pending' ORDER BY id", (user,))
         rows = cur.fetchall()
-    for rid, raw, title, ntype, situ, tags in rows:
-        cap = {"clean_content": raw, "title": title, "note_type": ntype, "situation": situ,
-               "tags": tags or [], "concepts": [], "source": None}
+    for rid, raw_cap in rows:
+        cap = raw_cap or {}  # the full original payload → concepts + source survive the retry
         try:
             with _db() as c:
                 res = _capture.record_capture(_nkb.PgKbIndex(c), _nkb.RealNotionClient(token), user, cap,

@@ -1,0 +1,5 @@
+# Deps for the capture MCP server (mcp_server.py). Runs in a SEPARATE Python 3.10+
+# environment (the `mcp` package requires >=3.10; the main API venv is 3.9). The MCP
+# process imports app.py, so it needs the full backend deps too.
+#   python3.11 -m venv .venv-mcp && ./.venv-mcp/bin/pip install -r requirements.txt -r requirements-mcp.txt
+mcp>=1.2

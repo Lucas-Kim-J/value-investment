@@ -19,7 +19,9 @@ description: Capture a user's thought/insight into their Notion knowledge base v
 - `tags`:2-4 个关键词。
 - `concepts`:这条触及的耐久概念。先用 `vi-capture:list_concepts` 看已有的,命中就 `{"name":..., "existing":true}`,没有就 `{"name":..., "existing":false, "one_liner":"一句话定义"}`。链不上就给空数组。
 - `source`:**仅当**有明确、可复用的来源(某本书/某档常听的播客/某封 letter)才给 `{"title","kind","author","url"}`;只是随口一个念头就给 `null`。
-- `insight`:**仅当**这条透露出"这个用户是谁"的耐久观察(如"他总把波动当风险")才给一句;否则 `null`。
+
+## 关于"更懂这个用户"
+不用把"这个人是谁"的定性观察(如"他总把波动当风险")塞进 capture_note —— 那属于你**自己的记忆**(USER.md / mem0)。处理对话时,持续蒸馏并更新你对该用户的理解,写进你的记忆即可。capture_note 只负责把这条**笔记**归档进 Notion。
 
 ## 硬约束
 - 绝不编造内容、数字、来源。
