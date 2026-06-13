@@ -624,6 +624,19 @@ def _learner_stats(user: str) -> dict:
             "report_generated": report_generated, "total_min": total_min}
 
 
+def format_recent_context(rows: list[dict]) -> str:
+    if not rows:
+        return ""
+    qs = [r["title"] for r in rows if r.get("note_type") == "疑问"]
+    cons = sorted({c for r in rows for c in (r.get("concepts") or [])})
+    parts = []
+    if cons:
+        parts.append("最近在记的概念：" + "、".join(cons[:12]))
+    if qs:
+        parts.append("未决疑问：" + "；".join(qs[:5]))
+    return "【近期沉淀】" + " ".join(parts) if parts else ""
+
+
 def _build_learner_profile(user: str) -> dict:
     s = _learner_stats(user)
     if s["canon_read"] < 2 and s["term_mastered"] < 3:
@@ -635,8 +648,22 @@ def _build_learner_profile(user: str) -> dict:
     with _db() as c, c.cursor() as cur:
         cur.execute("SELECT term_slug FROM user_term_mastery WHERE username=%s AND mastery='mastered'", (user,))
         mastered = [r[0] for r in cur.fetchall()]
+        # recent captures: fetch last ~15 with title and type
+        # (concept names aren't stored per-capture in PG; inject the user's recent kb_concepts instead)
+        cur.execute(
+            "SELECT title, note_type FROM captures WHERE username=%s ORDER BY created_at DESC LIMIT 15",
+            (user,))
+        raw_caps = cur.fetchall()
+        cur.execute(
+            "SELECT name FROM kb_concepts WHERE username=%s ORDER BY id DESC LIMIT 30",
+            (user,))
+        all_concept_names = [r[0] for r in cur.fetchall()]
+        cap_rows = [{"title": r[0], "note_type": r[1], "concepts": all_concept_names}
+                    for r in raw_caps]
+    recent_context = format_recent_context(cap_rows)
     return {"stage": stage, "canon_read": s["canon_read"], "term_mastered": s["term_mastered"],
-            "total_hours": round(s["total_min"] / 60, 1), "mastered_terms": mastered, "stats": s}
+            "total_hours": round(s["total_min"] / 60, 1), "mastered_terms": mastered,
+            "recent_context": recent_context, "stats": s}
 
 
 def _eval_rule(rule: dict, s: dict) -> bool:
@@ -900,9 +927,10 @@ def compose_analysis_prompt(user: str, company: dict) -> str:
     else:
         stance = "用户是进阶者。术语直接用、不解释；拔高到组合层面与 thesis 可证伪性，犀利、省略基础。"
     mastered = "、".join(p["mastered_terms"][:30]) or "（暂无）"
+    recent_ctx = (("\n" + p["recent_context"]) if p.get("recent_context") else "")
     return (
         f"{METHODOLOGY_CONTEXT}\n\n"
-        f"【用户学习画像】阶段={p['stage']} 已读一手内容={p['canon_read']} 已掌握术语：{mastered}\n\n"
+        f"【用户学习画像】阶段={p['stage']} 已读一手内容={p['canon_read']} 已掌握术语：{mastered}{recent_ctx}\n\n"
         f"【交流策略】{stance}\n\n"
         f"【本次分析公司】{company.get('ticker')} {company.get('name', '')} 市场={company.get('market', '')}\n"
         "任务：按价值投资方法论对这家公司做一次审视报告。结构固定为："
@@ -1007,7 +1035,8 @@ def compose_chat_prompt(user: str, question: str, context: str, history: list) -
         "如果给了他正在看的页面内容，请据此 + 他的学习阶段给出有依据的建议（比如先读/先做哪个、顺序、为什么），优先推荐「起点必读」和短而高杠杆的内容；不要泛泛而谈。\n"
         "硬约束：不荐股、不给目标价；**绝不编造具体财务数字**（涉及具体数字就提示「去官方原文核对」）；不知道就说不知道。回答控制在 250 字内，除非他要求展开。\n\n"
         f"{METHODOLOGY_CONTEXT}\n\n"
-        f"【用户画像】阶段={p['stage']}；已掌握术语：{('、'.join(p['mastered_terms'][:20]) or '暂无')}。{stage_note}\n"
+        f"【用户画像】阶段={p['stage']}；已掌握术语：{('、'.join(p['mastered_terms'][:20]) or '暂无')}。{stage_note}"
+        + (("\n" + p["recent_context"]) if p.get("recent_context") else "") + "\n"
         f"{ctx}"
         + (f"\n【最近对话】\n{hist}\n" if hist else "")
         + f"\n用户：{question}\nhermes："
