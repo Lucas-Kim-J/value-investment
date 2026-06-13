@@ -10,3 +10,7 @@ def test_format_recent_context_lists_concepts_and_open_questions():
     assert "安全边际" in s
     assert "DCF 真的可信吗" in s        # open question surfaced
     assert "疑问" in s
+
+
+def test_format_recent_context_empty_returns_empty_string():
+    assert format_recent_context([]) == ""

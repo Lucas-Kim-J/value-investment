@@ -12,5 +12,15 @@ def capture_note(user: str, title: str, clean_content: str, situation: str, note
         "title": title, "clean_content": clean_content, "situation": situation,
         "note_type": note_type, "tags": tags, "concepts": concepts, "source": source, "insight": insight})
 
+@mcp.tool()
+def list_concepts(user: str) -> list[str]:
+    """List the user's existing concept names so a new note links to the canonical one, not a near-duplicate."""
+    return _app.list_concept_names(user)
+
+@mcp.tool()
+def list_sources(user: str) -> list[str]:
+    """List the user's existing source titles so a note reuses an existing source instead of duplicating it."""
+    return _app.list_source_titles(user)
+
 if __name__ == "__main__":
     mcp.run()

@@ -1614,10 +1614,22 @@ def parse_holdings_image():
 
 # ---------- knowledge capture (buffer-first → Notion) ----------
 
+def list_concept_names(user: str) -> list:
+    """Existing concept names for this user (for hermes to link the canonical one, not a duplicate)."""
+    with _db() as c, c.cursor() as cur:
+        cur.execute("SELECT name FROM kb_concepts WHERE username=%s ORDER BY name", (user,))
+        return [r[0] for r in cur.fetchall()]
+
+def list_source_titles(user: str) -> list:
+    """Existing source titles for this user (for hermes to reuse a source instead of duplicating it)."""
+    with _db() as c, c.cursor() as cur:
+        cur.execute("SELECT title FROM kb_sources WHERE username=%s ORDER BY title", (user,))
+        return [r[0] for r in cur.fetchall()]
+
 def do_capture(user: str, cap: dict) -> dict:
     """Persist a capture (buffer-first so it's never lost), then file into Notion."""
     with _db() as c, c.cursor() as cur:
-        concept_names = [c["name"] for c in (cap.get("concepts") or []) if c.get("name")]
+        concept_names = [con["name"] for con in (cap.get("concepts") or []) if con.get("name")]
         cur.execute("INSERT INTO captures (username, raw, title, note_type, situation, tags, concept_names) "
                     "VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                     (user, cap.get("clean_content") or cap.get("raw", ""), cap.get("title"),
