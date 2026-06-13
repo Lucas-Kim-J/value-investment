@@ -39,6 +39,8 @@ import psycopg2
 import psycopg2.extras
 from cryptography.fernet import Fernet
 from flask import Flask, jsonify, request, session
+import capture as _capture
+import notion_kb as _nkb
 
 CODES_FILE = Path(os.environ.get("VI_CODES_FILE", "/etc/value-investment/access-codes.json"))
 DB_URL = os.environ.get("VI_DATABASE_URL", "")
@@ -61,6 +63,10 @@ _MOCK_REPORT = (
     "- prompt 长度：{n} 字符\n- 生产环境由服务器上的 hermes 按方法论生成真实报告\n\n"
     "## 下一步\n\n在服务器上 `VI_REPORT_MODE` 为默认 hermes，会生成真实的逐仓位审视报告。\n"
 )
+
+_NOTION_DBS = {"notes": os.environ.get("VI_NOTION_DB_NOTES", ""),
+               "concepts": os.environ.get("VI_NOTION_DB_CONCEPTS", ""),
+               "sources": os.environ.get("VI_NOTION_DB_SOURCES", "")}
 
 METHODOLOGY_CONTEXT = """【方法论核心 v1.1】
 - B 轨学习者(~10h/周)，起点流派 Pabrai + Marks（先精通这两派 3 年再吸收其他）。
@@ -1577,6 +1583,58 @@ def parse_holdings_image():
     if not data or not isinstance(data, dict):
         return {"error": "没认出持仓——换一张更清晰、含币种和数量的截图试试"}, 502
     return jsonify({"holdings": data.get("holdings") or [], "warnings": data.get("warnings") or []})
+
+
+# ---------- knowledge capture (buffer-first → Notion) ----------
+
+def do_capture(user: str, cap: dict) -> dict:
+    """Persist a capture (buffer-first so it's never lost), then file into Notion."""
+    with _db() as c, c.cursor() as cur:
+        cur.execute("INSERT INTO captures (username, raw, title, note_type, situation, tags) "
+                    "VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+                    (user, cap.get("clean_content") or cap.get("raw", ""), cap.get("title"),
+                     cap.get("note_type"), cap.get("situation"), json.dumps(cap.get("tags") or [])))
+        cap_id = cur.fetchone()[0]
+    token = get_notion_token(user)
+    if not token:
+        return {"ok": False, "error": "未连接 Notion", "capture_id": cap_id}
+    try:
+        with _db() as c:
+            res = _capture.record_capture(_nkb.PgKbIndex(c), _nkb.RealNotionClient(token), user, cap,
+                                          _NOTION_DBS, kb_slug_lookup(c), _now())
+            with c.cursor() as cur:
+                cur.execute("UPDATE captures SET status='written', notion_page_id=%s, written_at=now() WHERE id=%s",
+                            (res["notion_page_id"], cap_id))
+        return {"ok": True, "capture_id": cap_id, **res}
+    except Exception as e:  # noqa: BLE001 — Notion down/limited: leave status=pending, retry later
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE captures SET status='pending', error=%s WHERE id=%s", (str(e)[:300], cap_id))
+        return {"ok": False, "error": "Notion 写入失败，已缓冲稍后重试", "capture_id": cap_id}
+
+def retry_pending_captures(user: str) -> int:
+    """Re-file captures stuck in pending (Notion was down). Returns count re-filed."""
+    token = get_notion_token(user)
+    if not token:
+        return 0
+    n = 0
+    with _db() as c, c.cursor() as cur:
+        cur.execute("SELECT id, raw, title, note_type, situation, tags FROM captures "
+                    "WHERE username=%s AND status='pending' ORDER BY id", (user,))
+        rows = cur.fetchall()
+    for rid, raw, title, ntype, situ, tags in rows:
+        cap = {"clean_content": raw, "title": title, "note_type": ntype, "situation": situ,
+               "tags": tags or [], "concepts": [], "source": None}
+        try:
+            with _db() as c:
+                res = _capture.record_capture(_nkb.PgKbIndex(c), _nkb.RealNotionClient(token), user, cap,
+                                              _NOTION_DBS, kb_slug_lookup(c), _now())
+                with c.cursor() as cur:
+                    cur.execute("UPDATE captures SET status='written', notion_page_id=%s, written_at=now() WHERE id=%s",
+                                (res["notion_page_id"], rid))
+            n += 1
+        except Exception:  # noqa: BLE001 — still down, leave pending
+            break
+    return n
 
 
 if __name__ == "__main__":
