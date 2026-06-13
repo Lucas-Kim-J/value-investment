@@ -17,3 +17,21 @@ def map_note_properties(cap: dict, concept_ids: list[str], source_id: str | None
     if source_id:
         props["来源"] = {"relation": [{"id": source_id}]}
     return props
+
+
+def find_or_create_concept(kb, notion, user: str, name: str, one_liner: str,
+                           concepts_db_id: str, term_slug: str | None) -> str:
+    """Return the Notion page id for a concept, creating + indexing it if new."""
+    name = (name or "").strip()
+    hit = kb.find_concept(user, name)
+    if hit:
+        return hit["page_id"]
+    props = {
+        "名称": {"title": [{"text": {"content": name}}]},
+        "定义": {"rich_text": [{"text": {"content": one_liner or ""}}]},
+    }
+    if term_slug:
+        props["术语slug"] = {"rich_text": [{"text": {"content": term_slug}}]}
+    page_id = notion.create_page(concepts_db_id, props)
+    kb.add_concept(user, name, page_id, term_slug)
+    return page_id
