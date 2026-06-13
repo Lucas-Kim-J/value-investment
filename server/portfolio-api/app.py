@@ -11,6 +11,11 @@ Secrets live ONLY on the server (never in the repo):
   - VI_CODES_FILE     JSON mapping {access_code: username}
   - VI_SECRET_KEY     Flask session signing key
   - VI_DATABASE_URL   postgresql://vi_app:...@127.0.0.1:5432/value_investment
+
+Non-secret Notion config (env vars, not the token — token is Fernet-stored in Postgres):
+  - VI_NOTION_DB_NOTES      32-char Notion database id for the Notes database
+  - VI_NOTION_DB_CONCEPTS   32-char Notion database id for the Concepts database
+  - VI_NOTION_DB_SOURCES    32-char Notion database id for the Sources database
 """
 from __future__ import annotations
 
