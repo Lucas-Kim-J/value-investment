@@ -1159,6 +1159,33 @@ def _dec_secret(s: str) -> str:
     return _fernet().decrypt(s.encode()).decode()
 
 
+def set_notion_token(user: str, token: str) -> None:
+    with _db() as c, c.cursor() as cur:
+        cur.execute("""CREATE TABLE IF NOT EXISTS notion_tokens (
+            username TEXT PRIMARY KEY, token_enc TEXT NOT NULL, updated_at TIMESTAMPTZ DEFAULT now())""")
+        cur.execute("INSERT INTO notion_tokens (username, token_enc) VALUES (%s,%s) "
+                    "ON CONFLICT (username) DO UPDATE SET token_enc=EXCLUDED.token_enc, updated_at=now()",
+                    (user, _enc_secret(token)))
+
+def get_notion_token(user: str) -> str | None:
+    with _db() as c, c.cursor() as cur:
+        cur.execute("SELECT token_enc FROM notion_tokens WHERE username=%s", (user,))
+        r = cur.fetchone()
+        return _dec_secret(r[0]) if r else None
+
+def kb_slug_lookup(conn):
+    """Returns slug_lookup(kind, key): concept name → glossary slug, source title → canon slug."""
+    def lookup(kind: str, key: str):
+        with conn.cursor() as cur:
+            if kind == "concept":
+                cur.execute("SELECT slug FROM glossary_terms WHERE lower(term)=lower(%s) LIMIT 1", (key,))
+            else:
+                cur.execute("SELECT slug FROM canon_items WHERE lower(title)=lower(%s) LIMIT 1", (key,))
+            r = cur.fetchone()
+            return r[0] if r else None
+    return lookup
+
+
 def _http_get_json(url: str, headers: dict, timeout: int = 12):
     req = urllib.request.Request(url, headers=headers, method="GET")
     try:
