@@ -34,3 +34,33 @@ class RealNotionClient:
 
     def update_page(self, page_id: str, properties: dict) -> None:
         self._c.pages.update(page_id=page_id, properties=properties)
+
+
+class PgKbIndex:
+    """KbIndex backed by kb_concepts / kb_sources. Pass a live psycopg2 connection."""
+    def __init__(self, conn):
+        self.conn = conn
+
+    def find_concept(self, user, name):
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT notion_page_id, term_slug FROM kb_concepts WHERE username=%s AND lower(name)=lower(%s)",
+                        (user, name.strip()))
+            r = cur.fetchone()
+            return {"page_id": r[0], "term_slug": r[1]} if r else None
+
+    def add_concept(self, user, name, page_id, term_slug):
+        with self.conn.cursor() as cur:
+            cur.execute("INSERT INTO kb_concepts (username, name, notion_page_id, term_slug) VALUES (%s,%s,%s,%s) "
+                        "ON CONFLICT (username, lower(name)) DO NOTHING", (user, name.strip(), page_id, term_slug))
+
+    def find_source(self, user, title):
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT notion_page_id, canon_slug FROM kb_sources WHERE username=%s AND lower(title)=lower(%s)",
+                        (user, title.strip()))
+            r = cur.fetchone()
+            return {"page_id": r[0], "canon_slug": r[1]} if r else None
+
+    def add_source(self, user, title, page_id, canon_slug):
+        with self.conn.cursor() as cur:
+            cur.execute("INSERT INTO kb_sources (username, title, notion_page_id, canon_slug) VALUES (%s,%s,%s,%s) "
+                        "ON CONFLICT (username, lower(title)) DO NOTHING", (user, title.strip(), page_id, canon_slug))
