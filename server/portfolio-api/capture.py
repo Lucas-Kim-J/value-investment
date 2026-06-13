@@ -2,6 +2,8 @@
 Pure logic + a NotionClient seam so it's fully unit-testable without a real Notion."""
 from __future__ import annotations
 
+from collections.abc import Callable
+
 
 def map_note_properties(cap: dict, concept_ids: list[str], source_id: str | None, created_iso: str) -> dict:
     """Build a Notion `properties` dict for a Notes-database page from a capture JSON."""
@@ -23,6 +25,8 @@ def find_or_create_concept(kb, notion, user: str, name: str, one_liner: str,
                            concepts_db_id: str, term_slug: str | None) -> str:
     """Return the Notion page id for a concept, creating + indexing it if new."""
     name = (name or "").strip()
+    if not name:
+        raise ValueError("concept name must not be empty")
     hit = kb.find_concept(user, name)
     if hit:
         return hit["page_id"]
@@ -39,6 +43,8 @@ def find_or_create_concept(kb, notion, user: str, name: str, one_liner: str,
 
 def find_or_create_source(kb, notion, user: str, src: dict, sources_db_id: str, canon_slug: str | None) -> str:
     title = (src.get("title") or "").strip()
+    if not title:
+        raise ValueError("source title must not be empty")
     hit = kb.find_source(user, title)
     if hit:
         return hit["page_id"]
@@ -56,9 +62,11 @@ def find_or_create_source(kb, notion, user: str, src: dict, sources_db_id: str, 
     return page_id
 
 
-def record_capture(kb, notion, user: str, cap: dict, db_ids: dict, slug_lookup, created_iso: str) -> dict:
+def record_capture(kb, notion, user: str, cap: dict, db_ids: dict,
+                   slug_lookup: Callable[[str, str], str | None], created_iso: str) -> dict:
     """Resolve concepts/source, create the Note page, return {notion_page_id, concept_ids, source_id, receipt}."""
     concept_ids = []
+    # the 'existing' hint from hermes is advisory; find_or_create_concept dedups regardless.
     for c in (cap.get("concepts") or []):
         slug = slug_lookup("concept", c["name"])
         concept_ids.append(find_or_create_concept(

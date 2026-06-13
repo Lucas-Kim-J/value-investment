@@ -48,7 +48,9 @@ def test_find_or_create_source_dedupes_by_title(notion, kb):
     src = {"title": "纵横四海 EP100", "kind": "播客", "author": "劲波", "url": "https://x"}
     sid1 = find_or_create_source(kb, notion, "lucas", src, sources_db_id="DBS", canon_slug=None)
     sid2 = find_or_create_source(kb, notion, "lucas", {"title": "纵横四海 EP100"}, sources_db_id="DBS", canon_slug=None)
-    assert sid1 == sid2
+    # case-insensitive on the Roman suffix (unique index is lower(title))
+    sid3 = find_or_create_source(kb, notion, "lucas", {"title": "纵横四海 ep100"}, sources_db_id="DBS", canon_slug=None)
+    assert sid1 == sid2 == sid3
 
 
 DB_IDS = {"notes": "DBN", "concepts": "DBC", "sources": "DBS"}

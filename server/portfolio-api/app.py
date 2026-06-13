@@ -285,9 +285,10 @@ def _init_db() -> None:
                 notion_page_id TEXT,
                 status         TEXT NOT NULL DEFAULT 'pending',   -- pending | written | error
                 error          TEXT,
-                created_at     TIMESTAMPTZ DEFAULT now(),
+                created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
                 written_at     TIMESTAMPTZ
             )""")
+        cur.execute("CREATE INDEX IF NOT EXISTS captures_retry_idx ON captures (username, status)")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS kb_concepts (
                 id             SERIAL PRIMARY KEY,
@@ -302,7 +303,9 @@ def _init_db() -> None:
                 id             SERIAL PRIMARY KEY,
                 username       TEXT NOT NULL,
                 title          TEXT NOT NULL,
-                kind TEXT, author TEXT, url TEXT,
+                kind           TEXT,
+                author         TEXT,
+                url            TEXT,
                 notion_page_id TEXT,
                 canon_slug     TEXT
             )""")
