@@ -1,5 +1,6 @@
 from capture import map_note_properties
 from capture import find_or_create_concept
+from capture import find_or_create_source
 
 
 def test_map_note_properties_builds_notion_shape():
@@ -40,3 +41,10 @@ def test_find_or_create_concept_creates_then_reuses(notion, kb):
     assert len(notion.pages) == n_before          # no duplicate page created
     # the created page carried the term_slug back-fill
     assert notion.pages[cid1]["properties"]["术语slug"] == {"rich_text": [{"text": {"content": "margin-of-safety"}}]}
+
+
+def test_find_or_create_source_dedupes_by_title(notion, kb):
+    src = {"title": "纵横四海 EP100", "kind": "播客", "author": "劲波", "url": "https://x"}
+    sid1 = find_or_create_source(kb, notion, "lucas", src, sources_db_id="DBS", canon_slug=None)
+    sid2 = find_or_create_source(kb, notion, "lucas", {"title": "纵横四海 EP100"}, sources_db_id="DBS", canon_slug=None)
+    assert sid1 == sid2

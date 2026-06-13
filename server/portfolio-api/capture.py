@@ -35,3 +35,22 @@ def find_or_create_concept(kb, notion, user: str, name: str, one_liner: str,
     page_id = notion.create_page(concepts_db_id, props)
     kb.add_concept(user, name, page_id, term_slug)
     return page_id
+
+
+def find_or_create_source(kb, notion, user: str, src: dict, sources_db_id: str, canon_slug: str | None) -> str:
+    title = (src.get("title") or "").strip()
+    hit = kb.find_source(user, title)
+    if hit:
+        return hit["page_id"]
+    props = {"标题": {"title": [{"text": {"content": title}}]}}
+    if src.get("kind"):
+        props["类型"] = {"select": {"name": src["kind"]}}
+    if src.get("author"):
+        props["作者"] = {"rich_text": [{"text": {"content": src["author"]}}]}
+    if src.get("url"):
+        props["URL"] = {"url": src["url"]}
+    if canon_slug:
+        props["canon_slug"] = {"rich_text": [{"text": {"content": canon_slug}}]}
+    page_id = notion.create_page(sources_db_id, props)
+    kb.add_source(user, title, page_id, canon_slug)
+    return page_id
