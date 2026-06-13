@@ -19,3 +19,18 @@ class KbIndex(Protocol):
     def add_concept(self, user: str, name: str, page_id: str, term_slug: str | None) -> None: ...
     def find_source(self, user: str, title: str) -> dict | None: ...
     def add_source(self, user: str, title: str, page_id: str, canon_slug: str | None) -> None: ...
+
+
+from notion_client import Client as _Notion
+
+
+class RealNotionClient:
+    def __init__(self, token: str):
+        self._c = _Notion(auth=token)
+
+    def create_page(self, db_id: str, properties: dict) -> str:
+        page = self._c.pages.create(parent={"database_id": db_id}, properties=properties)
+        return page["id"]
+
+    def update_page(self, page_id: str, properties: dict) -> None:
+        self._c.pages.update(page_id=page_id, properties=properties)
