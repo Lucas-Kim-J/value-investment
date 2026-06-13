@@ -54,3 +54,22 @@ def find_or_create_source(kb, notion, user: str, src: dict, sources_db_id: str, 
     page_id = notion.create_page(sources_db_id, props)
     kb.add_source(user, title, page_id, canon_slug)
     return page_id
+
+
+def record_capture(kb, notion, user: str, cap: dict, db_ids: dict, slug_lookup, created_iso: str) -> dict:
+    """Resolve concepts/source, create the Note page, return {notion_page_id, concept_ids, source_id, receipt}."""
+    concept_ids = []
+    for c in (cap.get("concepts") or []):
+        slug = slug_lookup("concept", c["name"])
+        concept_ids.append(find_or_create_concept(
+            kb, notion, user, c["name"], c.get("one_liner", ""), db_ids["concepts"], slug))
+    source_id = None
+    src = cap.get("source")
+    if src and src.get("title"):
+        source_id = find_or_create_source(
+            kb, notion, user, src, db_ids["sources"], slug_lookup("source", src["title"]))
+    props = map_note_properties(cap, concept_ids, source_id, created_iso)
+    note_id = notion.create_page(db_ids["notes"], props)
+    cnames = "·".join(c["name"] for c in (cap.get("concepts") or [])) or "—"
+    receipt = f"✅ 已记:〈{cap.get('title', '')}〉· 概念 {cnames}"
+    return {"notion_page_id": note_id, "concept_ids": concept_ids, "source_id": source_id, "receipt": receipt}
