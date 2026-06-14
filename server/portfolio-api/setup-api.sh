@@ -19,7 +19,8 @@ mkdir -p "$APP_DIR" "$DATA_DIR" "$ETC_DIR"
 chmod 700 "$ETC_DIR"
 
 echo "== app code =="
-cp "$SRC/app.py" "$APP_DIR/app.py"
+# app.py imports sibling modules (capture, notion_kb, market_data) — copy them all.
+cp "$SRC"/*.py "$APP_DIR/"
 
 echo "== venv + deps =="
 if [ ! -d "$APP_DIR/venv" ]; then
@@ -56,13 +57,22 @@ systemctl restart value-investment-api
 sleep 1
 
 echo "== nginx vhost =="
-if [ -f "$SRC/../nginx-value-investment.conf" ] && command -v nginx >/dev/null 2>&1; then
-  cp "$SRC/../nginx-value-investment.conf" /etc/nginx/sites-available/value-investment
-  ln -sf /etc/nginx/sites-available/value-investment /etc/nginx/sites-enabled/value-investment
-  rm -f /etc/nginx/sites-enabled/default
-  nginx -t && systemctl reload nginx && echo "   vhost installed + nginx reloaded"
+# Production frontend is the React SPA → install the SPA vhost (clean URLs +
+# try_files fallback to /index.html). Do NOT install the legacy vanilla conf here:
+# it would break React routing. Only (re)install if the active conf isn't already SPA.
+SPA_CONF="$SRC/../nginx-value-investment-spa.conf"
+ACTIVE=/etc/nginx/sites-available/value-investment
+if [ -f "$SPA_CONF" ] && command -v nginx >/dev/null 2>&1; then
+  if ! grep -q "location @spa" "$ACTIVE" 2>/dev/null; then
+    cp "$SPA_CONF" "$ACTIVE"
+    ln -sf "$ACTIVE" /etc/nginx/sites-enabled/value-investment
+    rm -f /etc/nginx/sites-enabled/default
+    nginx -t && systemctl reload nginx && echo "   SPA vhost installed + nginx reloaded"
+  else
+    echo "   (SPA vhost already active — left untouched)"
+  fi
 else
-  echo "   (skipped — nginx not found or conf missing)"
+  echo "   (skipped — nginx not found or SPA conf missing)"
 fi
 
 echo "== health =="
