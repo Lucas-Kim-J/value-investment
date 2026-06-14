@@ -148,6 +148,54 @@ export interface AnalysisDetail extends AnalysisItem {
   error?: string;
 }
 
+/** ---- company-analysis dashboard (real data from /api/companies/*) ---- */
+type Num = number | null;
+
+export interface CompanySnapshot {
+  ticker: string;
+  market: string;
+  as_of?: string;
+  profile: {
+    name?: string; sector?: string | null; industry?: string | null;
+    exchange?: string | null; currency?: string | null; country?: string | null;
+    employees?: number | null; website?: string | null; summary?: string | null;
+  };
+  quote: {
+    price?: Num; change_pct?: Num; market_cap?: Num; currency?: string | null;
+    fifty_two_week_high?: Num; fifty_two_week_low?: Num;
+  };
+  metrics: {
+    pe?: Num; forward_pe?: Num; pb?: Num; ps?: Num; dividend_yield?: Num;
+    roe?: Num; gross_margin?: Num; operating_margin?: Num; net_margin?: Num;
+    debt_to_equity?: Num; debt_to_assets?: Num; current_ratio?: Num;
+    revenue_growth?: Num; earnings_growth?: Num; fcf?: Num;
+  };
+  financials: {
+    years?: string[]; revenue?: Num[]; net_income?: Num[]; eps?: Num[]; fcf?: Num[];
+    gross_margin?: Num[]; net_margin?: Num[];
+  };
+  price_history: { dates?: string[]; ohlc?: number[][]; close?: number[] };
+  radar: { indicators?: { name: string; max: number }[]; values?: Num[]; notes?: Record<string, string> };
+  valuation_history: {
+    pe_percentile?: Num; pb_percentile?: Num; price_percentile?: Num;
+    span?: string; method?: string;
+  };
+  warnings?: string[];
+  _cached?: boolean;
+  _age_s?: number;
+}
+
+export interface CompanyNewsItem {
+  title?: string; link?: string | null; publisher?: string; time?: string | null;
+  type?: "news" | "filing" | string; form?: string;
+}
+
+export interface CompanyNews {
+  ticker: string; market: string;
+  news: CompanyNewsItem[]; filings: CompanyNewsItem[];
+  warnings?: string[];
+}
+
 export interface ChatTurn { question?: string; reply?: string }
 export interface AsyncJob { status: "running" | "done" | "error" | string; reply?: string; error?: string }
 export interface CuratedTerm { term: string; term_en?: string; definition?: string; slug: string }
