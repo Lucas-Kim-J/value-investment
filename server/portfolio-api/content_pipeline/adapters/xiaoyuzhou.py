@@ -48,3 +48,40 @@ def parse_episodes(html: str, pid: str) -> list[ContentItem]:
             media_url=(ep.get("enclosure") or {}).get("url"),
         ))
     return items
+
+
+import tempfile
+import urllib.request
+from pathlib import Path
+
+_HTTP_TIMEOUT = 20
+_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+       "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36")
+
+
+def _default_http_get(url: str) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": _UA})
+    with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT) as r:
+        return r.read()
+
+
+class XiaoyuzhouAdapter:
+    """SourceAdapter for 小宇宙. http_get is injectable for tests."""
+    source = SOURCE
+
+    def __init__(self, podcast_id: str, http_get=_default_http_get, tmp_dir=None):
+        self.podcast_id = podcast_id
+        self._get = http_get
+        self._tmp_dir = Path(tmp_dir) if tmp_dir else Path(tempfile.gettempdir())
+
+    def list_items(self) -> list[ContentItem]:
+        html = self._get(PODCAST_URL.format(pid=self.podcast_id)).decode("utf-8", "replace")
+        return parse_episodes(html, self.podcast_id)
+
+    def fetch_media(self, item: ContentItem) -> Path:
+        if not item.media_url:
+            raise ValueError(f"item {item.external_id} has no media_url")
+        data = self._get(item.media_url)
+        out = self._tmp_dir / f"{item.source}_{item.external_id}.m4a"
+        out.write_bytes(data)
+        return out
