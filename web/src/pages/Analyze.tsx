@@ -11,6 +11,7 @@ import "./analyze/dashboard.css";
 
 const MARKETS = ["美股", "A股", "港股", "加密"];
 
+const SNAPSHOT_SCHEMA = 2; // keep in sync with market_data.SNAPSHOT_SCHEMA
 const verdictCls = (v: string) =>
   v === "便宜" ? "cheap" : v === "偏贵" ? "rich" : v === "合理" ? "fair" : "na";
 const pcStr = (x?: number | null) => (x == null ? "数据缺失" : (x * 100).toFixed(1) + "%");
@@ -102,6 +103,11 @@ export default function Analyze() {
     ]);
     if (snapR.status === 401) { nav("/login", { replace: true }); return; }
     if (!mounted.current) return;
+    // auto-refresh once if the cached snapshot predates the current schema (avoids
+    // empty new panels until a manual 刷新 after a backend deploy)
+    if (!fresh && snapR.data && (snapR.data._schema ?? 0) < SNAPSHOT_SCHEMA) {
+      return loadDashboard(t, n, mk, true);
+    }
     setSnap(snapR.data);
     setNews(newsR.data);
     setDashLoading(false);
@@ -397,6 +403,9 @@ export default function Analyze() {
                 )}
                 {snap.quality_signals.payout_ratio != null && (
                   <div className="ca-tool"><div className="tn">派息率</div><div className="td">{snap.quality_signals.payout_ratio}%</div></div>
+                )}
+                {snap.quality_signals.fixed_charge_coverage != null && (
+                  <div className="ca-tool"><div className="tn">固定现金义务覆盖</div><div className="td">FCF/(利息+分红) = {snap.quality_signals.fixed_charge_coverage}×{snap.quality_signals.fixed_charge_coverage < 1 ? "（<1 需外部融资）" : ""}</div></div>
                 )}
               </div>
               {(snap.quality_signals.red_flags?.length ?? 0) > 0 && (

@@ -197,6 +197,7 @@ export interface CompanySnapshot {
     incremental_roic?: { incremental?: Num; avg_roic?: Num; verdict?: string } | null;
     goodwill_ratio?: Num;
     payout_ratio?: Num;
+    fixed_charge_coverage?: Num;
     red_flags?: { name: string; hit: boolean; detail: string }[];
     flag_count?: number;
   };
@@ -214,6 +215,7 @@ export interface CompanySnapshot {
     note?: string;
   };
   warnings?: string[];
+  _schema?: number;
   _cached?: boolean;
   _age_s?: number;
 }

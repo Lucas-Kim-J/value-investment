@@ -942,10 +942,16 @@ def _news_cn(code, name=""):
 # public API
 # --------------------------------------------------------------------------- #
 
+# Bump when the snapshot shape gains fields, so the frontend auto-refreshes stale
+# cached snapshots once instead of showing empty new panels until a manual 刷新.
+SNAPSHOT_SCHEMA = 2
+
+
 def _base_snapshot(ticker, market):
     return {
         "ticker": ticker, "market": market,
         "as_of": datetime.now(timezone.utc).isoformat(),
+        "_schema": SNAPSHOT_SCHEMA,
         "profile": {"name": ticker}, "quote": {}, "metrics": {},
         "financials": {}, "price_history": {}, "radar": {},
         "valuation_history": {}, "valuation_signals": {}, "quality_signals": {},
@@ -1087,12 +1093,16 @@ def _snapshot_us(ticker: str, market: str = "美股") -> dict:
         def _last(d):
             return next((d[y] for y in reversed(fy) if d.get(y) is not None), None)
 
+        ie_row = _row(getattr(t, "income_stmt", None), "Interest Expense", "Interest Expense Non Operating")
+        dv_row = _row(getattr(t, "cashflow", None), "Cash Dividends Paid", "Common Stock Dividend Paid", "Cash Dividend Paid")
         out["quality_signals"] = _fx.signals(
             net_income=fin.get("net_income"), revenue=fin.get("revenue"),
             fcf=fin.get("fcf"), ebit=fin.get("operating_income"),
             receivables=[recv.get(y) for y in fy], inventory=[invn.get(y) for y in fy],
             goodwill_latest=_last(gw), equity_latest=_last(eq),
             invested_capital=invcap, payout_ratio=_num(info.get("payoutRatio")),
+            interest_expense=(ie_row[-1] if ie_row else None),
+            dividends_paid=(dv_row[-1] if dv_row else None),
         )
     except Exception as e:  # noqa: BLE001
         warnings.append(f"盈余质量取证失败：{str(e)[:120]}")
