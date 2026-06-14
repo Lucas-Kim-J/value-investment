@@ -57,6 +57,15 @@
 .ca-deep.yes { color: var(--good); }
 .ca-deep.no { color: var(--muted); }
 
+/* peer comparison table */
+.ca-peers { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ca-peers th { text-align: right; color: var(--muted); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.ca-peers th:first-child { text-align: left; }
+.ca-peers td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--border); color: var(--fg-soft); white-space: nowrap; }
+.ca-peers td:first-child { text-align: left; color: var(--fg); }
+.ca-peers tr.self td { background: var(--accent-soft); color: var(--fg); font-weight: 700; }
+.ca-peers tr:last-child td { border-bottom: none; }
+
 .ca-ai { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
 .ca-ai .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ca-ai .head h3 { margin: 0; font-size: 15px; }

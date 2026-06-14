@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { apiGet, apiPost } from "../lib/api";
 import { useMe } from "../lib/hooks";
-import type { AnalysisDetail, AnalysisItem, CompanyNews, CompanyNewsItem, CompanySnapshot, Holding } from "../lib/types";
+import type { AnalysisDetail, AnalysisItem, CompanyNews, CompanyNewsItem, CompanyPeers, CompanySnapshot, Holding } from "../lib/types";
 import { Markdown } from "../shell/Markdown";
 import { EChart } from "./analyze/EChart";
 import { fmtMoney, fmtPct, fmtPx, fmtX, priceOption, radarOption, relTime, trendOption } from "./analyze/charts";
@@ -14,6 +14,9 @@ const MARKETS = ["美股", "A股", "港股", "加密"];
 const verdictCls = (v: string) =>
   v === "便宜" ? "cheap" : v === "偏贵" ? "rich" : v === "合理" ? "fair" : "na";
 const pcStr = (x?: number | null) => (x == null ? "数据缺失" : (x * 100).toFixed(1) + "%");
+const mispCls = (f?: string | null) => (!f ? "na" : f.includes("错杀") ? "cheap" : f.includes("高估") ? "rich" : "fair");
+// percentile cell color: for valuation lower=cheaper(good-ish), for quality higher=better. neutral chip.
+const pctChip = (v?: number | null) => (v == null ? "—" : v + "%");
 
 function Tile({ k, v, sub }: { k: string; v: string | null; sub?: string }) {
   const na = v == null || v === "";
@@ -52,6 +55,8 @@ export default function Analyze() {
 
   const [snap, setSnap] = useState<CompanySnapshot | null>(null);
   const [news, setNews] = useState<CompanyNews | null>(null);
+  const [peers, setPeers] = useState<CompanyPeers | null>(null);
+  const [peersLoading, setPeersLoading] = useState(false);
   const [dashLoading, setDashLoading] = useState(false);
   const cur = useRef<{ ticker: string; name: string; market: string } | null>(null);
 
@@ -81,10 +86,16 @@ export default function Analyze() {
     setDashLoading(true);
     setSnap(null);
     setNews(null);
+    setPeers(null);
     setReport(null);
     setAiSt({ msg: "", cls: "" });
     const f = fresh ? "&fresh=1" : "";
     const qs = `ticker=${encodeURIComponent(t)}&market=${encodeURIComponent(mk)}&name=${encodeURIComponent(n || "")}`;
+    // peers are slow (many .info calls) → fetch separately so the main dashboard isn't blocked
+    setPeersLoading(true);
+    apiGet<CompanyPeers>(`/api/companies/peers?${qs}${f}`).then((r) => {
+      if (mounted.current) { setPeers(r.data); setPeersLoading(false); }
+    });
     const [snapR, newsR] = await Promise.all([
       apiGet<CompanySnapshot>(`/api/companies/snapshot?${qs}${f}`),
       apiGet<CompanyNews>(`/api/companies/news?${qs}${f}`),
@@ -308,6 +319,53 @@ export default function Analyze() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* 同行对比 — async (slower) */}
+          {(peersLoading || peers) && (
+            <div className="ca-panel ca-consensus">
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0 }}>🏟️ 同行对比{peers?.industry ? `（${peers.industry}）` : ""}</h3>
+                {peers?.mispricing && <span className={"ca-verdict " + mispCls(peers.mispricing)}>{peers.mispricing}</span>}
+              </div>
+              <p className="hint">在同行里找错价：比同行便宜但质量更高 = 潜在错杀。补全四工具③（EV/EBIT 同行裁决）。</p>
+              {peersLoading && !peers && <div className="ca-skel" style={{ textAlign: "left", padding: "10px 0" }}>同行数据加载中…（较慢，约 10–20 秒）</div>}
+              {peers && peers.rows.length > 0 && (
+                <>
+                  <div className="ca-bet">四工具③ EV/EBIT 同行裁决：<b>{peers.ev_ebit_verdict}</b></div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table className="ca-peers">
+                      <thead>
+                        <tr><th>代码</th><th>市值</th><th>P/E</th><th>EV/EBITDA</th><th>ROE</th><th>毛利率</th><th>净利率</th><th>营收增速</th></tr>
+                      </thead>
+                      <tbody>
+                        {peers.rows.map((r, i) => (
+                          <tr key={i} className={r.is_self ? "self" : ""}>
+                            <td>{r.ticker}{r.is_self ? " ★" : ""}</td>
+                            <td>{fmtMoney(r.market_cap, "USD") ?? "—"}</td>
+                            <td>{fmtX(r.pe) ?? "—"}</td>
+                            <td>{r.ev_ebitda != null ? r.ev_ebitda + "×" : "—"}</td>
+                            <td>{fmtPct(r.roe) ?? "—"}</td>
+                            <td>{fmtPct(r.gross_margin) ?? "—"}</td>
+                            <td>{fmtPct(r.net_margin) ?? "—"}</td>
+                            <td>{fmtPct(r.revenue_growth) ?? "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="hint" style={{ marginTop: 10 }}>
+                    ★行 = 本公司在同行中的百分位：估值 P/E {pctChip(peers.percentiles.pe)} · EV/EBITDA {pctChip(peers.percentiles.ev_ebitda)}（低=比同行便宜）；
+                    质量 ROE {pctChip(peers.percentiles.roe)} · 净利率 {pctChip(peers.percentiles.net_margin)}（高=比同行好）
+                  </p>
+                </>
+              )}
+              {peers && peers.rows.length === 0 && (
+                <div className="ca-skel" style={{ textAlign: "left", padding: "10px 0" }}>
+                  {peers.warnings?.[0] || "暂无同行数据"}
+                </div>
+              )}
             </div>
           )}
 
