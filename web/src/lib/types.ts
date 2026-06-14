@@ -205,6 +205,14 @@ export interface CompanySnapshot {
     metrics?: { name: string; unit: string; current: number; min: number; max: number; avg: number; position: number; state: string }[];
     note?: string;
   };
+  macro_signal?: {
+    env?: {
+      ten_year?: Num; ten_year_1y_ago?: Num; short_rate?: Num; curve_slope?: Num;
+      curve_state?: string; rate_trend?: string; lpr_1y?: Num; m2_growth?: Num;
+    };
+    sensitivity?: { score?: string; drivers?: string[] };
+    note?: string;
+  };
   warnings?: string[];
   _cached?: boolean;
   _age_s?: number;

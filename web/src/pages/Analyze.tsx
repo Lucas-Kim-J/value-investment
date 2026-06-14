@@ -433,6 +433,30 @@ export default function Analyze() {
             </div>
           )}
 
+          {/* 宏观资金传导 */}
+          {snap.macro_signal?.note && (
+            <div className="ca-panel ca-consensus">
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0 }}>🌐 宏观资金传导</h3>
+                <span className={"ca-verdict " + (snap.macro_signal.sensitivity?.score === "高" ? "rich" : snap.macro_signal.sensitivity?.score === "低" ? "cheap" : "fair")}>
+                  利率敏感度 {snap.macro_signal.sensitivity?.score ?? "—"}
+                </span>
+              </div>
+              <p className="hint">利率/流动性/政策 → 行业 → 个股。环境（市场级）× 该公司的传导敏感度（杠杆/久期）。</p>
+              <div className="ca-tiles" style={{ marginBottom: 10 }}>
+                {snap.macro_signal.env?.ten_year != null && (
+                  <Tile k="10Y 国债" v={snap.macro_signal.env.ten_year + "%"} sub={snap.macro_signal.env.rate_trend ? "近一年" + snap.macro_signal.env.rate_trend : undefined} />
+                )}
+                {snap.macro_signal.env?.curve_state && (
+                  <Tile k="收益率曲线" v={snap.macro_signal.env.curve_state} sub={snap.macro_signal.env.curve_slope != null ? "10Y−短端 " + snap.macro_signal.env.curve_slope + "pp" : undefined} />
+                )}
+                {snap.macro_signal.env?.lpr_1y != null && <Tile k="1年期 LPR" v={snap.macro_signal.env.lpr_1y + "%"} />}
+                {snap.macro_signal.env?.short_rate != null && <Tile k="短端利率" v={snap.macro_signal.env.short_rate + "%"} />}
+              </div>
+              <div className="ca-bet">★ {snap.macro_signal.note}</div>
+            </div>
+          )}
+
           <div className="ca-panel" style={{ marginBottom: 14 }}>
             <h3>💹 价格走势（近 5 年 · 月）</h3>
             <p className="hint">仅供感受波动与位置；价值投资看的是生意与估值，不是图形。</p>
