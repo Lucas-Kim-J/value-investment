@@ -1,12 +1,41 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { apiGet, apiPost } from "../lib/api";
 import { useMe } from "../lib/hooks";
-import type { AnalysisDetail, AnalysisItem, Holding } from "../lib/types";
+import type { AnalysisDetail, AnalysisItem, CompanyNews, CompanyNewsItem, CompanySnapshot, Holding } from "../lib/types";
 import { Markdown } from "../shell/Markdown";
+import { EChart } from "./analyze/EChart";
+import { fmtMoney, fmtPct, fmtPx, fmtX, priceOption, radarOption, relTime, trendOption } from "./analyze/charts";
+import "./analyze/dashboard.css";
 
 const MARKETS = ["美股", "A股", "港股", "加密"];
+
+function Tile({ k, v, sub }: { k: string; v: string | null; sub?: string }) {
+  const na = v == null || v === "";
+  return (
+    <div className="ca-tile">
+      <div className="k">{k}</div>
+      <div className={"v" + (na ? " na" : "")}>{na ? "—" : v}</div>
+      {sub && !na && <div className="vsub">{sub}</div>}
+    </div>
+  );
+}
+
+function FeedItem({ it }: { it: CompanyNewsItem }) {
+  const t = it.time ? new Date(it.time) : null;
+  const when = t && !isNaN(t.getTime()) ? t.toLocaleDateString("zh-CN") : it.time || "";
+  const meta = [it.publisher, when].filter(Boolean).join(" · ");
+  return (
+    <a className="ca-item" href={it.link || "#"} target="_blank" rel="noopener noreferrer">
+      <div className="t">
+        {it.type === "filing" && <span className="ca-badge">{it.form || "文件"}</span>}
+        {it.title}
+      </div>
+      {meta && <div className="m">{meta}</div>}
+    </a>
+  );
+}
 
 export default function Analyze() {
   const user = useMe();
@@ -16,10 +45,17 @@ export default function Analyze() {
   const [ticker, setTicker] = useState("");
   const [name, setName] = useState("");
   const [market, setMarket] = useState("美股");
-  const [st, setSt] = useState<{ msg: string; cls: string }>({ msg: "", cls: "" });
-  const [busy, setBusy] = useState(false);
-  const [pulse, setPulse] = useState(false);
+
+  const [snap, setSnap] = useState<CompanySnapshot | null>(null);
+  const [news, setNews] = useState<CompanyNews | null>(null);
+  const [dashLoading, setDashLoading] = useState(false);
+  const cur = useRef<{ ticker: string; name: string; market: string } | null>(null);
+
+  // AI review (3-pillar hermes report, grounded on the data above)
   const [report, setReport] = useState<AnalysisDetail | null>(null);
+  const [aiSt, setAiSt] = useState<{ msg: string; cls: string }>({ msg: "", cls: "" });
+  const [aiBusy, setAiBusy] = useState(false);
+
   const [archive, setArchive] = useState<AnalysisItem[]>([]);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const mounted = useRef(true);
@@ -28,108 +64,122 @@ export default function Analyze() {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
-
   useEffect(() => {
     if (user === null) nav("/login", { replace: true });
   }, [user, nav]);
 
+  const radar = useMemo(() => (snap ? radarOption(snap.radar) : null), [snap]);
+  const trend = useMemo(() => (snap ? trendOption(snap.financials) : null), [snap]);
+  const price = useMemo(() => (snap ? priceOption(snap.price_history, snap.quote.currency) : null), [snap]);
+
+  async function loadDashboard(t: string, n: string, mk: string, fresh = false) {
+    cur.current = { ticker: t, name: n, market: mk };
+    setDashLoading(true);
+    setSnap(null);
+    setNews(null);
+    setReport(null);
+    setAiSt({ msg: "", cls: "" });
+    const f = fresh ? "&fresh=1" : "";
+    const qs = `ticker=${encodeURIComponent(t)}&market=${encodeURIComponent(mk)}&name=${encodeURIComponent(n || "")}`;
+    const [snapR, newsR] = await Promise.all([
+      apiGet<CompanySnapshot>(`/api/companies/snapshot?${qs}${f}`),
+      apiGet<CompanyNews>(`/api/companies/news?${qs}${f}`),
+    ]);
+    if (snapR.status === 401) { nav("/login", { replace: true }); return; }
+    if (!mounted.current) return;
+    setSnap(snapR.data);
+    setNews(newsR.data);
+    setDashLoading(false);
+  }
+
+  function go() {
+    const t = ticker.trim();
+    if (!t) return;
+    loadDashboard(t, name.trim(), market);
+  }
+  function quick(h: Holding) {
+    setTicker(h.ticker);
+    setName(h.name || "");
+    if (h.market) setMarket(h.market);
+    loadDashboard(h.ticker, h.name || "", h.market || "美股");
+  }
+
+  // ---- AI review ----
   function showReport(d: AnalysisDetail) {
     if (!mounted.current) return;
     setReport(d);
-    setSt({
-      msg: (d.ticker || "") + " 分析完成 · " + (d.generated_at ? new Date(d.generated_at).toLocaleString("zh-CN") : ""),
-      cls: "ok",
-    });
+    setAiSt({ msg: (d.ticker || "") + " · " + (d.generated_at ? new Date(d.generated_at).toLocaleString("zh-CN") : ""), cls: "ok" });
   }
-
   async function poll(id: number) {
     const t0 = Date.now();
     while (mounted.current && Date.now() - t0 < 200000) {
       await new Promise((r) => setTimeout(r, 3000));
       if (!mounted.current) return;
       let d: AnalysisDetail | null = null;
-      try {
-        d = (await apiGet<AnalysisDetail>("/api/analyses/" + id)).data;
-      } catch {
-        continue;
-      }
+      try { d = (await apiGet<AnalysisDetail>("/api/analyses/" + id)).data; } catch { continue; }
       if (!d) continue;
       if (d.status === "done") { showReport(d); return; }
-      if (d.status === "error") { setSt({ msg: "分析失败：" + (d.error || "未知"), cls: "err" }); return; }
-      setSt({ msg: "分析中… " + Math.round((Date.now() - t0) / 1000) + "s", cls: "" });
+      if (d.status === "error") { setAiSt({ msg: "分析失败：" + (d.error || "未知"), cls: "err" }); return; }
+      setAiSt({ msg: "分析中… " + Math.round((Date.now() - t0) / 1000) + "s", cls: "" });
     }
-    if (mounted.current) setSt({ msg: "超时，请重试", cls: "err" });
+    if (mounted.current) setAiSt({ msg: "超时，请重试", cls: "err" });
   }
-
-  async function analyze(t: string, n: string, m: string) {
-    setBusy(true);
+  async function startAI() {
+    if (!cur.current) return;
+    setAiBusy(true);
     setReport(null);
-    setSt({ msg: "已提交，hermes 正按你的学习阶段审视…（约 30-90 秒）", cls: "" });
+    setAiSt({ msg: "已提交，hermes 正按你的学习阶段审视…（约 30-90 秒）", cls: "" });
     try {
-      const r = await apiPost<{ id: number; error?: string }>("/api/analyses", { ticker: t, name: n, market: m });
+      const r = await apiPost<{ id: number; error?: string }>("/api/analyses", cur.current);
       if (r.status === 401) { nav("/login", { replace: true }); return; }
-      if (!r.ok || !r.data?.id) {
-        setSt({ msg: "启动失败：" + (r.data?.error || r.status), cls: "err" });
-        setBusy(false);
-        return;
-      }
+      if (!r.ok || !r.data?.id) { setAiSt({ msg: "启动失败：" + (r.data?.error || r.status), cls: "err" }); setAiBusy(false); return; }
       await poll(r.data.id);
     } catch (e) {
-      setSt({ msg: "网络错误：" + (e as Error).message, cls: "err" });
+      setAiSt({ msg: "网络错误：" + (e as Error).message, cls: "err" });
     }
-    // mirror vanilla: reached only on success/network-error fall-through, NOT on the 401 / startup-failure early returns
-    if (mounted.current) setBusy(false);
+    if (mounted.current) setAiBusy(false);
     loadArchive();
   }
 
-  function go() {
-    const t = ticker.trim();
-    if (!t) { setSt({ msg: "请输入公司代码", cls: "err" }); return; }
-    setPulse(false);
-    analyze(t, name.trim(), market);
-  }
-
-  function quick(h: Holding) {
-    setTicker(h.ticker);
-    setName(h.name || "");
-    if (h.market) setMarket(h.market);
-    analyze(h.ticker, h.name || "", h.market || "");
-  }
-
+  // ---- archive ----
   async function loadArchive() {
     const r = await apiGet<{ items: AnalysisItem[] }>("/api/analyses");
     if (mounted.current) setArchive(r.data?.items ?? []);
   }
-
-  async function openArchive(id: number) {
-    const r = await apiGet<AnalysisDetail>("/api/analyses/" + id);
-    const d = r.data;
-    if (d && d.status === "done") {
-      showReport(d);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else if (d && d.status === "running") {
-      setSt({ msg: "这份还在生成中…", cls: "" });
-      poll(id);
-    } else setSt({ msg: "这份分析没有内容（可能失败）", cls: "err" });
+  async function openArchive(a: AnalysisItem) {
+    await loadDashboard(a.ticker, a.company_name || "", a.market || "美股");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    const r = await apiGet<AnalysisDetail>("/api/analyses/" + a.id);
+    if (r.data && r.data.status === "done") showReport(r.data);
   }
 
-  // initial load: holdings (quick buttons) + archive + query-string prefill
+  // initial load
   useEffect(() => {
     if (!user) return;
-    apiGet<{ holdings: Holding[] }>("/api/holdings").then((r) => {
-      if (mounted.current) setHoldings(r.data?.holdings ?? []);
-    });
+    apiGet<{ holdings: Holding[] }>("/api/holdings").then((r) => { if (mounted.current) setHoldings(r.data?.holdings ?? []); });
     loadArchive();
     const t = params.get("ticker");
     if (t) {
       setTicker(t);
-      if (params.get("name")) setName(params.get("name")!);
-      if (params.get("market")) setMarket(params.get("market")!);
-      setPulse(true);
-      setSt({ msg: "已带入 " + t + "，点「一键分析」开始", cls: "" });
+      const n = params.get("name") || "";
+      const mk = params.get("market") || "美股";
+      if (n) setName(n);
+      if (params.get("market")) setMarket(mk);
+      loadDashboard(t, n, mk);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  const p = snap?.profile, q = snap?.quote, m = snap?.metrics, vh = snap?.valuation_history;
+  const ccy = q?.currency || p?.currency || "";
+  const isCN = (snap?.market || "") === "A股";
+  const range =
+    q?.fifty_two_week_low != null && q?.fifty_two_week_high != null
+      ? fmtPx(q.fifty_two_week_low, ccy) + " – " + fmtPx(q.fifty_two_week_high, ccy)
+      : null;
+  const valPctTile =
+    vh?.pe_percentile != null ? `${vh.pe_percentile}%` : vh?.price_percentile != null ? `${vh.price_percentile}%` : null;
+  const valPctSub = vh?.pe_percentile != null ? "P/E 历史分位" : vh?.price_percentile != null ? "价格历史分位" : "";
 
   return (
     <>
@@ -137,7 +187,8 @@ export default function Analyze() {
         <div className="eyebrow">Company Analysis</div>
         <h1>公司分析</h1>
         <p>
-          一键让 hermes 按价值投资方法论审视一家公司——并<strong>按你的学习阶段</strong>调整详略（新手多解释，进阶更犀利）。不荐股、不编数字，只帮你看「该看什么、缺什么验证」。每次分析自动归档，可回看演进。
+          先看<strong>真实数据</strong>——基本面、财务趋势、价格、一手消息流（美股 SEC / A股 巨潮公告优先）；再让 hermes 按
+          <strong>你的学习阶段</strong>审视「该看什么、缺什么验证」。不荐股、不编数字。每次 AI 审视自动归档。
         </p>
       </div>
 
@@ -154,11 +205,10 @@ export default function Analyze() {
           <div>
             <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 4 }}>市场</label>
             <select className="vi-in" value={market} onChange={(e) => setMarket(e.target.value)}>
-              {MARKETS.map((m) => <option key={m}>{m}</option>)}
+              {MARKETS.map((mk) => <option key={mk}>{mk}</option>)}
             </select>
           </div>
-          <button className={"btn btn-primary" + (pulse ? " btn-pulse" : "")} onClick={go} disabled={busy}>📝 一键分析</button>
-          <span className={"status " + st.cls}>{st.msg}</span>
+          <button className="btn btn-primary" onClick={go} disabled={dashLoading}>📊 分析</button>
         </div>
         {holdings.length > 0 && (
           <div style={{ marginTop: 12, fontSize: 13, color: "var(--muted)" }}>
@@ -170,20 +220,111 @@ export default function Analyze() {
         )}
       </div>
 
-      {report && (
-        <div style={{ marginTop: 20 }}>
-          <div style={{ background: "var(--bg-soft)", border: "1px solid var(--border)", borderRadius: 10, padding: "20px 24px" }}>
-            <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 10 }}>
-              {report.ticker} {report.company_name || ""} · {report.market || ""}
+      {dashLoading && !snap && <div className="ca-skel">📊 正在拉取 {cur.current?.ticker} 的真实数据…</div>}
+
+      {snap && (
+        <div className="ca-dash">
+          <div className="ca-head2">
+            <h2>{p?.name || snap.ticker}</h2>
+            <span className="tick">{snap.ticker} · {snap.market}</span>
+            {q?.price != null && (
+              <span className="px">
+                {fmtPx(q.price, ccy)}
+                {q.change_pct != null && (
+                  <span className={"chg " + (q.change_pct >= 0 ? "up" : "down")}>
+                    {" "}{q.change_pct >= 0 ? "▲" : "▼"} {Math.abs(q.change_pct).toFixed(2)}%
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
+          {(p?.sector || p?.industry || p?.exchange) && (
+            <div className="ca-sub">
+              {[p?.sector, p?.industry, p?.exchange].filter(Boolean).join(" · ")}
+              {p?.employees ? <> <span className="dot">·</span>员工 {Number(p.employees).toLocaleString()}</> : null}
+              {p?.website ? <> <span className="dot">·</span><a href={p.website} target="_blank" rel="noopener noreferrer" style={{ color: "var(--muted)" }}>官网↗</a></> : null}
             </div>
-            <Markdown>{report.report || ""}</Markdown>
+          )}
+          <div className="ca-fresh">
+            {snap.as_of && <span>数据更新于 {relTime(snap.as_of)}{snap._cached ? "（缓存）" : "（刚拉取）"}</span>}
+            <button className="ca-refresh" disabled={dashLoading} onClick={() => cur.current && loadDashboard(cur.current.ticker, cur.current.name, cur.current.market, true)}>
+              🔄 {dashLoading ? "刷新中…" : "刷新"}
+            </button>
+          </div>
+          {snap.warnings && snap.warnings.length > 0 && <div className="ca-note">⚠️ {snap.warnings.join("；")}</div>}
+
+          <div className="ca-tiles">
+            <Tile k="市值" v={fmtMoney(q?.market_cap, ccy)} />
+            <Tile k="P/E (TTM)" v={fmtX(m?.pe)} sub={m?.forward_pe != null ? "前瞻 " + fmtX(m.forward_pe) : undefined} />
+            <Tile k="P/B" v={fmtX(m?.pb)} />
+            <Tile k="P/S" v={fmtX(m?.ps)} />
+            <Tile k="ROE" v={fmtPct(m?.roe)} />
+            <Tile k="净利率" v={fmtPct(m?.net_margin)} />
+            <Tile k="毛利率" v={fmtPct(m?.gross_margin)} />
+            <Tile k="股息率" v={fmtPct(m?.dividend_yield)} />
+            <Tile k="负债/权益" v={m?.debt_to_equity != null ? m.debt_to_equity.toFixed(0) + "%" : null} />
+            <Tile k="营收增速" v={fmtPct(m?.revenue_growth)} />
+            <Tile k="估值历史分位" v={valPctTile} sub={valPctSub} />
+            <Tile k="52周区间" v={range} />
+          </div>
+
+          <div className="ca-panels">
+            <div className="ca-panel">
+              <h3>🏥 财务健康速览</h3>
+              <p className="hint">五维 0–100 评分（越大越健康）。学习用启发式速览，不是买卖信号——高分仍要回原文核对。</p>
+              {radar ? <EChart option={radar} /> : <div className="ca-skel">数据不足，无法评分</div>}
+            </div>
+            <div className="ca-panel">
+              <h3>📈 营收 · 利润 · 利润率</h3>
+              <p className="hint">柱=营收/净利润（左轴），线=净利率（右轴）。看趋势是否持续、利润率是否被侵蚀。</p>
+              {trend ? <EChart option={trend} /> : <div className="ca-skel">暂无财报数据</div>}
+            </div>
+          </div>
+
+          <div className="ca-panel" style={{ marginBottom: 14 }}>
+            <h3>💹 价格走势（近 5 年 · 月）</h3>
+            <p className="hint">仅供感受波动与位置；价值投资看的是生意与估值，不是图形。</p>
+            {price ? <EChart option={price} height={300} /> : <div className="ca-skel">暂无价格数据</div>}
+          </div>
+
+          <div className="ca-ai">
+            <div className="head">
+              <h3>🤖 让 hermes 按方法论审视</h3>
+              <span className="sub">基于上面的真实数据，给出 第一性原理 / 资金传导 / 历史镜像 + 该补什么验证</span>
+              <button className="btn btn-primary btn-sm" style={{ marginLeft: "auto" }} onClick={startAI} disabled={aiBusy}>开始 AI 审视</button>
+              <span className={"status " + aiSt.cls}>{aiSt.msg}</span>
+            </div>
+            {report?.report && <div style={{ marginTop: 14 }}><Markdown>{report.report}</Markdown></div>}
+          </div>
+
+          <div className="ca-panel">
+            <div className="ca-feed">
+              <div>
+                <h3>📄 一手文件（{isCN ? "巨潮公告" : "SEC"}）</h3>
+                <p className="hint">{isCN ? "价值投资优先看原文：年报/季报、分红/回购、股东会决议等官方公告（巨潮资讯）。" : "价值投资优先看原文：10-K/10-Q 财报、8-K 重大事件、13F 机构持仓。"}</p>
+                {news?.filings && news.filings.length > 0 ? (
+                  news.filings.map((it, i) => <FeedItem key={i} it={it} />)
+                ) : (
+                  <div className="ca-skel" style={{ textAlign: "left", padding: "10px 0" }}>暂无一手文件（未匹配到该公司，或暂未接入该市场）</div>
+                )}
+              </div>
+              <div>
+                <h3>📰 新闻消息流</h3>
+                <p className="hint">辅助了解市场叙事，别被标题带节奏。</p>
+                {news?.news && news.news.length > 0 ? (
+                  news.news.map((it, i) => <FeedItem key={i} it={it} />)
+                ) : (
+                  <div className="ca-skel" style={{ textAlign: "left", padding: "10px 0" }}>暂无新闻</div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       <h2 style={{ fontSize: 17, margin: "36px 0 12px", borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>我的公司库（归档）</h2>
       {archive.length === 0 ? (
-        <p style={{ color: "var(--muted)", fontSize: 14 }}>还没有分析记录。在上面输入一个公司代码，点「一键分析」。</p>
+        <p style={{ color: "var(--muted)", fontSize: 14 }}>还没有 AI 审视记录。输入代码点「分析」看数据，再点「开始 AI 审视」。</p>
       ) : (
         <div className="vi-grid">
           {archive.map((a, i) => (
@@ -191,7 +332,7 @@ export default function Analyze() {
               key={a.id}
               className="vi-card hoverable"
               style={{ cursor: "pointer" }}
-              onClick={() => openArchive(a.id)}
+              onClick={() => openArchive(a)}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(i * 0.04, 0.3) }}
