@@ -143,3 +143,50 @@ def signals(*, net_income=None, revenue=None, fcf=None, ebit=None,
 
 def _pc(x):
     return "数据缺失" if x is None else f"{x * 100:.1f}%"
+
+
+def _range_position(label, values, unit):
+    """Current value's position within its own multi-year min–max range (0=trough,
+    100=peak). For ~6 annual points a min–max position is meaningful where a
+    percentile isn't — it answers 'is this metric at a cyclical peak or trough?'."""
+    xs = [_f(x) for x in (values or [])]
+    xs = [x for x in xs if x is not None]
+    if len(xs) < 3:
+        return None
+    cur, lo, hi = xs[-1], min(xs), max(xs)
+    avg = sum(xs) / len(xs)
+    pos = round((cur - lo) / (hi - lo) * 100) if hi > lo else 50
+    state = "高位" if pos >= 80 else "低位" if pos <= 20 else "中段"
+    return {"name": label, "unit": unit, "current": round(cur, 2), "min": round(lo, 2),
+            "max": round(hi, 2), "avg": round(avg, 2), "position": pos, "state": state}
+
+
+def history_position(financials):
+    """历史镜像 (cycle position): where today's profitability/growth sits in the
+    company's OWN multi-year range — to catch the market extrapolating a peak (or
+    trough) as if it were normal."""
+    years = financials.get("years") or []
+    rev = [_f(x) for x in (financials.get("revenue") or [])]
+    yoy = []
+    for i in range(1, len(rev)):
+        yoy.append(round((rev[i] / rev[i - 1] - 1) * 100, 2) if (rev[i] is not None and rev[i - 1]) else None)
+
+    metrics = []
+    for m in (
+        _range_position("净利率", financials.get("net_margin"), "%"),
+        _range_position("毛利率", financials.get("gross_margin"), "%"),
+        _range_position("营收YoY增速", yoy, "%"),
+    ):
+        if m:
+            metrics.append(m)
+    if not metrics:
+        return {}
+
+    nm = next((m for m in metrics if m["name"] == "净利率"), None)
+    if nm and nm["position"] >= 80:
+        note = "盈利能力接近历史高位——若市场按当前高盈利外推，警惕均值回归 / 周期顶（低 P/E 可能是价值陷阱）"
+    elif nm and nm["position"] <= 20:
+        note = "盈利能力接近历史低位——分清是均值回归机会还是结构性衰退"
+    else:
+        note = "盈利能力处于历史中段，无明显周期极值"
+    return {"span": f"{years[0]}-{years[-1]}" if len(years) >= 2 else "", "metrics": metrics, "note": note}

@@ -55,6 +55,27 @@ def test_signals_clean_company_no_flags():
     assert s["flag_count"] == 0
 
 
+def test_history_position_peak_and_trough():
+    # net margin currently at its multi-year high → 高位 + extrapolation note
+    fin = {"years": ["2021", "2022", "2023", "2024", "2025"],
+           "net_margin": [20, 22, 24, 25, 28], "gross_margin": [50, 51, 52, 53, 54],
+           "revenue": [100, 110, 121, 133, 146]}
+    hp = fx.history_position(fin)
+    nm = next(m for m in hp["metrics"] if m["name"] == "净利率")
+    assert nm["position"] == 100 and nm["state"] == "高位"
+    assert "高位" in hp["note"]
+    # trough case
+    fin2 = {"years": ["2021", "2022", "2023"], "net_margin": [30, 20, 10],
+            "gross_margin": [50, 45, 40], "revenue": [100, 95, 90]}
+    hp2 = fx.history_position(fin2)
+    nm2 = next(m for m in hp2["metrics"] if m["name"] == "净利率")
+    assert nm2["position"] == 0 and "低位" in hp2["note"]
+
+
+def test_history_position_too_few_points():
+    assert fx.history_position({"years": ["2024"], "net_margin": [20], "revenue": [100]}) == {}
+
+
 def test_signals_missing_inputs_graceful():
     s = fx.signals(net_income=[100, 110], fcf=[90, 100])
     assert s["cash_conversion"] is not None

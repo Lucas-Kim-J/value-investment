@@ -1000,6 +1000,12 @@ def _format_company_data(snap: dict, nws: dict, peers: dict | None = None) -> st
         elif vh.get("price_percentile") is not None:
             lines.append(
                 f"价格历史分位（{vh.get('span','')}）：{_fmt(vh.get('price_percentile'),'%')} ←{vh.get('method','')}")
+    # operating-metric cycle position (for 历史镜像: peak/trough extrapolation)
+    hp = snap.get("history_position") or {}
+    if hp.get("metrics"):
+        pos = "；".join(f"{m['name']} 当前{m['current']}{m['unit']}（区间{m['min']}~{m['max']}，位置{m['position']}%·{m['state']}）" for m in hp["metrics"])
+        lines.append(f"盈利周期位置（{hp.get('span','')}，0%=历史最低/100%=历史最高）：{pos}")
+        lines.append(f"  ★历史镜像提示：{hp.get('note','')}")
     # valuation consensus (four-tools scoreboard + reverse DCF) — the consensus anchor
     vs = snap.get("valuation_signals") or {}
     if vs.get("tools"):
