@@ -1,5 +1,6 @@
 """Audio → text via faster-whisper. Lazy import (heavy model) + a 'mock' mode
-so local dev / tests never need the model. Set VI_WHISPER_MODE=mock to mock."""
+so local dev / tests never need the model. Set VI_WHISPER_MODE=mock to mock,
+and VI_WHISPER_MODEL to pick the model size (default large-v3; prod uses medium)."""
 from __future__ import annotations
 
 import os
@@ -15,9 +16,9 @@ def segments_to_text(segments) -> tuple[str, list[dict]]:
 
 
 class Transcriber:
-    def __init__(self, mode: str | None = None, model_name: str = "large-v3"):
+    def __init__(self, mode: str | None = None, model_name: str | None = None):
         self.mode = mode or os.environ.get("VI_WHISPER_MODE", "whisper")
-        self.model_name = model_name
+        self.model_name = model_name or os.environ.get("VI_WHISPER_MODEL", "large-v3")
 
     def transcribe(self, audio_path) -> dict:
         if self.mode == "mock":
