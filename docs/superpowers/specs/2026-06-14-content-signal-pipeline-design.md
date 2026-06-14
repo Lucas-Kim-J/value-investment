@@ -135,7 +135,8 @@ adapter.list_items() ──→ 与 PG 比对,筛出未见过的 external_id
 
 ## 留到实现阶段研究的细节
 
-- 小宇宙 `__NEXT_DATA__` 里 episode 对象的确切字段路径(付费标记 / 音频 URL 的 key 名)——抓一份真实样本确认。
+- ✅ 已确认(2026-06-14 实测):episodes 在 `props.pageProps.podcast.episodes[]`;字段 `eid`/`title`/`pubDate`/`duration`/`payType`(`FREE` vs `PAY_EPISODE*`)/`enclosure.url`。仅嵌入最近 ~15 集(日轮询足够)。
+- 备注:episode 对象另有 `transcript`/`transcriptMediaId` 字段——若官方已提供转录,未来可作为跳过 whisper 的捷径(本期不依赖)。
 - faster-whisper 在该服务器上的实际速度(CPU vs 是否有 GPU)→ 决定 large-v3 还是 medium。
 - `hermes -p app-<user> --skills vi-podcast-distill` 的确切调用形态与 JSON 取回方式(对齐 hermes-skill 既有实践)。
 - 飞书信号卡的排版(纯文本 vs 卡片消息)——看 `hermes send --to feishu` 支持到哪。
