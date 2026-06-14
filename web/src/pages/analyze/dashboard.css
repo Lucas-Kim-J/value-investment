@@ -40,6 +40,23 @@
 .ca-note { font-size: 12.5px; color: var(--muted); background: var(--accent-soft); border-radius: 8px; padding: 9px 12px; margin: 10px 0; line-height: 1.55; }
 .ca-skel { color: var(--muted); font-size: 13px; padding: 24px 0; text-align: center; }
 
+/* valuation-consensus scoreboard */
+.ca-consensus { margin-bottom: 14px; }
+.ca-bet { font-size: 13px; color: var(--fg-soft); background: var(--accent-soft); border-radius: 8px; padding: 10px 13px; margin: 2px 0 12px; line-height: 1.55; }
+.ca-bet b { color: var(--accent); }
+.ca-tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.ca-tool { border: 1px solid var(--border); border-radius: 9px; padding: 11px 13px; background: var(--bg); }
+.ca-tool .tn { font-size: 12.5px; color: var(--muted); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.ca-tool .td { font-size: 12px; color: var(--fg-soft); line-height: 1.5; }
+.ca-verdict { font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 5px; }
+.ca-verdict.cheap { background: var(--good-soft); color: var(--good); }
+.ca-verdict.rich { background: var(--warn-soft); color: var(--warn); }
+.ca-verdict.fair { background: var(--accent-soft); color: var(--accent); }
+.ca-verdict.na { background: var(--code-bg); color: var(--muted); }
+.ca-deep { font-size: 12.5px; font-weight: 700; margin-left: auto; }
+.ca-deep.yes { color: var(--good); }
+.ca-deep.no { color: var(--muted); }
+
 .ca-ai { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
 .ca-ai .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ca-ai .head h3 { margin: 0; font-size: 15px; }

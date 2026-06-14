@@ -35,6 +35,8 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
+import valuation as _val
+
 # Identify ourselves to SEC EDGAR (required by their fair-access policy).
 SEC_UA = "value-investment-learning lucas.jin@boostengine.ai"
 _HTTP_TIMEOUT = 20
@@ -486,6 +488,41 @@ def _retry(fn, tries=3):
     raise last
 
 
+_RF_DEFAULT = {"US": 0.043, "CN": 0.023}  # fallback 10Y if the live fetch fails
+
+
+def ten_year_yield(market):
+    """Risk-free 10Y govt-bond yield (decimal) for the OE-yield-vs-10Y tool."""
+    if _is_us(market):
+        try:
+            import yfinance as yf
+            h = yf.Ticker("^TNX").history(period="5d")
+            if h is not None and not h.empty:
+                v = float(h["Close"].dropna().iloc[-1])
+                if v > 20:        # older ^TNX feeds quoted 10×yield
+                    v /= 10
+                if 0.3 <= v <= 8:
+                    return round(v / 100, 4)
+        except Exception:  # noqa: BLE001
+            pass
+        return _RF_DEFAULT["US"]
+    if _is_cn(market):
+        try:
+            import akshare as ak
+            df = _retry(lambda: ak.bond_zh_us_rate())
+            for col in ("中国国债收益率10年",):
+                if df is not None and col in df.columns:
+                    s = df[col].dropna()
+                    if len(s):
+                        v = float(s.iloc[-1])
+                        if 0.3 <= v <= 8:
+                            return round(v / 100, 4)
+        except Exception:  # noqa: BLE001
+            pass
+        return _RF_DEFAULT["CN"]
+    return None
+
+
 def _cn_prefix(code):
     if code[:1] in ("6", "9"):
         return "sh"
@@ -661,6 +698,22 @@ def _snapshot_cn(code, market, name=""):
         out["radar"] = _radar(out["metrics"], out.get("financials") or {})
     except Exception as e:  # noqa: BLE001
         warnings.append(f"健康评分计算失败：{str(e)[:120]}")
+    # valuation-consensus signals — A股 uses 经营现金流 as the owner-earnings proxy;
+    # EV/EBIT stays "待同行" (akshare net-debt/EBIT not wired yet).
+    try:
+        fin = out.get("financials") or {}
+        out["valuation_signals"] = _val.signals(
+            market_cap=out["quote"].get("market_cap"),
+            owner_earnings=(fin.get("fcf") or [None])[-1],
+            net_debt=None,
+            ebit=None,
+            pe_percentile=(out.get("valuation_history") or {}).get("pe_percentile"),
+            ten_year_yield=ten_year_yield(market),
+            hist_rev_cagr=_val._cagr(fin.get("revenue")),
+            hist_eps_cagr=_val._cagr(fin.get("eps")),
+        )
+    except Exception as e:  # noqa: BLE001
+        warnings.append(f"估值信号计算失败：{str(e)[:120]}")
     return out
 
 
@@ -699,7 +752,7 @@ def _base_snapshot(ticker, market):
         "as_of": datetime.now(timezone.utc).isoformat(),
         "profile": {"name": ticker}, "quote": {}, "metrics": {},
         "financials": {}, "price_history": {}, "radar": {},
-        "valuation_history": {}, "warnings": [],
+        "valuation_history": {}, "valuation_signals": {}, "warnings": [],
     }
 
 
@@ -798,6 +851,23 @@ def _snapshot_us(ticker: str, market: str = "美股") -> dict:
         out["valuation_history"] = vh
     except Exception:  # noqa: BLE001
         pass
+    # valuation-consensus signals (reverse DCF + four tools)
+    try:
+        fin = out.get("financials") or {}
+        oi = fin.get("operating_income") or []
+        net_debt = (_num(info.get("totalDebt")) or 0) - (_num(info.get("totalCash")) or 0)
+        out["valuation_signals"] = _val.signals(
+            market_cap=out["quote"].get("market_cap"),
+            owner_earnings=_num(info.get("freeCashflow")) or (fin.get("fcf") or [None])[-1],
+            net_debt=net_debt,
+            ebit=oi[-1] if oi else None,
+            pe_percentile=(out.get("valuation_history") or {}).get("pe_percentile"),
+            ten_year_yield=ten_year_yield(market),
+            hist_rev_cagr=_val._cagr(fin.get("revenue")),
+            hist_eps_cagr=_val._cagr(fin.get("eps")),
+        )
+    except Exception as e:  # noqa: BLE001
+        warnings.append(f"估值信号计算失败：{str(e)[:120]}")
     out["_t_cached"] = False
     return out
 

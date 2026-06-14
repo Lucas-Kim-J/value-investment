@@ -11,6 +11,10 @@ import "./analyze/dashboard.css";
 
 const MARKETS = ["美股", "A股", "港股", "加密"];
 
+const verdictCls = (v: string) =>
+  v === "便宜" ? "cheap" : v === "偏贵" ? "rich" : v === "合理" ? "fair" : "na";
+const pcStr = (x?: number | null) => (x == null ? "数据缺失" : (x * 100).toFixed(1) + "%");
+
 function Tile({ k, v, sub }: { k: string; v: string | null; sub?: string }) {
   const na = v == null || v === "";
   return (
@@ -280,6 +284,32 @@ export default function Analyze() {
               {trend ? <EChart option={trend} /> : <div className="ca-skel">暂无财报数据</div>}
             </div>
           </div>
+
+          {snap.valuation_signals?.tools && snap.valuation_signals.tools.length > 0 && (
+            <div className="ca-panel ca-consensus">
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0 }}>🎯 估值共识（四工具）· 便宜 {snap.valuation_signals.cheap_count}/{snap.valuation_signals.scored_count} 票</h3>
+                <span className={"ca-deep " + (snap.valuation_signals.deep_research ? "yes" : "no")}>
+                  {snap.valuation_signals.deep_research ? "≥2 票 → 可进深度研究" : "<2 票 → 暂不值得深研"}
+                </span>
+              </div>
+              <p className="hint">先量出市场共识（它在赌什么），再去三支柱里找「真实可能偏离共识」的非共识点。</p>
+              {snap.valuation_signals.reverse_dcf?.implied_growth != null && (
+                <div className="ca-bet">
+                  ★ 市场在赌什么：当前价隐含未来年增长 <b>≈ {(snap.valuation_signals.reverse_dcf.implied_growth * 100).toFixed(1)}%</b>
+                  （历史营收 CAGR {pcStr(snap.valuation_signals.reverse_dcf.hist_rev_cagr)}，EPS CAGR {pcStr(snap.valuation_signals.reverse_dcf.hist_eps_cagr)}）
+                </div>
+              )}
+              <div className="ca-tools">
+                {snap.valuation_signals.tools.map((t, i) => (
+                  <div className="ca-tool" key={i}>
+                    <div className="tn">{t.name} <span className={"ca-verdict " + verdictCls(t.verdict)}>{t.verdict}</span></div>
+                    <div className="td">{t.detail || "—"}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="ca-panel" style={{ marginBottom: 14 }}>
             <h3>💹 价格走势（近 5 年 · 月）</h3>

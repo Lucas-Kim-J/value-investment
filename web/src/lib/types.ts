@@ -180,6 +180,17 @@ export interface CompanySnapshot {
     pe_percentile?: Num; pb_percentile?: Num; price_percentile?: Num;
     span?: string; method?: string;
   };
+  valuation_signals?: {
+    tools?: { key: string; name: string; verdict: string; detail: string }[];
+    cheap_count?: number;
+    scored_count?: number;
+    deep_research?: boolean;
+    reverse_dcf?: {
+      implied_growth?: Num; hist_rev_cagr?: Num; hist_eps_cagr?: Num; owner_earnings?: Num;
+      assumptions?: { discount_rate: number; terminal_growth: number; years: number };
+    };
+    ev_ebit?: Num; owner_earnings_yield?: Num; ten_year_yield?: Num; net_debt?: Num;
+  };
   warnings?: string[];
   _cached?: boolean;
   _age_s?: number;
