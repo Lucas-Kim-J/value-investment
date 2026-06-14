@@ -336,11 +336,25 @@ def _init_db() -> None:
             CREATE TABLE IF NOT EXISTS company_data_cache (
                 ticker     TEXT NOT NULL,
                 market     TEXT NOT NULL DEFAULT '',
-                kind       TEXT NOT NULL,           -- 'snapshot' | 'news'
+                kind       TEXT NOT NULL,           -- 'snapshot' | 'news' | 'peers'
                 payload    JSONB NOT NULL,
                 fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 PRIMARY KEY (ticker, market, kind)
             )""")
+        # append-only archive: every FRESH fetch is kept (cache above is overwrite-only)
+        # so we can later 排查 exactly what data we had at any point in time.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS company_data_archive (
+                id         BIGSERIAL PRIMARY KEY,
+                ticker     TEXT NOT NULL,
+                market     TEXT NOT NULL DEFAULT '',
+                kind       TEXT NOT NULL,
+                payload    JSONB NOT NULL,
+                fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )""")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_cda ON company_data_archive(ticker, market, kind, fetched_at DESC)")
+        # each AI analysis keeps the exact data bundle it was generated from (reproducible / auditable)
+        cur.execute("ALTER TABLE company_analyses ADD COLUMN IF NOT EXISTS data_snap JSONB")
 
 
 def _load(user: str) -> dict:
@@ -1013,6 +1027,24 @@ def _format_company_data(snap: dict, nws: dict, peers: dict | None = None) -> st
             f"  估值分位 P/E {_fmt(pc.get('pe'), '%')} EV/EBITDA {_fmt(pc.get('ev_ebitda'), '%')}；"
             f"质量分位 ROE {_fmt(pc.get('roe'), '%')} 毛利率 {_fmt(pc.get('gross_margin'), '%')} 净利率 {_fmt(pc.get('net_margin'), '%')}")
         lines.append(f"  四工具③同行裁决：{peers.get('ev_ebit_verdict')}；★错价信号：{peers.get('mispricing')}")
+    # earnings-quality / capital-transmission forensics (资金传导支柱)
+    qs = snap.get("quality_signals") or {}
+    if qs.get("cash_conversion") or qs.get("red_flags"):
+        cc = qs.get("cash_conversion") or {}
+        ir = qs.get("incremental_roic") or {}
+        bits = []
+        if cc.get("cum_fcf_ni") is not None:
+            bits.append(f"利润含金量(累计FCF/净利) {cc['cum_fcf_ni']}（{cc.get('verdict', '')}）")
+        if ir.get("incremental") is not None:
+            bits.append(f"增量ROIC {ir['incremental'] * 100:.1f}% vs 平均 {(ir.get('avg_roic') or 0) * 100:.1f}%（{ir.get('verdict', '')}）")
+        if qs.get("goodwill_ratio") is not None:
+            bits.append(f"商誉/净资产 {qs['goodwill_ratio']}%")
+        if qs.get("payout_ratio") is not None:
+            bits.append(f"派息率 {qs['payout_ratio']}%")
+        if bits:
+            lines.append("盈余质量/资金传导：" + "；".join(bits))
+        hit = [f["name"] + "（" + f["detail"] + "）" for f in (qs.get("red_flags") or []) if f.get("hit")]
+        lines.append(f"★价值陷阱红旗（命中 {qs.get('flag_count', 0)}）：" + ("；".join(hit) if hit else "本批数据未命中红旗"))
     # radar
     r = snap.get("radar") or {}
     if r.get("indicators"):
@@ -1098,8 +1130,14 @@ def _run_analysis_job(analysis_id: int, user: str, ticker: str, name: str, marke
                 peers = {}
         prompt = compose_analysis_prompt(user, {"ticker": ticker, "name": name, "market": market}, snap, nws, peers)
         report = run_hermes(prompt)
+        # keep the exact data this report was generated from (reproducible / 排查)
+        data_snap = json.dumps({"snapshot": snap, "peers": peers,
+                                "news": {"filings": len((nws or {}).get("filings") or []),
+                                         "news": len((nws or {}).get("news") or [])},
+                                "data_card": _format_company_data(snap or {}, nws or {}, peers or {})})
         with _db() as c, c.cursor() as cur:
-            cur.execute("UPDATE company_analyses SET status='done', report=%s, generated_at=now() WHERE id=%s", (report, analysis_id))
+            cur.execute("UPDATE company_analyses SET status='done', report=%s, data_snap=%s, generated_at=now() WHERE id=%s",
+                        (report, data_snap, analysis_id))
     except subprocess.TimeoutExpired:
         with _db() as c, c.cursor() as cur:
             cur.execute("UPDATE company_analyses SET status='error', error='生成超时（>240s）' WHERE id=%s", (analysis_id,))
@@ -1198,12 +1236,17 @@ def _cache_get(ticker: str, market: str, kind: str):
 
 
 def _cache_put(ticker: str, market: str, kind: str, payload: dict) -> None:
+    blob = json.dumps(payload)
     with _db() as c, c.cursor() as cur:
         cur.execute(
             "INSERT INTO company_data_cache(ticker,market,kind,payload,fetched_at) "
             "VALUES (%s,%s,%s,%s,now()) "
             "ON CONFLICT (ticker,market,kind) DO UPDATE SET payload=EXCLUDED.payload, fetched_at=now()",
-            (ticker, market, kind, json.dumps(payload)))
+            (ticker, market, kind, blob))
+        # append-only archive of this fresh fetch (for later 排查)
+        cur.execute(
+            "INSERT INTO company_data_archive(ticker,market,kind,payload) VALUES (%s,%s,%s,%s)",
+            (ticker, market, kind, blob))
 
 
 def _company_data(kind: str, fetch):
@@ -1244,6 +1287,31 @@ def company_peers():
     # separate endpoint (fetched in parallel by the frontend) — peer .info calls are
     # slow, so we don't let them block the main snapshot/dashboard.
     return _company_data("peers", lambda tk, mk: _md.peer_comparison(tk, mk))
+
+
+@app.get("/api/companies/archive")
+def company_archive():
+    """List archived data fetches for a ticker (for 排查). ?id=N returns one full payload."""
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    aid = request.args.get("id")
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        if aid:
+            cur.execute("SELECT id,ticker,market,kind,payload,fetched_at FROM company_data_archive WHERE id=%s", (aid,))
+            r = cur.fetchone()
+            if not r:
+                return {"error": "not found"}, 404
+            d = dict(r); d["fetched_at"] = d["fetched_at"].isoformat() if d.get("fetched_at") else None
+            return jsonify(d)
+        ticker = (request.args.get("ticker") or "").strip().upper()[:32]
+        if not ticker:
+            return {"error": "缺 ticker"}, 400
+        cur.execute(
+            "SELECT id,kind,fetched_at FROM company_data_archive WHERE ticker=%s ORDER BY fetched_at DESC LIMIT 100",
+            (ticker,))
+        rows = [{"id": r["id"], "kind": r["kind"],
+                 "fetched_at": r["fetched_at"].isoformat() if r.get("fetched_at") else None} for r in cur.fetchall()]
+    return jsonify({"ticker": ticker, "items": rows})
 
 
 # ---------- hermes chat (global learning companion) ----------

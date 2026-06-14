@@ -191,6 +191,15 @@ export interface CompanySnapshot {
     };
     ev_ebit?: Num; owner_earnings_yield?: Num; ten_year_yield?: Num; net_debt?: Num;
   };
+  quality_signals?: {
+    cash_conversion?: { cum_fcf_ni?: Num; latest_fcf_ni?: Num; years?: number; verdict?: string } | null;
+    accruals?: { rev_cagr?: Num; recv_cagr?: Num; inv_cagr?: Num; recv_flag?: boolean; inv_flag?: boolean } | null;
+    incremental_roic?: { incremental?: Num; avg_roic?: Num; verdict?: string } | null;
+    goodwill_ratio?: Num;
+    payout_ratio?: Num;
+    red_flags?: { name: string; hit: boolean; detail: string }[];
+    flag_count?: number;
+  };
   warnings?: string[];
   _cached?: boolean;
   _age_s?: number;

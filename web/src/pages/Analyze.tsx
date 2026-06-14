@@ -369,6 +369,50 @@ export default function Analyze() {
             </div>
           )}
 
+          {/* 盈余质量 / 资金传导取证 */}
+          {snap.quality_signals && (snap.quality_signals.cash_conversion || (snap.quality_signals.red_flags?.length ?? 0) > 0) && (
+            <div className="ca-panel ca-consensus">
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0 }}>🩺 盈余质量 / 资金传导取证</h3>
+                <span className={"ca-verdict " + ((snap.quality_signals.flag_count ?? 0) > 0 ? "rich" : "cheap")}>
+                  红旗命中 {snap.quality_signals.flag_count ?? 0}
+                </span>
+              </div>
+              <p className="hint">利润是不是真金白银、钱有没有越投越不值、有没有价值陷阱红旗——这些决定「便宜得有理」还是「价值陷阱」。</p>
+              <div className="ca-tools" style={{ marginBottom: 10 }}>
+                {snap.quality_signals.cash_conversion?.cum_fcf_ni != null && (
+                  <div className="ca-tool">
+                    <div className="tn">利润含金量</div>
+                    <div className="td">累计 FCF/净利 = {snap.quality_signals.cash_conversion.cum_fcf_ni}（{snap.quality_signals.cash_conversion.verdict}）</div>
+                  </div>
+                )}
+                {snap.quality_signals.incremental_roic?.incremental != null && (
+                  <div className="ca-tool">
+                    <div className="tn">增量 ROIC</div>
+                    <div className="td">{pcStr(snap.quality_signals.incremental_roic.incremental)} vs 平均 {pcStr(snap.quality_signals.incremental_roic.avg_roic)}（{snap.quality_signals.incremental_roic.verdict}）</div>
+                  </div>
+                )}
+                {snap.quality_signals.goodwill_ratio != null && (
+                  <div className="ca-tool"><div className="tn">商誉 / 净资产</div><div className="td">{snap.quality_signals.goodwill_ratio}%</div></div>
+                )}
+                {snap.quality_signals.payout_ratio != null && (
+                  <div className="ca-tool"><div className="tn">派息率</div><div className="td">{snap.quality_signals.payout_ratio}%</div></div>
+                )}
+              </div>
+              {(snap.quality_signals.red_flags?.length ?? 0) > 0 && (
+                <div>
+                  {snap.quality_signals.red_flags!.map((f, i) => (
+                    <div key={i} className="ca-flag">
+                      <span className={"ca-verdict " + (f.hit ? "rich" : "na")}>{f.hit ? "🚩 命中" : "✓ 未中"}</span>
+                      <span className="fn">{f.name}</span>
+                      <span className="fd">{f.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="ca-panel" style={{ marginBottom: 14 }}>
             <h3>💹 价格走势（近 5 年 · 月）</h3>
             <p className="hint">仅供感受波动与位置；价值投资看的是生意与估值，不是图形。</p>

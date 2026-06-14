@@ -35,6 +35,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
+import forensics as _fx
 import valuation as _val
 
 # Identify ourselves to SEC EDGAR (required by their fair-access policy).
@@ -788,6 +789,14 @@ def _snapshot_cn(code, market, name=""):
             "debt_to_equity": d2e,
             "debt_to_assets": d2a,
         })
+        # forensics (A股 partial: 利润含金量 via OCF + 商誉占净资产; 应收/EBIT not in abstract)
+        try:
+            out["quality_signals"] = _fx.signals(
+                net_income=ser("归母净利润"), revenue=revenue, fcf=ser("经营现金流量净额"),
+                goodwill_latest=latest("商誉"), equity_latest=latest("股东权益合计(净资产)"),
+            )
+        except Exception:  # noqa: BLE001
+            pass
     except Exception as e:  # noqa: BLE001
         warnings.append(f"财务数据拉取失败：{str(e)[:120]}")
 
@@ -856,7 +865,7 @@ def _base_snapshot(ticker, market):
         "as_of": datetime.now(timezone.utc).isoformat(),
         "profile": {"name": ticker}, "quote": {}, "metrics": {},
         "financials": {}, "price_history": {}, "radar": {},
-        "valuation_history": {}, "valuation_signals": {}, "warnings": [],
+        "valuation_history": {}, "valuation_signals": {}, "quality_signals": {}, "warnings": [],
     }
 
 
@@ -972,6 +981,37 @@ def _snapshot_us(ticker: str, market: str = "美股") -> dict:
         )
     except Exception as e:  # noqa: BLE001
         warnings.append(f"估值信号计算失败：{str(e)[:120]}")
+    # earnings-quality / capital-transmission forensics (资金传导支柱)
+    try:
+        fin = out.get("financials") or {}
+        fy = fin.get("years") or []
+        bs = getattr(t, "balance_sheet", None)
+        bal_years = [str(c.year) for c in bs.columns[::-1]] if (bs is not None and not getattr(bs, "empty", True)) else []
+
+        def _bseries(*names):
+            r = _row(bs, *names)
+            return dict(zip(bal_years, r)) if r else {}
+
+        recv = _bseries("Accounts Receivable", "Receivables", "Net Receivables")
+        invn = _bseries("Inventory")
+        gw = _bseries("Goodwill", "Goodwill And Other Intangible Assets")
+        eq = _bseries("Stockholders Equity", "Common Stock Equity", "Total Stockholder Equity")
+        debt = _bseries("Total Debt", "Total Debt And Capital Lease Obligation")
+        cash = _bseries("Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments")
+        invcap = [((debt.get(y) or 0) + eq[y] - (cash.get(y) or 0)) if eq.get(y) is not None else None for y in fy]
+
+        def _last(d):
+            return next((d[y] for y in reversed(fy) if d.get(y) is not None), None)
+
+        out["quality_signals"] = _fx.signals(
+            net_income=fin.get("net_income"), revenue=fin.get("revenue"),
+            fcf=fin.get("fcf"), ebit=fin.get("operating_income"),
+            receivables=[recv.get(y) for y in fy], inventory=[invn.get(y) for y in fy],
+            goodwill_latest=_last(gw), equity_latest=_last(eq),
+            invested_capital=invcap, payout_ratio=_num(info.get("payoutRatio")),
+        )
+    except Exception as e:  # noqa: BLE001
+        warnings.append(f"盈余质量取证失败：{str(e)[:120]}")
     out["_t_cached"] = False
     return out
 
