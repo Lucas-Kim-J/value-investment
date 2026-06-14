@@ -133,7 +133,7 @@ export default function Analyze() {
   }
   async function poll(id: number) {
     const t0 = Date.now();
-    while (mounted.current && Date.now() - t0 < 200000) {
+    while (mounted.current && Date.now() - t0 < 310000) {
       await new Promise((r) => setTimeout(r, 3000));
       if (!mounted.current) return;
       let d: AnalysisDetail | null = null;
