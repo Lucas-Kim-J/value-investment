@@ -942,7 +942,7 @@ def _fmt(v, unit=""):
     return "数据缺失" if v is None else (f"{v:g}{unit}")
 
 
-def _format_company_data(snap: dict, nws: dict) -> str:
+def _format_company_data(snap: dict, nws: dict, peers: dict | None = None) -> str:
     """Compact real-data card injected into the prompt so hermes reasons on actual
     numbers (no fabrication). Missing fields are stated as 数据缺失, never guessed."""
     if not snap:
@@ -1003,6 +1003,16 @@ def _format_company_data(snap: dict, nws: dict) -> str:
                 f"  ★市场在赌什么：当前价隐含未来年增长 ≈ {ig * 100:.1f}%"
                 f"（历史营收CAGR {_pc(rd.get('hist_rev_cagr'))}，EPS CAGR {_pc(rd.get('hist_eps_cagr'))}）"
                 "——这是共识；非共识 = 你为什么认为真实会偏离它")
+    # peer comparison (for 同行错杀 + 第一性原理 vs peers)
+    if peers and peers.get("rows"):
+        pc = peers.get("percentiles") or {}
+        lines.append(
+            f"同行对比（行业 {peers.get('industry', '')}，{len(peers['rows'])} 家；"
+            "目标在同行中的百分位，估值分位低=比同行便宜 / 质量分位高=比同行好）：")
+        lines.append(
+            f"  估值分位 P/E {_fmt(pc.get('pe'), '%')} EV/EBITDA {_fmt(pc.get('ev_ebitda'), '%')}；"
+            f"质量分位 ROE {_fmt(pc.get('roe'), '%')} 毛利率 {_fmt(pc.get('gross_margin'), '%')} 净利率 {_fmt(pc.get('net_margin'), '%')}")
+        lines.append(f"  四工具③同行裁决：{peers.get('ev_ebit_verdict')}；★错价信号：{peers.get('mispricing')}")
     # radar
     r = snap.get("radar") or {}
     if r.get("indicators"):
@@ -1021,7 +1031,7 @@ def _format_company_data(snap: dict, nws: dict) -> str:
     return "\n".join(lines)
 
 
-def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, nws: dict | None = None) -> str:
+def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, nws: dict | None = None, peers: dict | None = None) -> str:
     p = _build_learner_profile(user)
     if p["stage"] == "novice":
         stance = "用户是新手（一手内容读得还少）。多解释*为什么*，每用一个术语就一句话点明定义；强调先验证再深研；不要假设他懂反向 DCF / Owner Earnings。"
@@ -1031,7 +1041,7 @@ def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, 
         stance = "用户是进阶者。术语直接用、不解释；拔高到组合层面与 thesis 可证伪性，犀利、省略基础。"
     mastered = "、".join(p["mastered_terms"][:30]) or "（暂无）"
     recent_ctx = (("\n" + p["recent_context"]) if p.get("recent_context") else "")
-    data_card = _format_company_data(snap or {}, nws or {})
+    data_card = _format_company_data(snap or {}, nws or {}, peers or {})
     return (
         f"{METHODOLOGY_CONTEXT}\n\n"
         f"【用户学习画像】阶段={p['stage']} 已读一手内容={p['canon_read']} 已掌握术语：{mastered}{recent_ctx}\n\n"
@@ -1079,7 +1089,14 @@ def _run_analysis_job(analysis_id: int, user: str, ticker: str, name: str, marke
                 _cache_put(ticker, market, "news", nws)
             except Exception:  # noqa: BLE001
                 pass
-        prompt = compose_analysis_prompt(user, {"ticker": ticker, "name": name, "market": market}, snap, nws)
+        peers = _cache_get(ticker, market, "peers")
+        if peers is None:
+            try:
+                peers = _md.peer_comparison(ticker, market)
+                _cache_put(ticker, market, "peers", peers)
+            except Exception:  # noqa: BLE001
+                peers = {}
+        prompt = compose_analysis_prompt(user, {"ticker": ticker, "name": name, "market": market}, snap, nws, peers)
         report = run_hermes(prompt)
         with _db() as c, c.cursor() as cur:
             cur.execute("UPDATE company_analyses SET status='done', report=%s, generated_at=now() WHERE id=%s", (report, analysis_id))
@@ -1161,7 +1178,7 @@ def get_analysis(aid):
 # Cached in company_data_cache (public data, shared across users). TTL by kind;
 # ?fresh=1 forces a refetch.
 
-_CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600}
+_CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600, "peers": 12 * 3600}
 
 
 def _cache_get(ticker: str, market: str, kind: str):
@@ -1220,6 +1237,13 @@ def company_snapshot():
 def company_news():
     name = (request.args.get("name") or "")[:64]
     return _company_data("news", lambda tk, mk: _md.news(tk, mk, name))
+
+
+@app.get("/api/companies/peers")
+def company_peers():
+    # separate endpoint (fetched in parallel by the frontend) — peer .info calls are
+    # slow, so we don't let them block the main snapshot/dashboard.
+    return _company_data("peers", lambda tk, mk: _md.peer_comparison(tk, mk))
 
 
 # ---------- hermes chat (global learning companion) ----------

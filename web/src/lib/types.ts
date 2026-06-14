@@ -207,6 +207,21 @@ export interface CompanyNews {
   warnings?: string[];
 }
 
+export interface CompanyPeerRow {
+  ticker?: string; name?: string; market_cap?: Num; pe?: Num; pb?: Num; ps?: Num;
+  ev_ebitda?: Num; roe?: Num; gross_margin?: Num; net_margin?: Num; revenue_growth?: Num;
+  is_self?: boolean;
+}
+
+export interface CompanyPeers {
+  ticker: string; market: string; industry?: string | null;
+  rows: CompanyPeerRow[];
+  percentiles: Record<string, Num>;
+  ev_ebit_verdict?: string;
+  mispricing?: string | null;
+  warnings?: string[];
+}
+
 export interface ChatTurn { question?: string; reply?: string }
 export interface AsyncJob { status: "running" | "done" | "error" | string; reply?: string; error?: string }
 export interface CuratedTerm { term: string; term_en?: string; definition?: string; slug: string }

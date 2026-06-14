@@ -253,6 +253,110 @@ def _price_history(t) -> dict:
     return {"dates": dates, "ohlc": ohlc, "close": close}
 
 
+def _peer_metrics(info, ticker=None):
+    """Comparable metrics for one company, from a yfinance .info dict."""
+    ev = _num(info.get("enterpriseValue"))
+    ebitda = _num(info.get("ebitda"))
+    return {
+        "ticker": ticker or info.get("symbol"),
+        "name": info.get("shortName") or info.get("longName") or ticker,
+        "market_cap": _num(info.get("marketCap")),
+        "pe": _num(info.get("trailingPE")),
+        "pb": _num(info.get("priceToBook")),
+        "ps": _num(info.get("priceToSalesTrailing12Months")),
+        "ev_ebitda": round(ev / ebitda, 1) if (ev and ebitda and ebitda > 0) else None,
+        "roe": _pct(info.get("returnOnEquity")),
+        "gross_margin": _pct(info.get("grossMargins")),
+        "net_margin": _pct(info.get("profitMargins")),
+        "revenue_growth": _pct(info.get("revenueGrowth")),
+    }
+
+
+def _rank_pctile(rows, key, value):
+    """Percentile of `value` among peers' `key` (0 = lowest in the set). ≥3 needed."""
+    xs = [r[key] for r in rows if r.get(key) is not None]
+    if value is None or len(xs) < 3:
+        return None
+    return round(sum(1 for x in xs if x <= value) / len(xs) * 100)
+
+
+def peer_verdict_and_flag(rows, percentiles):
+    """Tool ③ EV/EBITDA peer verdict (cheapest 30% AND ROE not below peer median) +
+    a 错杀/高估 mispricing flag. Pure — separated so it's unit-testable."""
+    evp = percentiles.get("ev_ebitda")
+    self_row = next((r for r in rows if r.get("is_self")), rows[0] if rows else {})
+    roes = sorted(r["roe"] for r in rows if r.get("roe") is not None)
+    roe_med = roes[len(roes) // 2] if roes else None
+    roe_ok = self_row.get("roe") is not None and roe_med is not None and self_row["roe"] >= roe_med
+    if evp is None:
+        verdict = "数据缺失"
+    elif evp <= 30 and roe_ok:
+        verdict = "便宜（同行最便宜30%且ROE不输）"
+    elif evp >= 70:
+        verdict = "偏贵（同行偏贵端）"
+    else:
+        verdict = "合理（同行中段）"
+
+    val_p = [percentiles[k] for k in ("ev_ebitda", "pe") if percentiles.get(k) is not None]
+    q_p = [percentiles[k] for k in ("roe", "gross_margin", "net_margin") if percentiles.get(k) is not None]
+    flag = None
+    if val_p and q_p:
+        cheap, rich = min(val_p) <= 35, min(val_p) >= 65
+        hi_q = (percentiles.get("roe") or 0) >= 55 and max(q_p) >= 50
+        lo_q = (percentiles.get("roe") or 100) <= 45
+        if cheap and hi_q:
+            flag = "潜在错杀：比同行便宜，但质量（ROE/利润率）更高"
+        elif rich and lo_q:
+            flag = "潜在高估：比同行贵，但质量更差"
+        else:
+            flag = "与同行大致匹配，无明显错价"
+    return verdict, flag
+
+
+def peer_comparison(ticker, market, max_peers=8):
+    """Industry peer comparison. US via yfinance Industry; A-share not wired yet."""
+    ticker = (ticker or "").strip().upper()
+    out = {"ticker": ticker, "market": market, "industry": None, "rows": [],
+           "percentiles": {}, "ev_ebit_verdict": "数据缺失", "mispricing": None, "warnings": []}
+    if not _is_us(market):
+        out["warnings"].append("同行对比暂仅支持美股（A股同行数据待接入）。")
+        return out
+    try:
+        import yfinance as yf
+    except ImportError:
+        out["warnings"].append("服务器未安装 yfinance。")
+        return out
+    try:
+        t = yf.Ticker(ticker)
+        info = t.info or {}
+        out["industry"] = info.get("industry")
+        symbols = []
+        if info.get("industryKey"):
+            try:
+                tc = yf.Industry(info["industryKey"]).top_companies
+                if tc is not None and not getattr(tc, "empty", True):
+                    symbols = [str(s).upper() for s in tc.index.tolist()]
+            except Exception:  # noqa: BLE001
+                pass
+        symbols = [s for s in symbols if s != ticker][:max_peers]
+        if not symbols:
+            out["warnings"].append("未找到同行（行业样本稀疏或分类过窄）。")
+            return out
+        rows = [{**_peer_metrics(info, ticker), "is_self": True}]
+        for s in symbols:
+            try:
+                rows.append({**_peer_metrics(yf.Ticker(s).info or {}, s), "is_self": False})
+            except Exception:  # noqa: BLE001
+                continue
+        out["rows"] = rows
+        dims = ["pe", "pb", "ps", "ev_ebitda", "roe", "gross_margin", "net_margin", "revenue_growth"]
+        out["percentiles"] = {d: _rank_pctile(rows, d, rows[0].get(d)) for d in dims}
+        out["ev_ebit_verdict"], out["mispricing"] = peer_verdict_and_flag(rows, out["percentiles"])
+    except Exception as e:  # noqa: BLE001
+        out["warnings"].append(f"同行对比失败：{str(e)[:120]}")
+    return out
+
+
 def _by_year(pairs):
     """{'YYYY': value} from (col, value) pairs, keeping positive values only."""
     out = {}

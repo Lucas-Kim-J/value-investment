@@ -117,6 +117,43 @@ def test_percentile_cheap_vs_dear():
     assert md._percentile([1, 2, 3], 2) is None      # <30 points → not meaningful
 
 
+def test_peer_metrics_extracts_and_computes_ev_ebitda():
+    info = {"marketCap": 1e9, "trailingPE": 20, "returnOnEquity": 0.25,
+            "grossMargins": 0.6, "profitMargins": 0.2, "enterpriseValue": 1.2e9, "ebitda": 1e8}
+    m = md._peer_metrics(info, "XYZ")
+    assert m["ticker"] == "XYZ" and m["pe"] == 20
+    assert m["roe"] == 25.0 and m["gross_margin"] == 60.0     # decimals → percent
+    assert m["ev_ebitda"] == 12.0                              # 1.2e9 / 1e8
+
+
+def test_rank_pctile():
+    rows = [{"pe": 10}, {"pe": 20}, {"pe": 30}, {"pe": 40}]
+    assert md._rank_pctile(rows, "pe", 10) == 25
+    assert md._rank_pctile(rows, "pe", 40) == 100
+    assert md._rank_pctile(rows, "pe", None) is None
+    assert md._rank_pctile([{"pe": 1}, {"pe": 2}], "pe", 1) is None   # <3 → not meaningful
+
+
+def test_peer_verdict_cheap_high_quality_is_mispricing():
+    rows = [{"is_self": True, "roe": 30}, {"roe": 10}, {"roe": 15}, {"roe": 12}]
+    pct = {"ev_ebitda": 20, "pe": 25, "roe": 80, "gross_margin": 70, "net_margin": 65}
+    verdict, flag = md.peer_verdict_and_flag(rows, pct)
+    assert verdict.startswith("便宜")          # cheapest 30% + ROE above peer median
+    assert flag and "错杀" in flag
+
+
+def test_peer_verdict_expensive_low_quality():
+    rows = [{"is_self": True, "roe": 5}, {"roe": 20}, {"roe": 25}, {"roe": 22}]
+    pct = {"ev_ebitda": 85, "pe": 80, "roe": 10, "gross_margin": 20, "net_margin": 15}
+    verdict, flag = md.peer_verdict_and_flag(rows, pct)
+    assert verdict.startswith("偏贵") and flag and "高估" in flag
+
+
+def test_peer_comparison_non_us_graceful():
+    p = md.peer_comparison("600519", "A股")
+    assert p["rows"] == [] and p["warnings"] and "A股" in p["warnings"][0]
+
+
 def test_snapshot_unsupported_market_is_graceful_stub():
     s = md.snapshot("00700", "港股")
     assert s["ticker"] == "00700"
