@@ -15,7 +15,6 @@ from content_pipeline.models import ContentItem, PILLARS, REQUIRED_CARD_KEYS
 _PROFILE = os.environ.get("VI_PIPELINE_PROFILE", "app-lucas")
 _SKILL = "vi-podcast-distill"
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.S)
-_JSON_OBJ_RE = re.compile(r"\{.*\}", re.S)
 
 
 def build_distill_input(item: ContentItem, transcript: str) -> str:
@@ -40,14 +39,18 @@ def parse_signal_card(raw: str) -> dict:
     """Extract + validate a 信号卡 from hermes output. Raises ValueError if the
     text isn't valid JSON, is missing a required key, or has a bad pillar."""
     text = (raw or "").strip()
-    candidate = None
-    m = _JSON_FENCE_RE.search(text) or _JSON_OBJ_RE.search(text)
-    if m:
-        candidate = m.group(1) if m.re is _JSON_FENCE_RE else m.group(0)
-    if candidate is None:
-        raise ValueError("no JSON object found in distiller output")
+    fence = _JSON_FENCE_RE.search(text)
+    if fence:
+        blob = fence.group(1)
+    else:
+        start = text.find("{")
+        if start == -1:
+            raise ValueError("no JSON object found in distiller output")
+        blob = text[start:]   # may carry trailing prose; raw_decode reads the first object
     try:
-        card = json.loads(candidate)
+        # raw_decode parses the first complete JSON object and ignores any trailing text,
+        # so stray prose containing '}' after the card no longer breaks parsing.
+        card, _ = json.JSONDecoder().raw_decode(blob)
     except ValueError as e:
         raise ValueError(f"distiller output is not valid JSON: {e}") from e
     if not isinstance(card, dict):

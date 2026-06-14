@@ -47,6 +47,20 @@ def test_parse_signal_card_rejects_bad_pillar():
         parse_signal_card(json.dumps(bad, ensure_ascii=False))
 
 
+def test_parse_signal_card_ignores_trailing_prose_with_braces():
+    # hermes returns a valid card then stray prose containing a '}' — the
+    # first complete object must still parse (regression: greedy {.*} over-captured).
+    raw = json.dumps(_valid_card(), ensure_ascii=False) + "\n注意：仅供参考 {补充说明}。"
+    card = parse_signal_card(raw)
+    assert card["pillar"] == "资金传导"
+
+
+def test_parse_signal_card_handles_leading_prose_then_object():
+    raw = "结果如下：" + json.dumps(_valid_card(), ensure_ascii=False)
+    card = parse_signal_card(raw)
+    assert card["tldr"] == "主旨"
+
+
 def test_parse_signal_card_rejects_non_json():
     with pytest.raises(ValueError):
         parse_signal_card("我没有返回 json")
