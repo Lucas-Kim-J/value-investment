@@ -36,6 +36,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
 import forensics as _fx
+import macro as _macro
 import valuation as _val
 
 # Identify ourselves to SEC EDGAR (required by their fair-access policy).
@@ -628,6 +629,77 @@ def ten_year_yield(market):
     return None
 
 
+def _norm_yield(v):
+    v = _num(v)
+    if v is None:
+        return None
+    if v > 20:        # some feeds quote 10×yield
+        v /= 10
+    return round(v, 2) if 0 <= v <= 20 else None
+
+
+def macro_env(market):
+    """Macro-environment snapshot (market-level): rates level/trend + yield-curve
+    state (+ A股 LPR). All best-effort; missing pieces are simply omitted."""
+    env = {}
+    if _is_us(market):
+        try:
+            import yfinance as yf
+            h = yf.Ticker("^TNX").history(period="1y")
+            cl = h["Close"].dropna() if (h is not None and not h.empty) else None
+            if cl is not None and len(cl):
+                now, ago = _norm_yield(cl.iloc[-1]), _norm_yield(cl.iloc[0])
+                if now is not None:
+                    env["ten_year"] = now
+                if ago is not None:
+                    env["ten_year_1y_ago"] = ago
+                    env["rate_trend"] = _macro.rate_trend(now, ago)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            import yfinance as yf
+            s = yf.Ticker("^IRX").history(period="5d")
+            sc = s["Close"].dropna() if (s is not None and not s.empty) else None
+            if sc is not None and len(sc):
+                short = _norm_yield(sc.iloc[-1])
+                if short is not None:
+                    env["short_rate"] = short
+                    if env.get("ten_year") is not None:
+                        env["curve_slope"] = round(env["ten_year"] - short, 2)
+                        env["curve_state"] = _macro.curve_state(env["curve_slope"])
+        except Exception:  # noqa: BLE001
+            pass
+        return env
+    if _is_cn(market):
+        try:
+            import akshare as ak
+            df = _retry(lambda: ak.bond_zh_us_rate())
+            if df is not None and "中国国债收益率10年" in df.columns:
+                s = df["中国国债收益率10年"].dropna()
+                if len(s):
+                    env["ten_year"] = round(float(s.iloc[-1]), 2)
+                    if len(s) > 240:
+                        env["ten_year_1y_ago"] = round(float(s.iloc[-240]), 2)
+                        env["rate_trend"] = _macro.rate_trend(env["ten_year"], env["ten_year_1y_ago"])
+                sp = df.get("中国国债收益率10年-2年")
+                if sp is not None and len(sp.dropna()):
+                    env["curve_slope"] = round(float(sp.dropna().iloc[-1]), 2)
+                    env["curve_state"] = _macro.curve_state(env["curve_slope"])
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            import akshare as ak
+            lpr = _retry(lambda: ak.macro_china_lpr())
+            if lpr is not None and "LPR1Y" in lpr.columns:
+                v = lpr["LPR1Y"].dropna()
+                if len(v):
+                    env["lpr_1y"] = round(float(v.iloc[-1]), 2)
+        except Exception:  # noqa: BLE001
+            pass
+        return env
+    return env
+
+
 def _cn_prefix(code):
     if code[:1] in ("6", "9"):
         return "sh"
@@ -831,6 +903,13 @@ def _snapshot_cn(code, market, name=""):
         out["history_position"] = _fx.history_position(out.get("financials") or {})
     except Exception:  # noqa: BLE001
         pass
+    try:
+        m = out.get("metrics") or {}
+        out["macro_signal"] = _macro.assemble(
+            macro_env(market), d2e=m.get("debt_to_equity"), pe=m.get("pe"),
+            growth=m.get("revenue_growth"), market=market)
+    except Exception:  # noqa: BLE001
+        pass
     return out
 
 
@@ -870,7 +949,7 @@ def _base_snapshot(ticker, market):
         "profile": {"name": ticker}, "quote": {}, "metrics": {},
         "financials": {}, "price_history": {}, "radar": {},
         "valuation_history": {}, "valuation_signals": {}, "quality_signals": {},
-        "history_position": {}, "warnings": [],
+        "history_position": {}, "macro_signal": {}, "warnings": [],
     }
 
 
@@ -1021,6 +1100,19 @@ def _snapshot_us(ticker: str, market: str = "美股") -> dict:
         out["history_position"] = _fx.history_position(out.get("financials") or {})
     except Exception:  # noqa: BLE001
         pass
+    # macro capital transmission (资金传导支柱·宏观层)
+    try:
+        m = out.get("metrics") or {}
+        oi = (out.get("financials") or {}).get("operating_income") or []
+        ebit = oi[-1] if oi else None
+        ie = _row(getattr(t, "income_stmt", None), "Interest Expense", "Interest Expense Non Operating")
+        ie_latest = abs(ie[-1]) if (ie and ie[-1]) else None
+        cov = round(ebit / ie_latest, 1) if (ebit and ie_latest and ie_latest > 0) else None
+        out["macro_signal"] = _macro.assemble(
+            macro_env(market), d2e=m.get("debt_to_equity"), interest_coverage=cov,
+            pe=m.get("pe"), growth=m.get("revenue_growth"), market=market)
+    except Exception as e:  # noqa: BLE001
+        warnings.append(f"宏观传导计算失败：{str(e)[:120]}")
     out["_t_cached"] = False
     return out
 
