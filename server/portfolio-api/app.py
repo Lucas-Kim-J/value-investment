@@ -637,7 +637,7 @@ def run_hermes(prompt: str) -> str:
     if REPORT_MODE == "mock":
         time.sleep(2)
         return f"## 分析（本地 mock）\n\n本地未调用 hermes（生产环境会用服务器上的 hermes 按方法论生成）。\nprompt 长度：{len(prompt)} 字符。"
-    r = subprocess.run(["hermes", "-z", prompt], capture_output=True, text=True, timeout=240)
+    r = subprocess.run(["hermes", "-z", prompt], capture_output=True, text=True, timeout=300)
     out = (r.stdout or "").strip()
     if r.returncode != 0 or not out:
         raise RuntimeError((r.stderr or "").strip()[-300:] or "hermes 返回空内容")
@@ -1112,6 +1112,7 @@ def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, 
         "- **价值陷阱红旗核对**（用数据卡里的红旗：含金量不足 / 应收>营收增速 / 商誉过高 / 派息>盈利 / 增量ROIC衰减 / 低P/E但结构衰退）。\n"
         "- 我还需要去原文核对/补充哪些验证。\n\n"
         "硬约束：\n"
+        "- **篇幅精炼**：每节 3–6 句，非共识只给**最强的 1–2 条**；重质不重量，不要冗长堆砌（这也是为了快速生成）。\n"
         "- 只基于【真实数据卡】里的数字推理，**引用具体数值**；数据卡没有的写「数据缺失 / 需去原文核对」，**绝不编造任何数字**。\n"
         "- 区分「数据事实 / 判断 / 定论」：判断与概率都要标明是估计，不要把判断当定论。\n"
         "- 不给买卖建议、不给目标价。"
@@ -1154,7 +1155,7 @@ def _run_analysis_job(analysis_id: int, user: str, ticker: str, name: str, marke
                         (report, data_snap, analysis_id))
     except subprocess.TimeoutExpired:
         with _db() as c, c.cursor() as cur:
-            cur.execute("UPDATE company_analyses SET status='error', error='生成超时（>240s）' WHERE id=%s", (analysis_id,))
+            cur.execute("UPDATE company_analyses SET status='error', error='生成超时（>300s）' WHERE id=%s", (analysis_id,))
     except Exception as e:  # noqa: BLE001
         with _db() as c, c.cursor() as cur:
             cur.execute("UPDATE company_analyses SET status='error', error=%s WHERE id=%s", (str(e)[:300], analysis_id))
