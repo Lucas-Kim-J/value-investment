@@ -94,10 +94,11 @@ def incremental_roic(ebit, invested_capital):
 
 def signals(*, net_income=None, revenue=None, fcf=None, ebit=None,
             receivables=None, inventory=None, goodwill_latest=None, equity_latest=None,
-            invested_capital=None, payout_ratio=None):
+            invested_capital=None, payout_ratio=None, interest_expense=None, dividends_paid=None):
     """Assemble 盈余质量/资金传导 signals + the methodology's value-trap red flags."""
     out = {"cash_conversion": None, "accruals": None, "incremental_roic": None,
-           "goodwill_ratio": None, "payout_ratio": None, "red_flags": [], "flag_count": 0}
+           "goodwill_ratio": None, "payout_ratio": None, "fixed_charge_coverage": None,
+           "red_flags": [], "flag_count": 0}
 
     cc = cash_conversion(net_income, fcf)
     out["cash_conversion"] = cc
@@ -112,6 +113,14 @@ def signals(*, net_income=None, revenue=None, fcf=None, ebit=None,
     out["goodwill_ratio"] = gw_ratio
     pr = _f(payout_ratio)
     out["payout_ratio"] = round(pr * 100, 1) if pr is not None else None
+
+    # 固定现金义务覆盖 = FCF / (利息 + 分红) — the 资本结构/求偿 lens (microstrategy-style):
+    # <1 means cash obligations exceed self-generated cash → must borrow/issue to pay them.
+    fcf_latest = next((x for x in reversed(_clean(fcf)) if x is not None), None)
+    ie, dv = _f(interest_expense), _f(dividends_paid)
+    fixed = (abs(ie) if ie else 0) + (abs(dv) if dv else 0)
+    fcc = round(fcf_latest / fixed, 2) if (fcf_latest is not None and fixed > 0) else None
+    out["fixed_charge_coverage"] = fcc
 
     flags = []
 
@@ -131,6 +140,9 @@ def signals(*, net_income=None, revenue=None, fcf=None, ebit=None,
     if out["payout_ratio"] is not None:
         add("派息>盈利(>100%)", out["payout_ratio"] > 100,
             f"派息率 = {out['payout_ratio']}%（>100% 即分红超过盈利，可能靠借债）")
+    if fcc is not None:
+        add("固定现金义务覆盖<1（利息+分红 > 自由现金流）", fcc < 1,
+            f"FCF/(利息+分红) = {fcc}（<1 需靠外部融资续付固定义务）")
     iroic = out["incremental_roic"]
     if iroic and iroic.get("incremental") is not None:
         add("增量ROIC衰减", iroic["incremental"] < (iroic["avg_roic"] or 0) * 0.6,

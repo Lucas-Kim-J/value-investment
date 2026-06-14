@@ -45,6 +45,20 @@ def test_signals_red_flags_and_count():
     assert s["goodwill_ratio"] == 80.0 and s["payout_ratio"] == 130.0
 
 
+def test_fixed_charge_coverage_flag():
+    # FCF 50 vs interest 40 + dividends 30 = 70 → coverage 0.71 < 1 → flag
+    s = fx.signals(net_income=[100], revenue=[100], fcf=[50, 50],
+                   interest_expense=-40, dividends_paid=-30)
+    assert s["fixed_charge_coverage"] == round(50 / 70, 2)
+    hits = {f["name"]: f["hit"] for f in s["red_flags"]}
+    assert hits["固定现金义务覆盖<1（利息+分红 > 自由现金流）"] is True
+    # comfortable coverage → no flag
+    s2 = fx.signals(net_income=[100], revenue=[100], fcf=[200, 200],
+                    interest_expense=-10, dividends_paid=-20)
+    assert s2["fixed_charge_coverage"] > 1
+    assert not any(f["hit"] and "固定现金义务" in f["name"] for f in s2["red_flags"])
+
+
 def test_signals_clean_company_no_flags():
     s = fx.signals(
         net_income=[100, 110, 120], revenue=[100, 120, 140],
