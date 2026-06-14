@@ -6,6 +6,58 @@
 <title>公司分析 · 价值投资学习</title>
 <link rel="stylesheet" href="assets/style.css">
 <link rel="stylesheet" href="assets/app.css">
+<style>
+/* ---- company-analysis dashboard (scoped to this page) ---- */
+.ca-bar { background:var(--bg-soft); border:1px solid var(--border); border-radius:10px; padding:18px 20px; margin-bottom:8px; }
+.ca-row { display:flex; gap:10px; flex-wrap:wrap; align-items:end; }
+.ca-lab { font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
+
+.ca-dash { margin-top:22px; }
+.ca-head2 { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+.ca-head2 h2 { font-size:22px; margin:0; }
+.ca-head2 .tick { color:var(--muted); font-size:14px; font-weight:600; letter-spacing:.04em; }
+.ca-head2 .px { margin-left:auto; font-size:20px; font-weight:700; }
+.ca-head2 .chg.up { color:var(--good); } .ca-head2 .chg.down { color:var(--warn); }
+.ca-sub { color:var(--muted); font-size:13px; margin:2px 0 6px; }
+.ca-sub .dot { margin:0 7px; opacity:.5; }
+.ca-fresh { display:flex; align-items:center; gap:10px; font-size:12px; color:var(--muted); margin:0 0 16px; }
+.ca-refresh { background:transparent; border:1px solid var(--border); color:var(--fg-soft); border-radius:7px; padding:3px 10px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
+.ca-refresh:hover { border-color:var(--accent); color:var(--accent); }
+.ca-refresh:disabled { opacity:.55; cursor:default; }
+
+.ca-tiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:10px; margin-bottom:18px; }
+.ca-tile { background:var(--bg-soft); border:1px solid var(--border); border-radius:9px; padding:11px 13px; }
+.ca-tile .k { font-size:11.5px; color:var(--muted); margin-bottom:5px; letter-spacing:.02em; }
+.ca-tile .v { font-size:18px; font-weight:700; color:var(--fg); line-height:1.1; }
+.ca-tile .v.na { color:var(--muted); font-weight:500; font-size:14px; }
+.ca-tile .vsub { font-size:11px; color:var(--muted); margin-top:3px; }
+
+.ca-panels { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+@media (max-width:760px){ .ca-panels { grid-template-columns:1fr; } }
+.ca-panel { background:var(--bg-soft); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+.ca-panel h3 { font-size:14px; margin:0 0 4px; color:var(--fg); }
+.ca-panel .hint { font-size:11.5px; color:var(--muted); margin:0 0 10px; line-height:1.5; }
+.ca-chart { width:100%; height:280px; }
+.ca-chart.tall { height:300px; }
+
+.ca-feed { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media (max-width:760px){ .ca-feed { grid-template-columns:1fr; } }
+.ca-feed h3 { font-size:14px; margin:0 0 2px; }
+.ca-feed .hint { font-size:11.5px; color:var(--muted); margin:0 0 10px; }
+.ca-item { display:block; padding:10px 0; border-bottom:1px solid var(--border); text-decoration:none; color:inherit; }
+.ca-item:last-child { border-bottom:none; }
+.ca-item .t { font-size:13.5px; color:var(--fg); line-height:1.45; }
+.ca-item:hover .t { color:var(--accent); }
+.ca-item .m { font-size:11.5px; color:var(--muted); margin-top:4px; }
+.ca-badge { display:inline-block; font-size:11px; font-weight:700; padding:1px 7px; border-radius:5px; background:var(--accent-soft); color:var(--accent); margin-right:7px; vertical-align:1px; }
+.ca-note { font-size:12.5px; color:var(--muted); background:var(--accent-soft); border-radius:8px; padding:9px 12px; margin:10px 0; line-height:1.55; }
+.ca-skel { color:var(--muted); font-size:13px; padding:24px 0; text-align:center; }
+
+.ca-ai { background:var(--bg-soft); border:1px solid var(--border); border-radius:10px; padding:18px 20px; margin:14px 0; }
+.ca-ai .head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.ca-ai .head h3 { margin:0; font-size:15px; }
+.ca-ai .head .sub { font-size:12px; color:var(--muted); }
+</style>
 </head>
 <body class="app">
 <div class="app-wrap">
@@ -13,100 +65,319 @@
   <div class="app-head" data-reveal>
     <div class="eyebrow">Company Analysis</div>
     <h1>公司分析</h1>
-    <p>一键让 hermes 按价值投资方法论审视一家公司——并<strong>按你的学习阶段</strong>调整详略（新手多解释，进阶更犀利）。不荐股、不编数字，只帮你看「该看什么、缺什么验证」。每次分析自动归档，可回看演进。</p>
+    <p>先看<strong>真实数据</strong>——基本面、财务趋势、价格、一手消息流（美股 SEC / A股 巨潮公告优先）；再让 hermes 按<strong>你的学习阶段</strong>审视「该看什么、缺什么验证」。不荐股、不编数字。每次 AI 审视自动归档。</p>
   </div>
 
-  <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:8px">
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
-      <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">代码 *</label><input class="vi-in" id="ticker" placeholder="COST" style="width:120px"></div>
-      <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">名称</label><input class="vi-in" id="name" placeholder="Costco" style="width:140px"></div>
-      <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">市场</label>
+  <div class="ca-bar">
+    <div class="ca-row">
+      <div><label class="ca-lab">代码 *</label><input class="vi-in" id="ticker" placeholder="COST" style="width:120px"></div>
+      <div><label class="ca-lab">名称</label><input class="vi-in" id="name" placeholder="Costco" style="width:140px"></div>
+      <div><label class="ca-lab">市场</label>
         <select class="vi-in" id="market"><option>美股</option><option>A股</option><option>港股</option><option>加密</option></select></div>
-      <button class="btn btn-primary" id="go">📝 一键分析</button>
+      <button class="btn btn-primary" id="go">📊 分析</button>
       <span class="status" id="st"></span>
     </div>
     <div id="fromHoldings" style="margin-top:12px;font-size:13px;color:var(--muted)"></div>
   </div>
 
-  <div id="report" class="md-render" style="margin-top:20px"></div>
+  <!-- live data dashboard (charts + 消息流 + AI) -->
+  <div id="dashboard" class="ca-dash" style="display:none"></div>
 
   <h2 style="font-size:17px;margin:36px 0 12px;border-bottom:1px solid var(--border);padding-bottom:8px">我的公司库（归档）</h2>
   <div id="archive"></div>
 </div>
 
+<script src="assets/echarts.min.js"></script>
 <script src="assets/app.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
+const charts = [];                       // live ECharts instances (for resize)
+let curCompany = null;                    // {ticker,name,market}
 
-async function analyze(ticker, name, market){
-  $('go').disabled = true; $('report').innerHTML='';
-  $('st').textContent = '已提交，hermes 正按你的学习阶段审视…（约 30-90 秒）'; $('st').className='status';
-  try{
-    const r = await VI.api('/api/analyses', {body:{ticker, name, market}});
-    if(r.status===401){ location.href='login.html'; return; }
-    if(!r.ok){ $('st').textContent='启动失败：'+((r.data&&r.data.error)||r.status); $('st').className='status err'; $('go').disabled=false; return; }
-    await poll(r.data.id);
-  }catch(e){ $('st').textContent='网络错误：'+e.message; $('st').className='status err'; }
-  $('go').disabled=false; loadArchive();
+// ---------- formatting ----------
+function fmtMoney(v, cur){
+  if(v==null) return null;
+  const sym = cur==='USD'?'$':(cur==='CNY'?'¥':(cur==='HKD'?'HK$':''));
+  const a = Math.abs(v);
+  if(a>=1e12) return sym+(v/1e12).toFixed(2)+'T';
+  if(a>=1e9)  return sym+(v/1e9).toFixed(2)+'B';
+  if(a>=1e6)  return sym+(v/1e6).toFixed(2)+'M';
+  return sym+v.toFixed(0);
 }
-async function poll(id){
-  const t0 = Date.now();
+const fmtX   = v => v==null ? null : v.toFixed(1)+'×';
+const fmtPct = v => v==null ? null : v.toFixed(1)+'%';
+const fmtPx  = (v,cur) => v==null ? null : (cur==='USD'?'$':'')+v.toFixed(2);
+function tile(k, val, sub){
+  const na = (val==null||val==='');
+  return `<div class="ca-tile"><div class="k">${k}</div>`
+    + `<div class="v ${na?'na':''}">${na?'—':VI.esc(String(val))}</div>`
+    + (sub&&!na?`<div class="vsub">${VI.esc(sub)}</div>`:'')+`</div>`;
+}
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888'; }
+function relTime(iso){
+  const t = new Date(iso); if(isNaN(t)) return '';
+  const s = (Date.now()-t.getTime())/1000;
+  if(s<60) return '刚刚'; if(s<3600) return Math.floor(s/60)+' 分钟前';
+  if(s<86400) return Math.floor(s/3600)+' 小时前'; return Math.floor(s/86400)+' 天前';
+}
+
+// ---------- dashboard orchestration ----------
+async function loadDashboard(ticker, name, market, fresh){
+  curCompany = {ticker, name, market};
+  charts.forEach(c=>{try{c.dispose();}catch(e){}}); charts.length=0;
+  $('dashboard').style.display='block';
+  $('dashboard').innerHTML = '<div class="ca-skel">📊 正在'+(fresh?'刷新':'拉取')+' '+VI.esc(ticker)+' 的真实数据…</div>';
+  const f = fresh ? '&fresh=1' : '';
+  // fetch snapshot + news in parallel
+  const [snapR, newsR] = await Promise.all([
+    VI.api('/api/companies/snapshot?ticker='+encodeURIComponent(ticker)+'&market='+encodeURIComponent(market)+'&name='+encodeURIComponent(name||'')+f),
+    VI.api('/api/companies/news?ticker='+encodeURIComponent(ticker)+'&market='+encodeURIComponent(market)+'&name='+encodeURIComponent(name||'')+f),
+  ]);
+  if(snapR.status===401){ location.href='login.html'; return; }
+  const snap = snapR.data||{}, nws = newsR.data||{};
+  renderDashboard(snap, nws);
+}
+
+function renderDashboard(d, nws){
+  const p = d.profile||{}, q = d.quote||{}, m = d.metrics||{}, cur = q.currency||p.currency||'';
+  const chg = q.change_pct;
+  const subParts = [p.sector, p.industry, p.exchange].filter(Boolean).map(VI.esc);
+  const warn = (d.warnings||[]).length ? `<div class="ca-note">⚠️ ${(d.warnings||[]).map(VI.esc).join('；')}</div>` : '';
+
+  let html =
+    `<div class="ca-head2"><h2>${VI.esc(p.name||d.ticker||'')}</h2>`
+    + `<span class="tick">${VI.esc(d.ticker||'')} · ${VI.esc(d.market||'')}</span>`
+    + (q.price!=null?`<span class="px">${VI.esc(fmtPx(q.price,cur))}`
+        + (chg!=null?` <span class="chg ${chg>=0?'up':'down'}">${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(2)}%</span>`:'')
+        + `</span>`:'')
+    + `</div>`
+    + (subParts.length?`<div class="ca-sub">${subParts.join('<span class="dot">·</span>')}`
+        + (p.employees?`<span class="dot">·</span>员工 ${Number(p.employees).toLocaleString()}`:'')
+        + (p.website?`<span class="dot">·</span><a href="${VI.esc(p.website)}" target="_blank" rel="noopener" style="color:var(--muted)">官网↗</a>`:'')
+        + `</div>`:'')
+    + `<div class="ca-fresh">`
+        + (d.as_of?`数据更新于 ${relTime(d.as_of)}${d._cached?'（缓存）':'（刚拉取）'}`:'')
+        + ` <button class="ca-refresh" id="ca-refresh">🔄 刷新</button></div>`
+    + warn;
+
+  // KPI tiles
+  const range = (q.fifty_two_week_low!=null&&q.fifty_two_week_high!=null)
+    ? fmtPx(q.fifty_two_week_low,cur)+' – '+fmtPx(q.fifty_two_week_high,cur) : null;
+  html += `<div class="ca-tiles">`
+    + tile('市值', fmtMoney(q.market_cap,cur))
+    + tile('P/E (TTM)', fmtX(m.pe), m.forward_pe!=null?('前瞻 '+fmtX(m.forward_pe)):'')
+    + tile('P/B', fmtX(m.pb))
+    + tile('P/S', fmtX(m.ps))
+    + tile('ROE', fmtPct(m.roe))
+    + tile('净利率', fmtPct(m.net_margin))
+    + tile('毛利率', fmtPct(m.gross_margin))
+    + tile('股息率', fmtPct(m.dividend_yield))
+    + tile('负债/权益', m.debt_to_equity!=null?(m.debt_to_equity.toFixed(0)+'%'):null)
+    + tile('营收增速', fmtPct(m.revenue_growth))
+    + tile('52周区间', range)
+    + `</div>`;
+
+  // chart panels
+  html += `<div class="ca-panels">`
+    + `<div class="ca-panel"><h3>🏥 财务健康速览</h3><p class="hint">五维 0–100 评分（越大越健康）。这是学习用的启发式速览，不是买卖信号——高分仍要回原文核对。</p><div id="ch-radar" class="ca-chart"></div></div>`
+    + `<div class="ca-panel"><h3>📈 营收 · 利润 · 利润率</h3><p class="hint">柱=营收/净利润（左轴），线=净利率（右轴）。看趋势是否持续、利润率是否被侵蚀。</p><div id="ch-trend" class="ca-chart"></div></div>`
+    + `</div>`;
+  html += `<div class="ca-panel" style="margin-bottom:14px"><h3>💹 价格走势（近 5 年 · 月）</h3><p class="hint">仅供感受波动与位置；价值投资看的是生意与估值，不是图形。</p><div id="ch-price" class="ca-chart tall"></div></div>`;
+
+  // AI review trigger (data first, AI as a layer on top)
+  html += `<div class="ca-ai" id="ca-ai"><div class="head"><h3>🤖 让 hermes 按方法论审视</h3>`
+    + `<span class="sub">基于上面的真实数据，按你的学习阶段给出「该看什么、缺什么验证」</span>`
+    + `<button class="btn btn-primary btn-sm" id="ai-go" style="margin-left:auto">开始 AI 审视</button>`
+    + `<span class="status" id="ai-st"></span></div>`
+    + `<div id="report" class="md-render" style="margin-top:14px"></div></div>`;
+
+  // 消息流（一手文件来源随市场变化）
+  const cn = (d.market||'')==='A股';
+  const filTitle = cn ? '📄 一手文件（巨潮公告）' : '📄 一手文件（SEC）';
+  const filHint  = cn ? '价值投资优先看原文：年报/季报、分红/回购、股东会决议等官方公告（巨潮资讯）。'
+                      : '价值投资优先看原文：10-K/10-Q 财报、8-K 重大事件、13F 机构持仓。';
+  html += `<div class="ca-panel"><div class="ca-feed">`
+    + `<div><h3>${filTitle}</h3><p class="hint">${filHint}</p><div id="feed-filings"></div></div>`
+    + `<div><h3>📰 新闻消息流</h3><p class="hint">辅助了解市场叙事，别被标题带节奏。</p><div id="feed-news"></div></div>`
+    + `</div></div>`;
+
+  $('dashboard').innerHTML = html;
+
+  // draw
+  drawRadar(d.radar||{});
+  drawTrend(d.financials||{}, cur);
+  drawPrice(d.price_history||{}, cur);
+  renderFeed(nws||{});
+
+  // wire AI + refresh
+  $('ai-go').addEventListener('click', startAI);
+  const rf = $('ca-refresh');
+  if(rf) rf.addEventListener('click', ()=>{
+    rf.disabled = true; rf.textContent = '🔄 刷新中…';
+    if(curCompany) loadDashboard(curCompany.ticker, curCompany.name, curCompany.market, true);
+  });
+}
+
+// ---------- charts ----------
+function baseGrid(){ return {left:48, right:18, top:24, bottom:28}; }
+function axisStyle(){ const b=cssVar('--border'), mu=cssVar('--muted');
+  return { axisLine:{lineStyle:{color:b}}, axisLabel:{color:mu,fontSize:11}, splitLine:{lineStyle:{color:b,opacity:.5}} }; }
+function mkChart(id){ const el=$(id); if(!el) return null; const c=echarts.init(el,null,{renderer:'canvas'}); charts.push(c); return c; }
+
+function drawRadar(r){
+  const c = mkChart('ch-radar'); if(!c) return;
+  const inds = r.indicators||[], vals = (r.values||[]).map(v=>v==null?0:v);
+  if(!inds.length){ $('ch-radar').innerHTML='<div class="ca-skel">数据不足，无法评分</div>'; return; }
+  const accent=cssVar('--accent'), mu=cssVar('--muted'), notes=r.notes||{};
+  c.setOption({
+    tooltip:{ formatter:()=> inds.map((it,i)=>{
+      const raw=(r.values||[])[i];
+      return `${it.name}：<b>${raw==null?'数据缺失':raw}</b><br><span style="color:${mu};font-size:11px">${notes[it.name]||''}</span>`;
+    }).join('<br>'), backgroundColor:cssVar('--bg-soft'), borderColor:cssVar('--border'), textStyle:{color:cssVar('--fg'),fontSize:12} },
+    radar:{ indicator:inds, radius:'66%', center:['50%','54%'],
+      axisName:{color:cssVar('--fg-soft'),fontSize:12},
+      splitLine:{lineStyle:{color:cssVar('--border')}}, splitArea:{areaStyle:{color:['transparent']}},
+      axisLine:{lineStyle:{color:cssVar('--border')}} },
+    series:[{ type:'radar', data:[{value:vals, name:'健康度',
+      areaStyle:{color:accent,opacity:.18}, lineStyle:{color:accent,width:2}, itemStyle:{color:accent} }] }],
+  });
+}
+
+function drawTrend(f, cur){
+  const c = mkChart('ch-trend'); if(!c) return;
+  const yrs = f.years||[];
+  if(!yrs.length){ $('ch-trend').innerHTML='<div class="ca-skel">暂无财报数据</div>'; return; }
+  const accent=cssVar('--accent'), good=cssVar('--good'), as=axisStyle();
+  const scale = v => v==null?null:+(v/1e9).toFixed(2);   // → billions
+  c.setOption({
+    tooltip:{ trigger:'axis', backgroundColor:cssVar('--bg-soft'), borderColor:cssVar('--border'), textStyle:{color:cssVar('--fg'),fontSize:12},
+      valueFormatter:null },
+    legend:{ data:['营收','净利润','净利率'], textStyle:{color:cssVar('--muted'),fontSize:11}, top:0 },
+    grid:{left:50,right:46,top:30,bottom:26},
+    xAxis:{ type:'category', data:yrs, ...as },
+    yAxis:[ { type:'value', name:'十亿', nameTextStyle:{color:cssVar('--muted'),fontSize:10}, ...as },
+            { type:'value', name:'%', nameTextStyle:{color:cssVar('--muted'),fontSize:10}, axisLabel:{color:cssVar('--muted'),fontSize:11,formatter:'{value}%'}, splitLine:{show:false}, axisLine:{lineStyle:{color:cssVar('--border')}} } ],
+    series:[
+      { name:'营收', type:'bar', data:(f.revenue||[]).map(scale), itemStyle:{color:accent,opacity:.85}, barMaxWidth:26 },
+      { name:'净利润', type:'bar', data:(f.net_income||[]).map(scale), itemStyle:{color:good,opacity:.8}, barMaxWidth:26 },
+      { name:'净利率', type:'line', yAxisIndex:1, data:(f.net_margin||[]), smooth:true, lineStyle:{color:cssVar('--fg-soft'),width:2}, itemStyle:{color:cssVar('--fg-soft')} },
+    ],
+  });
+}
+
+function drawPrice(h, cur){
+  const c = mkChart('ch-price'); if(!c) return;
+  const dates=h.dates||[], close=h.close||[];
+  if(!dates.length){ $('ch-price').innerHTML='<div class="ca-skel">暂无价格数据</div>'; return; }
+  const accent=cssVar('--accent'), as=axisStyle();
+  c.setOption({
+    tooltip:{ trigger:'axis', backgroundColor:cssVar('--bg-soft'), borderColor:cssVar('--border'), textStyle:{color:cssVar('--fg'),fontSize:12},
+      valueFormatter:v=>v==null?'-':(cur==='USD'?'$':'')+(+v).toFixed(2) },
+    grid:baseGrid(),
+    xAxis:{ type:'category', data:dates, boundaryGap:false, ...as, axisLabel:{color:cssVar('--muted'),fontSize:10} },
+    yAxis:{ type:'value', scale:true, ...as },
+    series:[{ type:'line', data:close, smooth:true, showSymbol:false, lineStyle:{color:accent,width:2},
+      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:cssVar('--accent-soft')},{offset:1,color:'transparent'}])} }],
+  });
+}
+
+// ---------- 消息流 ----------
+function feedItem(it){
+  const t = it.time ? new Date(it.time) : null;
+  const when = t && !isNaN(t) ? t.toLocaleDateString('zh-CN') : (it.time||'');
+  const badge = it.type==='filing' ? `<span class="ca-badge">${VI.esc(it.form||'文件')}</span>` : '';
+  const meta = [it.publisher, when].filter(Boolean).map(VI.esc).join(' · ');
+  return `<a class="ca-item" href="${VI.esc(it.link||'#')}" target="_blank" rel="noopener">`
+    + `<div class="t">${badge}${VI.esc(it.title||'')}</div>`
+    + (meta?`<div class="m">${meta}</div>`:'')+`</a>`;
+}
+function renderFeed(nws){
+  const filings=nws.filings||[], news=nws.news||[];
+  $('feed-filings').innerHTML = filings.length ? filings.map(feedItem).join('')
+    : '<div class="ca-skel" style="text-align:left;padding:10px 0">暂无一手文件（未匹配到该公司，或暂未接入该市场）</div>';
+  $('feed-news').innerHTML = news.length ? news.map(feedItem).join('')
+    : '<div class="ca-skel" style="text-align:left;padding:10px 0">暂无新闻</div>';
+}
+
+// ---------- AI review (existing hermes flow, now layered on the data) ----------
+async function startAI(){
+  if(!curCompany) return;
+  $('ai-go').disabled = true; $('report').innerHTML='';
+  $('ai-st').textContent = '已提交，hermes 正按你的学习阶段审视…（约 30-90 秒）'; $('ai-st').className='status';
+  try{
+    const r = await VI.api('/api/analyses', {body:curCompany});
+    if(r.status===401){ location.href='login.html'; return; }
+    if(!r.ok){ $('ai-st').textContent='启动失败：'+((r.data&&r.data.error)||r.status); $('ai-st').className='status err'; $('ai-go').disabled=false; return; }
+    await pollAI(r.data.id);
+  }catch(e){ $('ai-st').textContent='网络错误：'+e.message; $('ai-st').className='status err'; }
+  $('ai-go').disabled=false; loadArchive();
+}
+async function pollAI(id){
+  const t0=Date.now();
   while(Date.now()-t0 < 200000){
     await sleep(3000);
-    let d; try{ const r = await VI.api('/api/analyses/'+id); d=r.data; }catch(e){ continue; }
+    let d; try{ d=(await VI.api('/api/analyses/'+id)).data; }catch(e){ continue; }
     if(!d) continue;
-    if(d.status==='done'){ showReport(d); return; }
-    if(d.status==='error'){ $('st').textContent='分析失败：'+(d.error||'未知'); $('st').className='status err'; return; }
-    $('st').textContent='分析中… '+Math.round((Date.now()-t0)/1000)+'s';
+    if(d.status==='done'){ showAIReport(d); return; }
+    if(d.status==='error'){ $('ai-st').textContent='分析失败：'+(d.error||'未知'); $('ai-st').className='status err'; return; }
+    $('ai-st').textContent='分析中… '+Math.round((Date.now()-t0)/1000)+'s';
   }
-  $('st').textContent='超时，请重试'; $('st').className='status err';
+  $('ai-st').textContent='超时，请重试'; $('ai-st').className='status err';
 }
-function showReport(d){
-  $('st').textContent = (d.ticker||'')+' 分析完成 · '+(d.generated_at?new Date(d.generated_at).toLocaleString('zh-CN'):''); $('st').className='status ok';
-  $('report').innerHTML = '<div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:20px 24px">'
-    + '<div style="color:var(--muted);font-size:13px;margin-bottom:10px">'+VI.esc(d.ticker||'')+' '+VI.esc(d.company_name||'')+' · '+VI.esc(d.market||'')+'</div>'
-    + VI.renderMd(d.report) + '</div>';
+function showAIReport(d){
+  $('ai-st').textContent = (d.ticker||'')+' · '+(d.generated_at?new Date(d.generated_at).toLocaleString('zh-CN'):''); $('ai-st').className='status ok';
+  $('report').innerHTML = VI.renderMd(d.report);
 }
 
+// ---------- archive ----------
 async function loadArchive(){
-  const r = await VI.api('/api/analyses'); const xs = (r.data&&r.data.items)||[];
-  if(!xs.length){ $('archive').innerHTML = '<p style="color:var(--muted);font-size:14px">还没有分析记录。在上面输入一个公司代码，点「一键分析」。</p>'; return; }
+  const r = await VI.api('/api/analyses'); const xs=(r.data&&r.data.items)||[];
+  if(!xs.length){ $('archive').innerHTML='<p style="color:var(--muted);font-size:14px">还没有 AI 审视记录。输入代码点「分析」看数据，再点「开始 AI 审视」。</p>'; return; }
   $('archive').innerHTML = '<div class="vi-grid vi-rise">' + xs.map(a=>`
-    <div class="vi-card" style="cursor:pointer" onclick="openArchive(${a.id})">
+    <div class="vi-card" style="cursor:pointer" onclick="openArchive(${a.id}, '${VI.esc(a.ticker)}', '${VI.esc(a.company_name||'')}', '${VI.esc(a.market||'')}')">
       <h3>${VI.esc(a.ticker)} ${a.company_name?'<span style="color:var(--muted);font-size:13px;font-weight:400">'+VI.esc(a.company_name)+'</span>':''}</h3>
       <p>${VI.esc(a.market||'')} · ${a.status==='done'?'已完成':(a.status==='error'?'失败/超时':a.status)}</p>
       <div class="meta">${a.created_at?new Date(a.created_at).toLocaleString('zh-CN'):''}</div>
     </div>`).join('') + '</div>';
 }
-async function openArchive(id){
-  const r = await VI.api('/api/analyses/'+id); const d = r.data;
-  if(d && d.status==='done'){ showReport(d); window.scrollTo({top:0,behavior:'smooth'}); }
-  else if(d && d.status==='running'){ $('st').textContent='这份还在生成中…'; poll(id); }
-  else $('st').textContent='这份分析没有内容（可能失败）';
+async function openArchive(id, ticker, name, market){
+  // load the data dashboard for the company, then drop in the archived AI report
+  await loadDashboard(ticker, name||'', market||'美股');
+  window.scrollTo({top:0,behavior:'smooth'});
+  const r = await VI.api('/api/analyses/'+id); const d=r.data;
+  if(d && d.status==='done'){ showAIReport(d); }
+  else if(d && d.status==='running'){ $('ai-st') && ($('ai-st').textContent='这份还在生成中…'); pollAI(id); }
 }
 window.openArchive = openArchive;
 
+// ---------- holdings quick-pick ----------
 async function loadHoldings(){
-  const r = await VI.api('/api/holdings'); const hs = (r.data&&r.data.holdings)||[];
+  const r = await VI.api('/api/holdings'); const hs=(r.data&&r.data.holdings)||[];
   if(hs.length){
     $('fromHoldings').innerHTML = '从持仓快速分析：' + hs.map(h=>
       `<button class="btn btn-ghost btn-sm vi-quick" style="margin:2px" data-t="${VI.esc(h.ticker)}" data-n="${VI.esc(h.name||'')}" data-m="${VI.esc(h.market||'')}">${VI.esc(h.ticker)}</button>`).join('');
     $('fromHoldings').querySelectorAll('.vi-quick').forEach(b=> b.addEventListener('click', ()=> quick(b.dataset.t, b.dataset.n, b.dataset.m)));
   }
 }
-function quick(t,n,m){ $('ticker').value=t; $('name').value=n; if(m)$('market').value=m; analyze(t,n,m); }
+function quick(t,n,m){ $('ticker').value=t; $('name').value=n; if(m)$('market').value=m; go(); }
 
-$('go').addEventListener('click', ()=>{
-  const t = $('ticker').value.trim(); if(!t){ $('st').textContent='请输入公司代码'; $('st').className='status err'; return; }
-  analyze(t, $('name').value.trim(), $('market').value);
-});
+// ---------- entry ----------
+function go(){
+  const t=$('ticker').value.trim(); if(!t){ $('st').textContent='请输入公司代码'; $('st').className='status err'; return; }
+  $('st').textContent=''; loadDashboard(t, $('name').value.trim(), $('market').value);
+}
+$('go').addEventListener('click', go);
+$('ticker').addEventListener('keydown', e=>{ if(e.key==='Enter') go(); });
+window.addEventListener('resize', ()=> charts.forEach(c=>{try{c.resize();}catch(e){}}));
 
 async function load(){
   const u = await VI.requireAuth(); if(!u) return; VI.nav('analyze', u); await VI.loadAchTitles();
-  const p = new URLSearchParams(location.search);   // prefill from holding / dashboard handoff
-  if(p.get('ticker')){ $('ticker').value=p.get('ticker'); if(p.get('name'))$('name').value=p.get('name'); if(p.get('market'))$('market').value=p.get('market');
-    $('go').classList.add('btn-pulse'); $('st').textContent='已带入 '+p.get('ticker')+'，点「一键分析」开始'; }
+  const p = new URLSearchParams(location.search);
+  if(p.get('ticker')){
+    $('ticker').value=p.get('ticker'); if(p.get('name'))$('name').value=p.get('name'); if(p.get('market'))$('market').value=p.get('market');
+    loadDashboard(p.get('ticker'), p.get('name')||'', p.get('market')||'美股');
+  }
   loadHoldings(); loadArchive();
 }
 load();
