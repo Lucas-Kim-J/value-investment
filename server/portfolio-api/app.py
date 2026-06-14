@@ -11,22 +11,37 @@ Secrets live ONLY on the server (never in the repo):
   - VI_CODES_FILE     JSON mapping {access_code: username}
   - VI_SECRET_KEY     Flask session signing key
   - VI_DATABASE_URL   postgresql://vi_app:...@127.0.0.1:5432/value_investment
+
+Non-secret Notion config (env vars, not the token — token is Fernet-stored in Postgres):
+  - VI_NOTION_DB_NOTES      32-char Notion database id for the Notes database
+  - VI_NOTION_DB_CONCEPTS   32-char Notion database id for the Concepts database
+  - VI_NOTION_DB_SOURCES    32-char Notion database id for the Sources database
 """
 from __future__ import annotations
 
+import base64
 import datetime
+import hashlib
+import hmac
 import json
 import os
 import re
 import subprocess
+import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 
 import psycopg2
 import psycopg2.extras
+from cryptography.fernet import Fernet
 from flask import Flask, jsonify, request, session
+import capture as _capture
+import market_data as _md
+import notion_kb as _nkb
 
 CODES_FILE = Path(os.environ.get("VI_CODES_FILE", "/etc/value-investment/access-codes.json"))
 DB_URL = os.environ.get("VI_DATABASE_URL", "")
@@ -49,6 +64,10 @@ _MOCK_REPORT = (
     "- prompt 长度：{n} 字符\n- 生产环境由服务器上的 hermes 按方法论生成真实报告\n\n"
     "## 下一步\n\n在服务器上 `VI_REPORT_MODE` 为默认 hermes，会生成真实的逐仓位审视报告。\n"
 )
+
+_NOTION_DBS = {"notes": os.environ.get("VI_NOTION_DB_NOTES", ""),
+               "concepts": os.environ.get("VI_NOTION_DB_CONCEPTS", ""),
+               "sources": os.environ.get("VI_NOTION_DB_SOURCES", "")}
 
 METHODOLOGY_CONTEXT = """【方法论核心 v1.1】
 - B 轨学习者(~10h/周)，起点流派 Pabrai + Marks（先精通这两派 3 年再吸收其他）。
@@ -241,8 +260,87 @@ def _init_db() -> None:
                 started_at   DOUBLE PRECISION,
                 created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
             );
+            -- read-only exchange API keys (crypto portfolio import). api_secret is
+            -- encrypted at rest (Fernet) — critical because pg_dump backups exist.
+            CREATE TABLE IF NOT EXISTS exchange_keys (
+                id             BIGSERIAL PRIMARY KEY,
+                username       TEXT NOT NULL,
+                exchange       TEXT NOT NULL,
+                label          TEXT,
+                api_key        TEXT NOT NULL,
+                api_secret_enc TEXT NOT NULL,
+                created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_ek_user ON exchange_keys(username);
+            -- manual net value for balances the public API can't read (e.g. Gate TradFi 股票)
+            ALTER TABLE exchange_keys ADD COLUMN IF NOT EXISTS manual_usd NUMERIC DEFAULT 0;
+            -- official skills registry: admin-curated per feature, seeded from skills/*/SKILL.md,
+            -- then distributed into each tenant's Hermes profile. PG is the source of truth.
+            CREATE TABLE IF NOT EXISTS official_skills (
+                name        TEXT PRIMARY KEY,
+                version     TEXT,
+                description TEXT,
+                skill_md    TEXT NOT NULL,
+                updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
             """
         )
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS captures (
+                id             SERIAL PRIMARY KEY,
+                username       TEXT NOT NULL,
+                raw            TEXT NOT NULL,
+                title          TEXT,
+                note_type      TEXT,
+                situation      TEXT,
+                tags           JSONB DEFAULT '[]',
+                concept_names  JSONB NOT NULL DEFAULT '[]',
+                raw_cap        JSONB NOT NULL DEFAULT '{}',
+                notion_page_id TEXT,
+                status         TEXT NOT NULL DEFAULT 'pending',   -- pending | written | error
+                error          TEXT,
+                created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+                written_at     TIMESTAMPTZ
+            )""")
+        cur.execute("CREATE INDEX IF NOT EXISTS captures_retry_idx ON captures (username, status)")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS kb_concepts (
+                id             SERIAL PRIMARY KEY,
+                username       TEXT NOT NULL,
+                name           TEXT NOT NULL,
+                notion_page_id TEXT,
+                term_slug      TEXT
+            )""")
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS kb_concepts_uq ON kb_concepts (username, lower(name))")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS kb_sources (
+                id             SERIAL PRIMARY KEY,
+                username       TEXT NOT NULL,
+                title          TEXT NOT NULL,
+                kind           TEXT,
+                author         TEXT,
+                url            TEXT,
+                notion_page_id TEXT,
+                canon_slug     TEXT
+            )""")
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS kb_sources_uq ON kb_sources (username, lower(title))")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS notion_tokens (
+                username   TEXT PRIMARY KEY,
+                token_enc  TEXT NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )""")
+        # market-data cache: real fundamentals/news for the 公司分析 dashboard.
+        # Shared across users (data is public), keyed by (ticker, market, kind).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS company_data_cache (
+                ticker     TEXT NOT NULL,
+                market     TEXT NOT NULL DEFAULT '',
+                kind       TEXT NOT NULL,           -- 'snapshot' | 'news'
+                payload    JSONB NOT NULL,
+                fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                PRIMARY KEY (ticker, market, kind)
+            )""")
 
 
 def _load(user: str) -> dict:
@@ -351,6 +449,19 @@ def get_holdings():
     if not user:
         return {"error": "未登录"}, 401
     return jsonify(_load(user))
+
+
+@app.post("/api/notion/token")
+def connect_notion():
+    """Store the user's Notion integration token (Fernet-encrypted) so captures can be filed."""
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    token = ((request.get_json(silent=True) or {}).get("token") or "").strip()
+    if not token:
+        return {"error": "缺少 token"}, 400
+    set_notion_token(user, token)
+    return {"ok": True}
 
 
 @app.put("/api/holdings")
@@ -540,6 +651,19 @@ def _learner_stats(user: str) -> dict:
             "report_generated": report_generated, "total_min": total_min}
 
 
+def format_recent_context(rows: list[dict]) -> str:
+    if not rows:
+        return ""
+    qs = [r["title"] for r in rows if r.get("note_type") == "疑问"]
+    cons = sorted({c for r in rows for c in (r.get("concepts") or [])})
+    parts = []
+    if cons:
+        parts.append("最近在记的概念：" + "、".join(cons[:12]))
+    if qs:
+        parts.append("未决疑问：" + "；".join(qs[:5]))
+    return "【近期沉淀】" + " ".join(parts) if parts else ""
+
+
 def _build_learner_profile(user: str) -> dict:
     s = _learner_stats(user)
     if s["canon_read"] < 2 and s["term_mastered"] < 3:
@@ -551,8 +675,15 @@ def _build_learner_profile(user: str) -> dict:
     with _db() as c, c.cursor() as cur:
         cur.execute("SELECT term_slug FROM user_term_mastery WHERE username=%s AND mastery='mastered'", (user,))
         mastered = [r[0] for r in cur.fetchall()]
+        # recent captures: last ~15, each with its own concept names (stored per-capture in PG)
+        cur.execute(
+            "SELECT title, note_type, concept_names FROM captures WHERE username=%s ORDER BY created_at DESC LIMIT 15",
+            (user,))
+        cap_rows = [{"title": r[0], "note_type": r[1], "concepts": r[2] or []} for r in cur.fetchall()]
+    recent_context = format_recent_context(cap_rows)
     return {"stage": stage, "canon_read": s["canon_read"], "term_mastered": s["term_mastered"],
-            "total_hours": round(s["total_min"] / 60, 1), "mastered_terms": mastered, "stats": s}
+            "total_hours": round(s["total_min"] / 60, 1), "mastered_terms": mastered,
+            "recent_context": recent_context, "stats": s}
 
 
 def _eval_rule(rule: dict, s: dict) -> bool:
@@ -716,6 +847,9 @@ def get_term(slug):
             m = cur.fetchone()
             if m:
                 t["mastery"], t["my_restatement"] = m["mastery"], m["my_restatement"] or ""
+        # connective tissue: which canon pieces reference this term
+        cur.execute("SELECT slug,title FROM canon_items WHERE %s = ANY(related_terms) ORDER BY sort_order LIMIT 6", (slug,))
+        t["appears_in"] = [dict(r) for r in cur.fetchall()]
     return jsonify(t)
 
 
@@ -804,7 +938,73 @@ def list_achievements():
 
 # ---------- company analysis (one-click + archive) ----------
 
-def compose_analysis_prompt(user: str, company: dict) -> str:
+def _fmt(v, unit=""):
+    return "数据缺失" if v is None else (f"{v:g}{unit}")
+
+
+def _format_company_data(snap: dict, nws: dict) -> str:
+    """Compact real-data card injected into the prompt so hermes reasons on actual
+    numbers (no fabrication). Missing fields are stated as 数据缺失, never guessed."""
+    if not snap:
+        return "（暂无可用的真实数据——数据源未返回；请明确说明数据缺失，不要编造任何数字。）"
+    p, q, m = snap.get("profile") or {}, snap.get("quote") or {}, snap.get("metrics") or {}
+    f, vh = snap.get("financials") or {}, snap.get("valuation_history") or {}
+    cur = q.get("currency") or ""
+    lines = []
+    prof = "、".join(x for x in [p.get("sector"), p.get("industry")] if x) or "数据缺失"
+    lines.append(f"公司：{p.get('name','')}（{snap.get('ticker','')}/{snap.get('market','')}） 行业：{prof}")
+    if p.get("summary"):
+        lines.append(f"主营简介：{str(p['summary'])[:280]}")
+    lines.append(
+        f"行情：现价 {_fmt(q.get('price'))} {cur} 市值 {_fmt(q.get('market_cap'))} "
+        f"涨跌 {_fmt(q.get('change_pct'),'%')}")
+    lines.append(
+        f"估值：P/E {_fmt(m.get('pe'))} 前瞻P/E {_fmt(m.get('forward_pe'))} P/B {_fmt(m.get('pb'))} "
+        f"P/S {_fmt(m.get('ps'))} 股息率 {_fmt(m.get('dividend_yield'),'%')}")
+    lines.append(
+        f"质量：ROE {_fmt(m.get('roe'),'%')} 毛利率 {_fmt(m.get('gross_margin'),'%')} "
+        f"净利率 {_fmt(m.get('net_margin'),'%')} 负债/权益 {_fmt(m.get('debt_to_equity'),'%')} "
+        f"流动比率 {_fmt(m.get('current_ratio'))}")
+    lines.append(
+        f"成长：营收增速 {_fmt(m.get('revenue_growth'),'%')} 盈利增速 {_fmt(m.get('earnings_growth'),'%')}")
+    # financial-statement trend (for 资金传导)
+    yrs = f.get("years") or []
+    if yrs:
+        def bil(xs):
+            return " ".join((f"{(x/1e9):.1f}" if x is not None else "—") for x in (xs or []))
+        lines.append(f"财报趋势（{yrs[0]}→{yrs[-1]}，单位十亿）：")
+        lines.append(f"  营收 {bil(f.get('revenue'))} ｜ 净利 {bil(f.get('net_income'))} ｜ 经营/自由现金流 {bil(f.get('fcf'))}")
+        nm = f.get("net_margin") or []
+        if any(x is not None for x in nm):
+            lines.append("  净利率% " + " ".join((f"{x:.0f}" if x is not None else "—") for x in nm))
+    # historical valuation percentile (for 历史镜像)
+    if vh:
+        if vh.get("pe_percentile") is not None or vh.get("pb_percentile") is not None:
+            lines.append(
+                f"历史估值分位（{vh.get('span','')}，0%=史上最便宜）：P/E {_fmt(vh.get('pe_percentile'),'%')} "
+                f"P/B {_fmt(vh.get('pb_percentile'),'%')} ←{vh.get('method','')}")
+        elif vh.get("price_percentile") is not None:
+            lines.append(
+                f"价格历史分位（{vh.get('span','')}）：{_fmt(vh.get('price_percentile'),'%')} ←{vh.get('method','')}")
+    # radar
+    r = snap.get("radar") or {}
+    if r.get("indicators"):
+        pairs = ", ".join(f"{i['name']}{('' if v is None else v)}" for i, v in zip(r["indicators"], r.get("values") or []))
+        lines.append(f"财务健康雷达(0-100)：{pairs}")
+    # primary-source filings + news headlines (for 资金传导 capital-allocation + catalysts)
+    fil = (nws or {}).get("filings") or []
+    if fil:
+        lines.append("近期一手文件：" + "；".join(f"[{x.get('form','')}]{x.get('title','')}"[:40] for x in fil[:6]))
+    news_items = (nws or {}).get("news") or []
+    if news_items:
+        lines.append("近期新闻标题：" + "；".join(str(x.get("title", ""))[:36] for x in news_items[:5]))
+    warns = snap.get("warnings") or []
+    if warns:
+        lines.append("数据告警：" + "；".join(warns))
+    return "\n".join(lines)
+
+
+def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, nws: dict | None = None) -> str:
     p = _build_learner_profile(user)
     if p["stage"] == "novice":
         stance = "用户是新手（一手内容读得还少）。多解释*为什么*，每用一个术语就一句话点明定义；强调先验证再深研；不要假设他懂反向 DCF / Owner Earnings。"
@@ -813,19 +1013,53 @@ def compose_analysis_prompt(user: str, company: dict) -> str:
     else:
         stance = "用户是进阶者。术语直接用、不解释；拔高到组合层面与 thesis 可证伪性，犀利、省略基础。"
     mastered = "、".join(p["mastered_terms"][:30]) or "（暂无）"
+    recent_ctx = (("\n" + p["recent_context"]) if p.get("recent_context") else "")
+    data_card = _format_company_data(snap or {}, nws or {})
     return (
         f"{METHODOLOGY_CONTEXT}\n\n"
-        f"【用户学习画像】阶段={p['stage']} 已读一手内容={p['canon_read']} 已掌握术语：{mastered}\n\n"
+        f"【用户学习画像】阶段={p['stage']} 已读一手内容={p['canon_read']} 已掌握术语：{mastered}{recent_ctx}\n\n"
         f"【交流策略】{stance}\n\n"
-        f"【本次分析公司】{company.get('ticker')} {company.get('name', '')} 市场={company.get('market', '')}\n"
-        "任务：按价值投资方法论对这家公司做一次审视报告。结构固定为："
-        "## 生意是什么 / ## 护城河与质量 / ## 该看哪些估值信号（四工具）/ ## 风险与价值陷阱红旗 / ## 我该补哪些验证（Pabrai 三问 + 可证伪 thesis + 退出条件）。\n"
-        "硬约束：不给买卖建议/目标价；**绝不编造任何具体财务数字**——涉及数字一律写「→ 去官方原文核对」；数据不足就说数据不足，不要编。"
+        f"【本次分析公司】{company.get('ticker')} {company.get('name', '')} 市场={company.get('market', '')}\n\n"
+        f"【真实数据卡 · 请基于这些数字推理并引用具体数值】\n{data_card}\n\n"
+        "任务：按价值投资方法论审视这家公司。报告以下面【三大主轴】为主体，全部建立在上面的真实数据上、引用具体数字；最后用方法论检查落地。\n\n"
+        "## 一、第一性原理（生意的本质）\n"
+        "把生意拆到不能再拆：它本质在卖什么价值、客户为什么非买不可、凭什么能定价赚钱；护城河的第一性来源（成本/网络/品牌/转换成本/特许经营）是否成立、是否在弱化。用毛利率/净利率/ROE 佐证价值在哪创造、资本效率如何。\n\n"
+        "## 二、资金传导（钱怎么流，分三层）\n"
+        "1) 内部资金链：营收→毛利→营业利润→净利→自由现金流，每一环漏在哪（应收/存货/费用）；利润含金量（经营/自由现金流 vs 净利润，用趋势数据说话）；赚的钱去哪了（再投资 ROIC / 分红 / 回购，结合一手文件里的相关公告）。\n"
+        "2) 宏观传导：利率/流动性/政策如何传导到它这个环节，它处在传导链的上游还是末端、受益还是受损。\n"
+        "3) 产业链上下游：它在产业链的位置、对上下游的议价权、利润池集中在哪一环。\n\n"
+        "## 三、历史镜像（放进历史看）\n"
+        "用上面的历史估值分位判断当前贵贱（便宜区 0-25%？）；它在过去周期里如何表现；历史上有哪些类似的生意/情形，后来演变成赢家还是价值陷阱；现在更像均值回归机会还是结构性变化（Marks 周期框架）。\n\n"
+        "## 四、落地检查（方法论）\n"
+        "- 价值陷阱红旗逐条核对（低 P/E 但结构衰退 / 高股息靠借债 / 经营现金流长期<净利润 / 应收增速>营收增速 / 商誉过高等），用数据指出有没有、有多严重。\n"
+        "- Pabrai 三问（最坏亏多少 / 能否承受 / 赔率≥2:1）现在能回答到什么程度、还缺什么。\n"
+        "- 给出一个可证伪的 thesis（哪个具体事件发生就证明看错）+ 明确退出条件。\n"
+        "- 我还需要去原文核对 / 补充哪些验证。\n\n"
+        "硬约束：\n"
+        "- 只基于【真实数据卡】里的数字推理，**引用具体数值**；数据卡里没有的，写「数据缺失 / 需去原文核对」，**绝不编造任何数字**。\n"
+        "- 区分「数据事实」与「你的推断」，推断要标明（如：推断/需验证）。\n"
+        "- 不给买卖建议、不给目标价。"
     )
 
 
-def _run_analysis_job(analysis_id: int, prompt: str) -> None:
+def _run_analysis_job(analysis_id: int, user: str, ticker: str, name: str, market: str) -> None:
+    """Background job: fetch real data (cached), compose the data-grounded prompt, run hermes."""
     try:
+        snap = _cache_get(ticker, market, "snapshot")
+        if snap is None:
+            snap = _md.snapshot(ticker, market, name)
+            try:
+                _cache_put(ticker, market, "snapshot", snap)
+            except Exception:  # noqa: BLE001
+                pass
+        nws = _cache_get(ticker, market, "news")
+        if nws is None:
+            nws = _md.news(ticker, market, name)
+            try:
+                _cache_put(ticker, market, "news", nws)
+            except Exception:  # noqa: BLE001
+                pass
+        prompt = compose_analysis_prompt(user, {"ticker": ticker, "name": name, "market": market}, snap, nws)
         report = run_hermes(prompt)
         with _db() as c, c.cursor() as cur:
             cur.execute("UPDATE company_analyses SET status='done', report=%s, generated_at=now() WHERE id=%s", (report, analysis_id))
@@ -854,13 +1088,13 @@ def start_analysis():
         if run and run["started_at"] and time.time() - run["started_at"] < 300:
             return {"id": run["id"], "status": "running"}
     profile = _build_learner_profile(user)
-    prompt = compose_analysis_prompt(user, {"ticker": ticker, "name": name, "market": market})
     with _db() as c, c.cursor() as cur:
         cur.execute("""INSERT INTO company_analyses(username,market,ticker,company_name,status,profile_snap,started_at)
             VALUES (%s,%s,%s,%s,'running',%s,%s) RETURNING id""",
             (user, market, ticker, name, json.dumps({"stage": profile["stage"]}), time.time()))
         aid = cur.fetchone()[0]
-    threading.Thread(target=_run_analysis_job, args=(aid, prompt), daemon=True).start()
+    # data fetch + prompt compose happen in the background job so the POST returns instantly
+    threading.Thread(target=_run_analysis_job, args=(aid, user, ticker, name, market), daemon=True).start()
     return {"id": aid, "status": "running"}
 
 
@@ -903,6 +1137,71 @@ def get_analysis(aid):
     return jsonify(d)
 
 
+# ---------- real market data (dashboard: fundamentals / charts / 消息流) ----------
+# Cached in company_data_cache (public data, shared across users). TTL by kind;
+# ?fresh=1 forces a refetch.
+
+_CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600}
+
+
+def _cache_get(ticker: str, market: str, kind: str):
+    ttl = _CACHE_TTL.get(kind, 3600)
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute(
+            "SELECT payload, extract(epoch FROM now()-fetched_at) AS age "
+            "FROM company_data_cache WHERE ticker=%s AND market=%s AND kind=%s",
+            (ticker, market, kind))
+        r = cur.fetchone()
+    if r and r["age"] is not None and r["age"] < ttl:
+        d = r["payload"]
+        d["_cached"] = True
+        d["_age_s"] = int(r["age"])
+        return d
+    return None
+
+
+def _cache_put(ticker: str, market: str, kind: str, payload: dict) -> None:
+    with _db() as c, c.cursor() as cur:
+        cur.execute(
+            "INSERT INTO company_data_cache(ticker,market,kind,payload,fetched_at) "
+            "VALUES (%s,%s,%s,%s,now()) "
+            "ON CONFLICT (ticker,market,kind) DO UPDATE SET payload=EXCLUDED.payload, fetched_at=now()",
+            (ticker, market, kind, json.dumps(payload)))
+
+
+def _company_data(kind: str, fetch):
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    ticker = (request.args.get("ticker") or "").strip().upper()[:32]
+    if not ticker:
+        return {"error": "缺 ticker"}, 400
+    market = (request.args.get("market") or "美股")[:16]
+    fresh = request.args.get("fresh") == "1"
+    if not fresh:
+        cached = _cache_get(ticker, market, kind)
+        if cached is not None:
+            return jsonify(cached)
+    data = fetch(ticker, market)
+    try:
+        _cache_put(ticker, market, kind, data)
+    except Exception:  # noqa: BLE001 — cache write failure must not break the response
+        pass
+    return jsonify(data)
+
+
+@app.get("/api/companies/snapshot")
+def company_snapshot():
+    name = (request.args.get("name") or "")[:64]
+    return _company_data("snapshot", lambda tk, mk: _md.snapshot(tk, mk, name))
+
+
+@app.get("/api/companies/news")
+def company_news():
+    name = (request.args.get("name") or "")[:64]
+    return _company_data("news", lambda tk, mk: _md.news(tk, mk, name))
+
+
 # ---------- hermes chat (global learning companion) ----------
 
 def compose_chat_prompt(user: str, question: str, context: str, history: list) -> str:
@@ -913,13 +1212,15 @@ def compose_chat_prompt(user: str, question: str, context: str, history: list) -
         "practitioner": "用户进阶，直接、犀利、省略基础。",
     }.get(p["stage"], "")
     hist = "\n".join(f"用户：{h['q']}\nhermes：{h['r']}" for h in history[-5:] if h.get("r"))
-    ctx = f"\n【用户正在看 / 选中的文字】「{context}」\n" if context else ""
+    ctx = f"\n【用户正在看的页面内容 / 选中文字】\n{context}\n" if context else ""
     return (
         "你是 hermes，这个用户的价值投资学习伙伴。用中文、简洁、像同行对话。"
         "目标是帮他真正学懂：多用反问引导、鼓励他用自己的话复述、必要时关联他的方法论与持仓。\n"
+        "如果给了他正在看的页面内容，请据此 + 他的学习阶段给出有依据的建议（比如先读/先做哪个、顺序、为什么），优先推荐「起点必读」和短而高杠杆的内容；不要泛泛而谈。\n"
         "硬约束：不荐股、不给目标价；**绝不编造具体财务数字**（涉及具体数字就提示「去官方原文核对」）；不知道就说不知道。回答控制在 250 字内，除非他要求展开。\n\n"
         f"{METHODOLOGY_CONTEXT}\n\n"
-        f"【用户画像】阶段={p['stage']}；已掌握术语：{('、'.join(p['mastered_terms'][:20]) or '暂无')}。{stage_note}\n"
+        f"【用户画像】阶段={p['stage']}；已掌握术语：{('、'.join(p['mastered_terms'][:20]) or '暂无')}。{stage_note}"
+        + (("\n" + p["recent_context"]) if p.get("recent_context") else "") + "\n"
         f"{ctx}"
         + (f"\n【最近对话】\n{hist}\n" if hist else "")
         + f"\n用户：{question}\nhermes："
@@ -959,7 +1260,7 @@ def chat_send():
         return {"error": "未登录"}, 401
     body = request.get_json(force=True, silent=True) or {}
     question = str(body.get("question", "")).strip()[:2000]
-    context = str(body.get("context", "")).strip()[:1500]
+    context = str(body.get("context", "")).strip()[:6000]  # large enough for a page digest ("看这一页")
     if not question:
         return {"error": "请输入问题"}, 400
     _reap_stale("chat_turns", user)
@@ -1059,6 +1360,515 @@ def explain_poll(jid):
     if not r or r["username"] != user:
         return {"error": "not found"}, 404
     return jsonify({"id": r["id"], "status": r["status"], "text": r["text"], "reply": r["reply"], "error": r["error"]})
+
+
+# ---------- crypto exchange import (read-only) ----------
+
+SUPPORTED_EXCHANGES = {"gate": "Gate.io"}  # others scaffolded in the UI, not yet wired
+GATE_HOST = "https://api.gateio.ws"
+_STABLES = {"USDT", "USDC", "DAI", "BUSD", "TUSD", "FDUSD"}
+_DUST_USD = 1.0  # hide / skip assets worth less than this (USD)
+
+
+def _fernet() -> Fernet:
+    # derive a Fernet key from the existing session secret — no extra env var,
+    # and secrets in the DB / pg_dump backups are never plaintext.
+    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(app.secret_key.encode()).digest()))
+
+
+def _enc_secret(s: str) -> str:
+    return _fernet().encrypt(s.encode()).decode()
+
+
+def _dec_secret(s: str) -> str:
+    return _fernet().decrypt(s.encode()).decode()
+
+
+def set_notion_token(user: str, token: str) -> None:
+    with _db() as c, c.cursor() as cur:
+        cur.execute("INSERT INTO notion_tokens (username, token_enc) VALUES (%s,%s) "
+                    "ON CONFLICT (username) DO UPDATE SET token_enc=EXCLUDED.token_enc, updated_at=now()",
+                    (user, _enc_secret(token)))
+
+def get_notion_token(user: str) -> str | None:
+    with _db() as c, c.cursor() as cur:
+        cur.execute("SELECT token_enc FROM notion_tokens WHERE username=%s", (user,))
+        r = cur.fetchone()
+        return _dec_secret(r[0]) if r else None
+
+def kb_slug_lookup(conn):
+    """Returns slug_lookup(kind, key): concept name → glossary slug, source title → canon slug."""
+    def lookup(kind: str, key: str):
+        with conn.cursor() as cur:
+            if kind == "concept":
+                cur.execute("SELECT slug FROM glossary_terms WHERE lower(term)=lower(%s) LIMIT 1", (key,))
+            else:
+                cur.execute("SELECT slug FROM canon_items WHERE lower(title)=lower(%s) LIMIT 1", (key,))
+            r = cur.fetchone()
+            return r[0] if r else None
+    return lookup
+
+
+def _http_get_json(url: str, headers: dict, timeout: int = 12):
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "ignore")
+        raise RuntimeError(f"HTTP {e.code}: {body[:160]}")
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"网络错误：{getattr(e, 'reason', e)}")
+
+
+def _gate_headers(key: str, secret: str, method: str, path: str, query: str = "", body: str = "") -> dict:
+    t = str(int(time.time()))
+    payload_hash = hashlib.sha512((body or "").encode()).hexdigest()
+    sig_str = f"{method}\n{path}\n{query}\n{payload_hash}\n{t}"
+    sign = hmac.new(secret.encode(), sig_str.encode(), hashlib.sha512).hexdigest()
+    return {"KEY": key, "Timestamp": t, "SIGN": sign, "Accept": "application/json", "Content-Type": "application/json"}
+
+
+def _gate_get(key: str, secret: str, path: str, query: str = ""):
+    full = "/api/v4" + path
+    headers = _gate_headers(key, secret, "GET", full, query)
+    url = GATE_HOST + full + (("?" + query) if query else "")
+    return _http_get_json(url, headers)
+
+
+def _gate_public_get(path: str, query: str = ""):
+    url = GATE_HOST + "/api/v4" + path + (("?" + query) if query else "")
+    return _http_get_json(url, {"Accept": "application/json"})
+
+
+def gate_snapshot(key: str, secret: str) -> dict:
+    """Read-only portfolio snapshot from Gate.io v4."""
+    total = _gate_get(key, secret, "/wallet/total_balance", "currency=USDT")  # also validates the key
+    by_account = {}
+    for name, v in (total.get("details") or {}).items():
+        amt = float(v.get("amount") or 0)
+        if amt > 0.5:
+            by_account[name] = round(amt, 2)
+    total_usdt = round(float((total.get("total") or {}).get("amount") or 0), 2)
+    # spot prices (public) for per-coin USD valuation
+    prices = {}
+    try:
+        for tk in _gate_public_get("/spot/tickers"):
+            prices[tk.get("currency_pair")] = float(tk.get("last") or 0)
+    except Exception:  # noqa: BLE001
+        pass
+
+    def usd(coin, amt):
+        if coin in _STABLES:
+            return amt
+        return amt * (prices.get(coin + "_USDT") or 0)
+
+    spot = []
+    try:
+        for b in _gate_get(key, secret, "/spot/accounts"):
+            amt = float(b.get("available") or 0) + float(b.get("locked") or 0)
+            if amt <= 0:
+                continue
+            coin = b.get("currency")
+            u = usd(coin, amt)
+            if u < _DUST_USD:  # hide sub-$1 dust
+                continue
+            spot.append({"coin": coin, "amount": amt, "usd": round(u, 2)})
+    except Exception:  # noqa: BLE001
+        pass
+    spot.sort(key=lambda x: x["usd"], reverse=True)
+
+    futures = []
+    try:
+        for p in _gate_get(key, secret, "/futures/usdt/positions"):
+            size = float(p.get("size") or 0)
+            if size == 0:
+                continue
+            futures.append({
+                "contract": p.get("contract"), "size": size,
+                "value": round(float(p.get("value") or 0), 2),
+                "upnl": round(float(p.get("unrealised_pnl") or 0), 2),
+                "entry": float(p.get("entry_price") or 0), "mark": float(p.get("mark_price") or 0),
+            })
+    except Exception:  # noqa: BLE001
+        pass  # futures may be disabled / empty
+
+    # 理财 / Earn holdings (itemizes the wallet's `finance` bucket; needs Earn read perm)
+    finance = []
+    try:
+        for l in _gate_get(key, secret, "/earn/uni/lends"):  # 活期 / Simple Earn
+            coin = l.get("currency"); amt = float(l.get("amount") or 0); u = usd(coin, amt)
+            if amt > 0 and u >= _DUST_USD:
+                finance.append({"coin": coin, "amount": amt, "usd": round(u, 2), "product": "活期"})
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        for d in _gate_get(key, secret, "/earn/dual/orders"):  # 双币赢 (open only)
+            if d.get("status") not in ("INIT", "SETTLEMENT_PROCESSING"):
+                continue
+            coin = d.get("invest_currency"); amt = float(d.get("invest_amount") or 0); u = usd(coin, amt)
+            if u >= _DUST_USD:
+                finance.append({"coin": coin, "amount": amt, "usd": round(u, 2), "product": "双币"})
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        for st in _gate_get(key, secret, "/earn/structured/orders"):  # 结构化 (active)
+            if st.get("status") != "SUCCESS":
+                continue
+            coin = st.get("lock_coin"); amt = float(st.get("amount") or 0); u = usd(coin, amt)
+            if u >= _DUST_USD:
+                finance.append({"coin": coin, "amount": amt, "usd": round(u, 2), "product": "结构化"})
+    except Exception:  # noqa: BLE001
+        pass
+    finance.sort(key=lambda x: x["usd"], reverse=True)
+
+    # TradFi (MT5) account — its equity is NOT in /wallet/total_balance, add it separately
+    tradfi = 0.0
+    try:
+        ta = _gate_get(key, secret, "/tradfi/users/assets")
+        tradfi = round(float((ta.get("data") or {}).get("equity") or 0), 2)
+    except Exception:  # noqa: BLE001
+        pass
+    if tradfi >= _DUST_USD:
+        by_account["tradfi"] = tradfi
+
+    grand_total = round(total_usdt + tradfi, 2)  # wallet rollup already covers spot+finance; tradfi is extra
+    return {"total_usdt": grand_total, "wallet_usdt": total_usdt, "tradfi_usdt": tradfi,
+            "by_account": by_account, "spot": spot, "finance": finance, "futures": futures}
+
+
+def fetch_exchange_snapshot(exchange: str, key: str, secret: str) -> dict:
+    if exchange == "gate":
+        return gate_snapshot(key, secret)
+    raise RuntimeError("暂不支持该交易所")
+
+
+@app.get("/api/exchange/keys")
+def list_exchange_keys():
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT id,exchange,label,api_key,manual_usd,created_at FROM exchange_keys WHERE username=%s ORDER BY id", (user,))
+        rows = cur.fetchall()
+    items = [{
+        "id": r["id"], "exchange": r["exchange"], "label": r["label"],
+        "key_masked": (r["api_key"][:5] + "…" + r["api_key"][-4:]) if len(r["api_key"] or "") > 11 else "••••",
+        "manual_usd": float(r["manual_usd"] or 0),
+        "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+    } for r in rows]
+    return jsonify({"items": items, "supported": SUPPORTED_EXCHANGES})
+
+
+@app.post("/api/exchange/keys")
+def add_exchange_key():
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    body = request.get_json(force=True, silent=True) or {}
+    exchange = str(body.get("exchange", "")).strip().lower()
+    api_key = str(body.get("api_key", "")).strip()
+    api_secret = str(body.get("api_secret", "")).strip()
+    label = str(body.get("label", "")).strip()[:60]
+    if exchange not in SUPPORTED_EXCHANGES:
+        return {"error": "目前只支持 Gate.io"}, 400
+    if not api_key or not api_secret:
+        return {"error": "缺少 API key 或 secret"}, 400
+    # validate the key by doing one read before saving
+    try:
+        fetch_exchange_snapshot(exchange, api_key, api_secret)
+    except Exception as e:  # noqa: BLE001
+        return {"error": "连接失败（请确认 key 正确、已开只读权限）：" + str(e)[:160]}, 400
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("INSERT INTO exchange_keys(username,exchange,label,api_key,api_secret_enc) VALUES (%s,%s,%s,%s,%s) RETURNING id",
+                    (user, exchange, label or SUPPORTED_EXCHANGES[exchange], api_key, _enc_secret(api_secret)))
+        kid = cur.fetchone()["id"]
+    return {"ok": True, "id": kid}
+
+
+@app.post("/api/exchange/keys/<int:kid>/manual")
+def set_exchange_manual(kid):
+    """Hand-filled net value for balances Gate's public API can't read (TradFi 股票)."""
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    body = request.get_json(force=True, silent=True) or {}
+    try:
+        usd = max(0.0, float(body.get("usd") or 0))
+    except (TypeError, ValueError):
+        return {"error": "金额无效"}, 400
+    with _db() as c, c.cursor() as cur:
+        cur.execute("UPDATE exchange_keys SET manual_usd=%s WHERE id=%s AND username=%s", (usd, kid, user))
+    return {"ok": True, "manual_usd": round(usd, 2)}
+
+
+@app.delete("/api/exchange/keys/<int:kid>")
+def del_exchange_key(kid):
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    with _db() as c, c.cursor() as cur:
+        cur.execute("DELETE FROM exchange_keys WHERE id=%s AND username=%s", (kid, user))
+    return {"ok": True}
+
+
+def _load_key_row(user, kid):
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT exchange,api_key,api_secret_enc,manual_usd FROM exchange_keys WHERE id=%s AND username=%s", (kid, user))
+        return cur.fetchone()
+
+
+@app.post("/api/exchange/keys/<int:kid>/sync")
+def sync_exchange(kid):
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    r = _load_key_row(user, kid)
+    if not r:
+        return {"error": "not found"}, 404
+    try:
+        snap = fetch_exchange_snapshot(r["exchange"], r["api_key"], _dec_secret(r["api_secret_enc"]))
+    except Exception as e:  # noqa: BLE001
+        return {"error": "同步失败：" + str(e)[:200]}, 502
+    manual = float(r.get("manual_usd") or 0)
+    snap["manual_usd"] = round(manual, 2)
+    if manual >= _DUST_USD:  # un-fetchable balance the user hand-filled (Gate TradFi 股票)
+        snap["by_account"]["tradfi股票·手填"] = round(manual, 2)
+        snap["total_usdt"] = round(snap["total_usdt"] + manual, 2)
+    return jsonify({"snapshot": snap})
+
+
+@app.post("/api/exchange/keys/<int:kid>/import")
+def import_exchange(kid):
+    """Add the snapshot's spot coins (+ futures) into the user's holdings table
+    (market=加密), deduped by ticker — never clobbers existing manual rows."""
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    r = _load_key_row(user, kid)
+    if not r:
+        return {"error": "not found"}, 404
+    try:
+        snap = fetch_exchange_snapshot(r["exchange"], r["api_key"], _dec_secret(r["api_secret_enc"]))
+    except Exception as e:  # noqa: BLE001
+        return {"error": "同步失败：" + str(e)[:200]}, 502
+    existing = _load(user)["holdings"]
+    have = {(h.get("ticker") or "").upper() for h in existing}
+    src = SUPPORTED_EXCHANGES.get(r["exchange"], r["exchange"])
+    added = 0
+    rows = list(existing)
+    today = datetime.date.today().isoformat()
+    for area, items in (("现货", snap.get("spot", [])), ("理财", snap.get("finance", []))):
+        for s in items:
+            if s["usd"] < _DUST_USD:
+                continue
+            tk = (s["coin"] or "").upper()
+            if not tk or tk in have:
+                continue
+            rows.append({"market": "加密", "ticker": tk, "name": f"{src} {area}",
+                         "buy_date": None, "cost": None, "position_pct": None,
+                         "note": f"{src}{area} {round(s['amount'], 6)} {tk} ≈ ${s['usd']}（{today} 同步）"})
+            have.add(tk); added += 1
+    if added:
+        _save(user, rows)
+    return {"ok": True, "added": added}
+
+
+# ---------- Hermes skills: official skill → distribute to profiles → invoke ----------
+
+HERMES_HOME = os.environ.get("HERMES_HOME", "/root/.hermes")
+app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024  # 12MB upload cap
+
+
+def _profile_name(user: str) -> str:
+    return "app-" + re.sub(r"[^a-z0-9_-]", "", (user or "").lower())[:48]
+
+
+def _extract_json(text: str):
+    """Pull the first balanced JSON value out of model output (tolerates fences/prose)."""
+    if not text:
+        return None
+    t = text.strip()
+    m = re.search(r"```(?:json)?\s*(.*?)```", t, re.S)
+    if m:
+        t = m.group(1).strip()
+    start = next((i for i, ch in enumerate(t) if ch in "{["), None)
+    if start is None:
+        return None
+    depth, instr, esc = 0, False, False
+    for i in range(start, len(t)):
+        c = t[i]
+        if esc:
+            esc = False; continue
+        if c == "\\":
+            esc = True; continue
+        if c == '"':
+            instr = not instr
+        if instr:
+            continue
+        if c in "{[":
+            depth += 1
+        elif c in "}]":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(t[start:i + 1])
+                except Exception:  # noqa: BLE001
+                    return None
+    return None
+
+
+def run_skill(user: str, skill: str, task: str, image_path: str = None, inject: str = None, timeout: int = 240):
+    """Invoke an official skill under the user's Hermes profile (`hermes -p app-<user> --skills <skill>`).
+    Structured facts are injected per-call (Postgres = source of truth). Returns parsed JSON or None."""
+    if REPORT_MODE == "mock":
+        return {"holdings": [{"symbol": "BTC", "name": "(mock)", "market": "加密", "quantity": 0.1, "value_usd": 4200, "dust": False}],
+                "warnings": ["本地 mock：未调用 hermes"]}
+    profile = _profile_name(user)
+    parts = [task]
+    if inject:
+        parts.append("【相关数据】\n" + inject)
+    if image_path:
+        parts.append("图片文件：" + image_path)
+    prompt = "\n\n".join(parts)
+    r = subprocess.run(
+        ["hermes", "-p", profile, "-z", prompt, "--skills", skill],
+        capture_output=True, text=True, timeout=timeout,
+        env={**os.environ, "HERMES_HOME": HERMES_HOME},
+    )
+    out = (r.stdout or "").strip()
+    if r.returncode != 0 and not out:
+        raise RuntimeError((r.stderr or "").strip()[-200:] or "skill 返回空")
+    return _extract_json(out)
+
+
+def provision_hermes():
+    """Deploy step (run as root): ensure each tenant has a Hermes profile (with auth) and the
+    official skills (from PG) distributed into it. Idempotent."""
+    try:
+        users = sorted(set(json.loads(CODES_FILE.read_text(encoding="utf-8")).values()))
+    except Exception:  # noqa: BLE001
+        users = []
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT name, skill_md FROM official_skills")
+        skills = cur.fetchall()
+    base = Path(HERMES_HOME)
+    report = []
+    for user in users:
+        prof = _profile_name(user)
+        pdir = base / "profiles" / prof
+        if not pdir.exists():
+            subprocess.run(["hermes", "profile", "create", prof, "--clone", "--no-alias",
+                            "--description", f"value-investment tenant {user}"],
+                           env={**os.environ, "HERMES_HOME": HERMES_HOME}, capture_output=True, text=True, timeout=120)
+        auth = base / "auth.json"  # --clone doesn't copy provider auth
+        if auth.exists() and not (pdir / "auth.json").exists():
+            (pdir / "auth.json").write_bytes(auth.read_bytes())
+        for s in skills:
+            sdir = pdir / "skills" / s["name"]
+            sdir.mkdir(parents=True, exist_ok=True)
+            (sdir / "SKILL.md").write_text(s["skill_md"], encoding="utf-8")
+        report.append({"user": user, "profile": prof, "exists": pdir.exists(), "skills": len(skills)})
+    return report
+
+
+@app.post("/api/holdings/parse-image")
+def parse_holdings_image():
+    """Photo → holdings preview, via the vi-parse-holdings official skill (Hermes vision)."""
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    f = request.files.get("image")
+    if not f or not f.filename:
+        return {"error": "没有收到图片"}, 400
+    fd, path = tempfile.mkstemp(prefix="vi-upload-", suffix=".img", dir="/tmp")
+    os.close(fd)
+    f.save(path)
+    try:
+        data = run_skill(user, "vi-parse-holdings",
+                         "用 vi-parse-holdings 技能，从这张持仓/资产截图里提取所有持仓。严格只输出该 SKILL 定义的 JSON，不要解释、不要代码块围栏。",
+                         image_path=path)
+    except subprocess.TimeoutExpired:
+        return {"error": "识别超时，请重试或换张更清晰的图"}, 502
+    except Exception as e:  # noqa: BLE001
+        return {"error": "识别失败：" + str(e)[:160]}, 502
+    finally:
+        try:
+            os.remove(path)
+        except Exception:  # noqa: BLE001
+            pass
+    if not data or not isinstance(data, dict):
+        return {"error": "没认出持仓——换一张更清晰、含币种和数量的截图试试"}, 502
+    return jsonify({"holdings": data.get("holdings") or [], "warnings": data.get("warnings") or []})
+
+
+# ---------- knowledge capture (buffer-first → Notion) ----------
+
+def list_concept_names(user: str) -> list:
+    """Existing concept names for this user (for hermes to link the canonical one, not a duplicate)."""
+    with _db() as c, c.cursor() as cur:
+        cur.execute("SELECT name FROM kb_concepts WHERE username=%s ORDER BY name", ((user or "").strip().lower(),))
+        return [r[0] for r in cur.fetchall()]
+
+def list_source_titles(user: str) -> list:
+    """Existing source titles for this user (for hermes to reuse a source instead of duplicating it)."""
+    with _db() as c, c.cursor() as cur:
+        cur.execute("SELECT title FROM kb_sources WHERE username=%s ORDER BY title", ((user or "").strip().lower(),))
+        return [r[0] for r in cur.fetchall()]
+
+def do_capture(user: str, cap: dict) -> dict:
+    """Persist a capture (buffer-first so it's never lost), then file into Notion."""
+    user = (user or "").strip().lower()  # hermes may pass a display name like "Lucas"; normalize
+    with _db() as c, c.cursor() as cur:
+        concept_names = [con["name"] for con in (cap.get("concepts") or []) if con.get("name")]
+        cur.execute("INSERT INTO captures (username, raw, title, note_type, situation, tags, concept_names, raw_cap) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                    (user, cap.get("clean_content") or cap.get("raw", ""), cap.get("title"),
+                     cap.get("note_type"), cap.get("situation"), json.dumps(cap.get("tags") or []),
+                     json.dumps(concept_names), json.dumps(cap)))
+        cap_id = cur.fetchone()[0]
+    token = get_notion_token(user)
+    if not token:
+        return {"ok": False, "error": "未连接 Notion", "capture_id": cap_id}
+    try:
+        with _db() as c:
+            res = _capture.record_capture(_nkb.PgKbIndex(c), _nkb.RealNotionClient(token), user, cap,
+                                          _NOTION_DBS, kb_slug_lookup(c), _now())
+            with c.cursor() as cur:
+                cur.execute("UPDATE captures SET status='written', notion_page_id=%s, written_at=now() WHERE id=%s",
+                            (res["notion_page_id"], cap_id))
+        try:
+            retry_pending_captures(user)  # Notion is reachable now → drain any buffered backlog
+        except Exception:  # noqa: BLE001 — backlog drain is best-effort, never fail the live capture
+            pass
+        return {"ok": True, "capture_id": cap_id, **res}
+    except Exception as e:  # noqa: BLE001 — Notion down/limited: leave status=pending, retry later
+        with _db() as c, c.cursor() as cur:
+            cur.execute("UPDATE captures SET status='pending', error=%s WHERE id=%s", (str(e)[:300], cap_id))
+        return {"ok": False, "error": "Notion 写入失败，已缓冲稍后重试", "capture_id": cap_id}
+
+def retry_pending_captures(user: str) -> int:
+    """Re-file captures stuck in pending (Notion was down). Returns count re-filed."""
+    token = get_notion_token(user)
+    if not token:
+        return 0
+    n = 0
+    with _db() as c, c.cursor() as cur:
+        cur.execute("SELECT id, raw_cap FROM captures WHERE username=%s AND status='pending' ORDER BY id", (user,))
+        rows = cur.fetchall()
+    for rid, raw_cap in rows:
+        cap = raw_cap or {}  # the full original payload → concepts + source survive the retry
+        try:
+            with _db() as c:
+                res = _capture.record_capture(_nkb.PgKbIndex(c), _nkb.RealNotionClient(token), user, cap,
+                                              _NOTION_DBS, kb_slug_lookup(c), _now())
+                with c.cursor() as cur:
+                    cur.execute("UPDATE captures SET status='written', notion_page_id=%s, written_at=now() WHERE id=%s",
+                                (res["notion_page_id"], rid))
+            n += 1
+        except Exception:  # noqa: BLE001 — still down, leave pending
+            break
+    return n
 
 
 if __name__ == "__main__":

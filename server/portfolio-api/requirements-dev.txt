@@ -1,0 +1,4 @@
+# Test-only dependencies (NOT needed in production).
+#   python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt -r requirements-dev.txt
+pytest>=8.0
+tdd-guard-pytest>=0.1

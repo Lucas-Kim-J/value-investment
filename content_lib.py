@@ -15,6 +15,34 @@ ROOT = Path(__file__).parent
 GLOSSARY_MD = ROOT / "routine" / "glossary.md"
 CANON_JSON = ROOT / "content" / "canon.json"
 ACHIEVEMENTS_JSON = ROOT / "content" / "achievements.json"
+SKILLS_DIR = ROOT / "skills"
+
+
+def load_skills() -> list[dict]:
+    """Read skills/*/SKILL.md → official skills registry rows {name, version, description, skill_md}."""
+    out = []
+    if not SKILLS_DIR.exists():
+        return out
+    for d in sorted(p for p in SKILLS_DIR.iterdir() if p.is_dir()):
+        f = d / "SKILL.md"
+        if not f.is_file():
+            continue
+        md = f.read_text(encoding="utf-8")
+        name, version, desc = d.name, "", ""
+        m = re.match(r"^---\s*\n(.*?)\n---\s*\n", md, re.S)
+        if m:
+            fm = m.group(1)
+            nm = re.search(r"^name:\s*(.+)$", fm, re.M)
+            vm = re.search(r"^version:\s*(.+)$", fm, re.M)
+            dm = re.search(r'^description:\s*"?(.+?)"?\s*$', fm, re.M)
+            if nm:
+                name = nm.group(1).strip()
+            if vm:
+                version = vm.group(1).strip()
+            if dm:
+                desc = dm.group(1).strip()
+        out.append({"name": name, "version": version, "description": desc, "skill_md": md})
+    return out
 
 # keep a-z, 0-9 and CJK so Chinese-only terms get meaningful, stable slugs
 _SLUG_RE = re.compile(r"[^a-z0-9一-鿿]+")

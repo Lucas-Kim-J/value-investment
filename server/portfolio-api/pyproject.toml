@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+# TDD Guard reporter writes to <root>/.claude/tdd-guard/data/test.json — the repo root.
+tdd_guard_project_root = "/Users/Zhuanz/Documents/code/value-investment"

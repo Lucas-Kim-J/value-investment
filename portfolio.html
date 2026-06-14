@@ -42,6 +42,8 @@ td input:focus, td select:focus { outline:none; border-color:var(--accent); back
 td.num input { text-align:right; font-variant-numeric:tabular-nums; }
 .del { background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; padding:4px 8px; border-radius:6px; }
 .del:hover { color:var(--warn); background:var(--warn-soft); }
+.anz { background:none; border:none; color:var(--muted); cursor:pointer; font-size:15px; padding:4px 6px; border-radius:6px; }
+.anz:hover { color:var(--accent); background:var(--accent-soft); }
 .actions { display:flex; gap:12px; align-items:center; margin-top:18px; flex-wrap:wrap; }
 .btn { padding:10px 18px; border-radius:8px; border:none; font-size:14px; font-weight:600; cursor:pointer; }
 .btn-primary { background:var(--accent); color:#fff; }
@@ -69,6 +71,30 @@ td.num input { text-align:right; font-variant-numeric:tabular-nums; }
 .report-body strong { color:var(--fg); }
 .report-body code { background:var(--code-bg); padding:1px 6px; border-radius:4px; font-size:0.86em; }
 .report-body hr { border:none; border-top:1px solid var(--border); margin:20px 0; }
+/* 交易所导入 */
+.exchange-section { margin-top:40px; padding-top:24px; border-top:1px solid var(--border); }
+.exchange-section h2 { font-size:20px; margin:0 0 6px; }
+.ex-intro { color:var(--fg-soft); font-size:13.5px; margin:0 0 14px; line-height:1.6; }
+.ex-hint { color:var(--muted); font-size:12.5px; margin:10px 0 0; }
+#exAddBox { margin-top:6px; }
+#exAddBox summary { cursor:pointer; color:var(--accent); font-size:14px; font-weight:600; padding:6px 0; }
+.ex-form { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+.ex-form input, .vi-sel { padding:8px 11px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--fg); font-size:14px; font-family:inherit; }
+.ex-form input { min-width:230px; flex:1; }
+.vi-sel:focus, .ex-form input:focus { outline:none; border-color:var(--accent); }
+.ex-card { display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:var(--bg-soft); border:1px solid var(--border); border-radius:10px; padding:11px 16px; margin-bottom:10px; }
+.ex-card .ex-name { font-weight:600; }
+.ex-card .ex-key { color:var(--muted); font-size:12.5px; font-family:"SF Mono",Menlo,monospace; }
+.ex-card .sp { margin-left:auto; }
+.btn-sm { padding:5px 11px; font-size:12.5px; }
+.ex-total { font-size:15px; margin:18px 0 10px; }
+.ex-total b { color:var(--accent); font-size:24px; font-variant-numeric:tabular-nums; }
+.ex-chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+.ex-chip { background:var(--bg-soft); border:1px solid var(--border); border-radius:20px; padding:3px 12px; font-size:12.5px; color:var(--fg-soft); }
+.ex-section-h { font-size:12px; color:var(--muted); margin:10px 0 6px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+.ex-snap-table { width:100%; border-collapse:collapse; font-size:13.5px; margin-bottom:8px; }
+.ex-snap-table th { text-align:left; padding:7px 10px; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border-bottom:1px solid var(--border); }
+.ex-snap-table td { padding:7px 10px; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums; }
 </style>
 </head>
 <body>
@@ -96,7 +122,7 @@ td.num input { text-align:right; font-variant-numeric:tabular-nums; }
           <th style="width:110px">成本价</th>
           <th style="width:90px">仓位%</th>
           <th>备注 / thesis 一句话</th>
-          <th style="width:40px"></th>
+          <th style="width:74px"></th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
@@ -108,6 +134,41 @@ td.num input { text-align:right; font-variant-numeric:tabular-nums; }
     <button class="btn btn-ghost" id="add">+ 添加一行</button>
     <button class="btn btn-primary" id="save">保存</button>
     <span class="status" id="status"></span>
+  </div>
+
+  <div class="exchange-section">
+    <h2>📷 拍照 / 截图识别持仓</h2>
+    <p class="ex-intro">上传任意账户的持仓截图（交易所 / 券商 / 钱包都行）—— hermes 自动读图识别成持仓，绕开所有 API 限制（比如 Gate 那个 API 拉不到的 TradFi 股票，截个图就进来了）。</p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input type="file" id="photoFile" accept="image/*" style="display:none">
+      <button class="btn btn-primary" id="photoBtn">📷 选图 / 拍照</button>
+      <span style="color:var(--muted);font-size:13px">或在本页直接 <kbd style="font-family:monospace;border:1px solid var(--border);border-radius:3px;padding:0 5px">⌘V</kbd> / <kbd style="font-family:monospace;border:1px solid var(--border);border-radius:3px;padding:0 5px">Ctrl+V</kbd> 粘贴截图</span>
+      <span class="status" id="photoSt"></span>
+    </div>
+    <div id="photoResult" style="margin-top:14px"></div>
+  </div>
+
+  <div class="exchange-section">
+    <h2>🔗 交易所导入（加密）</h2>
+    <p class="ex-intro">连接交易所<strong>只读</strong> API，一键拉取你的加密持仓。secret 加密存服务器、绝不外泄，只做读操作。</p>
+    <div id="exList"></div>
+    <details id="exAddBox">
+      <summary>+ 连接一个交易所</summary>
+      <div class="ex-form">
+        <select class="vi-sel" id="exSel">
+          <option value="gate">Gate.io</option>
+          <option value="okx" disabled>OKX（即将支持）</option>
+          <option value="binance" disabled>Binance（即将支持）</option>
+          <option value="bybit" disabled>Bybit（即将支持）</option>
+        </select>
+        <input id="exKey" placeholder="API Key" autocomplete="off" spellcheck="false">
+        <input id="exSecret" type="password" placeholder="API Secret" autocomplete="off" spellcheck="false">
+        <button class="btn btn-primary" id="exAdd">连接并验证</button>
+        <span class="status" id="exStatus"></span>
+      </div>
+      <p class="ex-hint">⚠️ 创建 key 时只勾选「只读 / 读取」（现货 / 合约 / 钱包 / 理财），<strong>不要开提现</strong>。</p>
+    </details>
+    <div id="exSnapshot"></div>
   </div>
 
   <div class="report-section">
@@ -142,13 +203,19 @@ function rowHtml(h){
     <td class="num"><input class="f-cost" type="number" step="any" placeholder="0.00" value="${v(h.cost)}"></td>
     <td class="num"><input class="f-position_pct" type="number" step="any" placeholder="0" value="${v(h.position_pct)}"></td>
     <td><input class="f-note" placeholder="为什么买 / thesis" value="${v(h.note)}"></td>
-    <td><button class="del" title="删除">✕</button></td>
+    <td style="white-space:nowrap"><button class="anz" title="分析这家公司">📊</button><button class="del" title="删除">✕</button></td>
   </tr>`;
 }
 
 function addRow(h){
   const tb=$('rows'); tb.insertAdjacentHTML('beforeend', rowHtml(h));
   tb.lastElementChild.querySelector('.del').addEventListener('click', e=>{ e.target.closest('tr').remove(); toggleEmpty(); });
+  tb.lastElementChild.querySelector('.anz').addEventListener('click', e=>{
+    const tr=e.target.closest('tr'); const t=tr.querySelector('.f-ticker').value.trim();
+    if(!t){ setStatus('先填代码再分析','err'); return; }
+    const n=tr.querySelector('.f-name').value.trim(), mk=tr.querySelector('.f-market').value;
+    location.href='analyze.html?ticker='+encodeURIComponent(t)+'&name='+encodeURIComponent(n)+'&market='+encodeURIComponent(mk);
+  });
   toggleEmpty();
 }
 function toggleEmpty(){ $('empty').style.display = $('rows').children.length ? 'none' : 'block'; }
@@ -282,15 +349,147 @@ async function loadReport(){
   }catch{}
 }
 
+// ---- 交易所导入（加密）----
+async function exApi(path, opts){
+  opts=opts||{}; const o={credentials:'same-origin',headers:{}};
+  if(opts.body!==undefined){ o.method=opts.method||'POST'; o.headers['Content-Type']='application/json'; o.body=JSON.stringify(opts.body); }
+  else if(opts.method) o.method=opts.method;
+  const r=await fetch(path,o); let d=null; try{ d=await r.json(); }catch(e){}
+  return {ok:r.ok,status:r.status,data:d};
+}
+function exSt(t,c){ const s=$('exStatus'); if(s){ s.textContent=t; s.className='status '+(c||''); } }
+
+async function loadExchanges(){
+  const r=await exApi('/api/exchange/keys'); const items=(r.data&&r.data.items)||[];
+  if(!items.length){ $('exList').innerHTML=''; return; }
+  $('exList').innerHTML = items.map(it=>`
+    <div class="ex-card" data-id="${it.id}">
+      <span class="ex-name">${esc(it.label||it.exchange)}</span>
+      <span class="ex-key">${esc(it.key_masked||'')}</span>
+      <span class="sp"></span>
+      <button class="btn btn-primary btn-sm ex-sync">🔄 同步</button>
+      <button class="btn btn-ghost btn-sm ex-del">🗑</button>
+    </div>`).join('');
+  $('exList').querySelectorAll('.ex-card').forEach(card=>{
+    const id=card.dataset.id;
+    card.querySelector('.ex-sync').addEventListener('click', ()=>syncExchange(id));
+    card.querySelector('.ex-del').addEventListener('click', ()=>delExchange(id));
+  });
+}
+
+async function addExchange(){
+  const exchange=$('exSel').value, api_key=$('exKey').value.trim(), api_secret=$('exSecret').value.trim();
+  if(!api_key||!api_secret){ exSt('请填 API Key 和 Secret','err'); return; }
+  $('exAdd').disabled=true; exSt('验证中…（会做一次只读拉取）');
+  const r=await exApi('/api/exchange/keys',{body:{exchange,api_key,api_secret}});
+  $('exAdd').disabled=false;
+  if(r.ok){ exSt('已连接 ✓','ok'); $('exKey').value=''; $('exSecret').value=''; await loadExchanges(); }
+  else exSt((r.data&&r.data.error)||'连接失败','err');
+}
+
+async function syncExchange(id){
+  $('exSnapshot').innerHTML='<p class="status">同步中…</p>';
+  const r=await exApi('/api/exchange/keys/'+id+'/sync',{body:{}});
+  if(!r.ok){ $('exSnapshot').innerHTML='<p class="status err">'+esc((r.data&&r.data.error)||'同步失败')+'</p>'; return; }
+  renderSnapshot(id, r.data.snapshot||{});
+}
+
+function renderSnapshot(id, s){
+  const chips=Object.entries(s.by_account||{}).map(([k,v])=>`<span class="ex-chip">${esc(k)} $${v}</span>`).join('');
+  const spot=(s.spot||[]).filter(x=>x.usd>=0.01).map(x=>`<tr><td>${esc(x.coin)}</td><td style="text-align:right">${(+x.amount).toLocaleString(undefined,{maximumFractionDigits:6})}</td><td style="text-align:right">$${x.usd}</td></tr>`).join('');
+  const fin=(s.finance||[]).map(x=>`<tr><td>${esc(x.coin)}</td><td style="color:var(--muted)">${esc(x.product||'')}</td><td style="text-align:right">${(+x.amount).toLocaleString(undefined,{maximumFractionDigits:6})}</td><td style="text-align:right">$${x.usd}</td></tr>`).join('');
+  const fut=(s.futures||[]).map(x=>`<tr><td>${esc(x.contract)}</td><td style="text-align:right">${x.size}</td><td style="text-align:right">$${x.value}</td><td style="text-align:right;color:${x.upnl>=0?'var(--good)':'var(--warn)'}">${x.upnl>=0?'+':''}${x.upnl}</td></tr>`).join('');
+  $('exSnapshot').innerHTML =
+    `<div class="ex-total">总资产 ≈ <b>$${s.total_usdt}</b></div>`+
+    (chips?`<div class="ex-chips">${chips}</div>`:'')+
+    (spot?`<div class="ex-section-h">现货</div><table class="ex-snap-table"><thead><tr><th>币种</th><th style="text-align:right">数量</th><th style="text-align:right">≈USD</th></tr></thead><tbody>${spot}</tbody></table>`:'')+
+    (fin?`<div class="ex-section-h">理财</div><table class="ex-snap-table"><thead><tr><th>币种</th><th>产品</th><th style="text-align:right">数量</th><th style="text-align:right">≈USD</th></tr></thead><tbody>${fin}</tbody></table>`:'')+
+    (fut?`<div class="ex-section-h">合约持仓</div><table class="ex-snap-table"><thead><tr><th>合约</th><th style="text-align:right">数量</th><th style="text-align:right">价值</th><th style="text-align:right">未实现盈亏</th></tr></thead><tbody>${fut}</tbody></table>`:'')+
+    `<div class="ex-section-h" title="Gate 公开 API 不提供 TradFi 股票账户，只能手填">TradFi 股票（API 拉不到 · 手填净值）</div>
+     <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+       <input id="exManual" class="vi-sel" type="number" step="any" min="0" placeholder="0" value="${s.manual_usd||''}" style="width:120px">
+       <span style="color:var(--muted);font-size:13px">USDT</span>
+       <button class="btn btn-ghost btn-sm" id="exManualSave">保存并计入总额</button>
+       <span class="status" id="exManualSt"></span>
+     </div>`+
+    `<button class="btn btn-primary" id="exImport">⬇ 导入到持仓表</button> <span class="status" id="exImpSt"></span>`;
+  $('exImport').addEventListener('click', ()=>importExchange(id));
+  $('exManualSave').addEventListener('click', async ()=>{
+    const v = parseFloat($('exManual').value)||0;
+    $('exManualSt').textContent='保存中…'; $('exManualSt').className='status';
+    const res = await exApi('/api/exchange/keys/'+id+'/manual', {body:{usd:v}});
+    if(res.ok){
+      const base = (s.total_usdt||0) - (s.manual_usd||0);
+      s.manual_usd = v; s.total_usdt = Math.round((base+v)*100)/100;
+      document.querySelector('#exSnapshot .ex-total b').textContent = '$'+s.total_usdt;
+      $('exManualSt').textContent='已保存，已计入总额 ✓'; $('exManualSt').className='status ok';
+    } else { $('exManualSt').textContent=(res.data&&res.data.error)||'失败'; $('exManualSt').className='status err'; }
+  });
+}
+
+async function importExchange(id){
+  const b=$('exImport'); b.disabled=true; $('exImpSt').textContent='导入中…'; $('exImpSt').className='status';
+  const r=await exApi('/api/exchange/keys/'+id+'/import',{body:{}});
+  if(r.ok){ $('exImpSt').textContent='已导入 '+(r.data.added||0)+' 个新币种 ✓（在上面的持仓表里）'; $('exImpSt').className='status ok'; $('rows').innerHTML=''; await init(); }
+  else { b.disabled=false; $('exImpSt').textContent=(r.data&&r.data.error)||'失败'; $('exImpSt').className='status err'; }
+}
+
+async function delExchange(id){
+  if(!confirm('删除这个交易所连接？(不影响已导入的持仓)')) return;
+  await exApi('/api/exchange/keys/'+id, {method:'DELETE'});
+  $('exSnapshot').innerHTML=''; loadExchanges();
+}
+
+// ---- 拍照 / 截图识别持仓（vi-parse-holdings skill）----
+async function parsePhoto(file){
+  $('photoSt').textContent='识别中…（hermes 读图，约 30-60 秒）'; $('photoSt').className='status'; $('photoResult').innerHTML='';
+  const fd = new FormData(); fd.append('image', file);
+  try{
+    const r = await fetch('/api/holdings/parse-image', {method:'POST', credentials:'same-origin', body:fd});
+    const d = await r.json().catch(()=>({}));
+    if(r.status===401){ location.replace('login.html'); return; }
+    if(!r.ok){ $('photoSt').textContent=(d.error)||('识别失败 '+r.status); $('photoSt').className='status err'; return; }
+    renderPhotoResult(d.holdings||[], d.warnings||[]);
+    $('photoSt').textContent='识别完成 ✓ 核对后加入'; $('photoSt').className='status ok';
+  }catch(err){ $('photoSt').textContent='网络错误：'+err.message; $('photoSt').className='status err'; }
+}
+function renderPhotoResult(holdings, warnings){
+  if(!holdings.length){ $('photoResult').innerHTML='<p class="status">没认出持仓，换张更清晰、含币种和数量的截图试试。</p>'; return; }
+  const rows = holdings.map(h=>`<tr><td>${esc(h.symbol||'')}</td><td>${esc(h.market||'')}</td><td style="text-align:right">${h.quantity!=null?h.quantity:''}</td><td style="text-align:right">${h.value_usd!=null?'$'+h.value_usd:''}</td></tr>`).join('');
+  $('photoResult').innerHTML =
+    (warnings.length?`<p class="status">⚠️ ${esc(warnings.join('；'))}</p>`:'')+
+    `<table class="ex-snap-table"><thead><tr><th>代码</th><th>市场</th><th style="text-align:right">数量</th><th style="text-align:right">≈USD</th></tr></thead><tbody>${rows}</tbody></table>
+     <button class="btn btn-primary" id="photoImport">⬇ 加入持仓表（可再编辑）</button> <span class="status" id="photoImpSt"></span>`;
+  $('photoImport').addEventListener('click', ()=>{
+    holdings.forEach(h=> addRow({market:h.market||'加密', ticker:(h.symbol||'').toUpperCase(), name:h.name||'',
+      note:((h.quantity!=null?h.quantity+' ':'')+(h.value_usd!=null?'≈$'+h.value_usd:'')).trim()+'（拍照识别）'}));
+    $('photoResult').innerHTML=''; $('photoSt').textContent='已加入 '+holdings.length+' 行——核对后点上面「保存」'; $('photoSt').className='status ok';
+  });
+}
+
+$('photoBtn').addEventListener('click', ()=> $('photoFile').click());
+$('photoFile').addEventListener('change', e=>{ const f=e.target.files[0]; if(f) parsePhoto(f); e.target.value=''; });
+// 直接粘贴剪贴板里的截图（⌘V / Ctrl+V）
+document.addEventListener('paste', e=>{
+  const items = (e.clipboardData && e.clipboardData.items) || [];
+  for(const it of items){
+    if(it.type && it.type.indexOf('image')===0){
+      const f = it.getAsFile();
+      if(f){ e.preventDefault(); $('photoSt').scrollIntoView({behavior:'smooth',block:'center'}); parsePhoto(f); }
+      return;
+    }
+  }
+});
 $('add').addEventListener('click', ()=>addRow());
 $('save').addEventListener('click', save);
 $('gen').addEventListener('click', gen);
 $('push').addEventListener('click', pushReport);
+$('exAdd').addEventListener('click', addExchange);
 $('logout').addEventListener('click', async ()=>{
   try{ await fetch('/api/logout',{method:'POST',credentials:'same-origin'}); }catch{}
   location.replace('login.html');
 });
-init().then(loadReport);
+init().then(()=>{ loadReport(); loadExchanges(); });
 </script>
 </body>
 </html>

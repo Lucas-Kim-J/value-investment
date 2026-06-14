@@ -10,7 +10,7 @@
 <body class="app">
 <div class="app-wrap">
   <div id="vi-nav"></div>
-  <div class="app-head">
+  <div class="app-head" data-reveal>
     <div class="eyebrow">Primary Sources</div>
     <h1>一手内容库</h1>
     <p>letter / AGM / 13F / 季报 / 演讲 —— 大师们的原始思维，是你认知的底层框架，优先学它胜过二手解读。</p>
@@ -22,6 +22,7 @@
   </div>
 
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px" id="filters"></div>
+  <div id="startHint"></div>
   <div id="list"></div>
 </div>
 
@@ -30,9 +31,10 @@
 <script src="assets/app.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-let ITEMS = [], USER = null, curKind = 'all', curTier = 'all';
+let ITEMS = [], USER = null, curKind = 'all', curTier = 'all', HOLDINGS = [];
 const KINDS = {letter:'Letter 信',agm:'AGM 股东会','13f':'13F 持仓',quarterly:'季报/10-K',talk:'演讲/访谈',book:'书',memo:'备忘录',tool:'工具源'};
 const TIERS = {tier0:'起点必读',tier1:'核心',tier2:'拓展'};
+const ZLIB = 'https://z-lib.io/s/';  // 书类条目的可读链接（域名变动时改这一处即可）
 
 function tierLabel(t){ return TIERS[t]||t||''; }
 
@@ -50,7 +52,16 @@ function renderList(){
   let xs = ITEMS.filter(i => (curKind==='all'||i.kind===curKind) && (curTier==='all'||i.tier===curTier));
   const readN = ITEMS.filter(i=>i.read).length;
   $('overview').textContent = `共 ${ITEMS.length} 篇 · 你已开始 ${readN} 篇`;
-  $('list').innerHTML = '<div class="vi-grid">' + xs.map(i => `
+  const sh = $('startHint');
+  if (sh) {
+    const fp = ITEMS.filter(i=>i.tier==='tier0').sort((a,b)=>(a.est_minutes||0)-(b.est_minutes||0))[0];
+    if (readN===0 && fp) {
+      sh.className = 'start-hint';
+      sh.innerHTML = `📍 不知道从哪开始？先挑一篇短的「起点必读」：<a href="#" id="fpLink">${fp.title}（约 ${Math.round((fp.est_minutes||0)/60)}h）</a>，读完写一句你自己的话就能留痕。也可以点右下角 💬 →「📄 看这一页」让 hermes 按你的水平给你排个顺序。`;
+      const fl = $('fpLink'); if (fl) fl.addEventListener('click', e=>{ e.preventDefault(); openItem(fp.slug); });
+    } else { sh.className=''; sh.innerHTML=''; }
+  }
+  $('list').innerHTML = '<div class="vi-grid vi-rise">' + xs.map(i => `
     <div class="vi-card" style="cursor:pointer" onclick="openItem('${i.slug}')">
       <div style="margin-bottom:8px"><span class="kind-tag">${KINDS[i.kind]||i.kind}</span><span class="cov cov-guide">导读</span> ${i.read?'<span class="read-dot" title="已开始">●</span>':''}</div>
       <h3>${i.title}</h3>
@@ -72,6 +83,7 @@ async function openItem(slug){
       <p><strong>导读：</strong>${it.guide||''}</p>
       ${qs?`<p><strong>读完应能回答：</strong></p><ul style="color:var(--fg-soft);padding-left:20px">${qs}</ul>`:''}
       ${it.official_url?`<p><a href="${it.official_url}" target="_blank" rel="noopener">📎 官方原文 / 权威链接 →</a></p>`:'<p style="color:var(--muted);font-size:13px">官方链接待核实——请自行搜索权威来源。</p>'}
+      ${it.kind==='book'?`<p><a href="${ZLIB}${encodeURIComponent((it.title||'').split('（')[0].split('(')[0].trim())}" target="_blank" rel="noopener">📚 在 Z-Library 找这本书读 →</a></p>`:''}
       ${(it.related_terms||[]).length?`<p style="font-size:13px;color:var(--muted)">相关术语：${it.related_terms.map(s=>`<a href="#" onclick="VI.showTerm('${s}');return false">${s}</a>`).join('　')}</p>`:''}
       <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
       <p style="font-size:13px;color:var(--muted)">读完写一句你的收获（不是摘抄，是你自己的话）→ 留痕 + 可能解锁成就：</p>
@@ -79,6 +91,10 @@ async function openItem(slug){
       <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
         <button class="btn btn-primary btn-sm" id="mark">${USER?'记下 + 标为已读':'登录后可留痕'}</button>
         <span class="status" id="markst"></span></div>
+      <div id="readNext"></div>
+      ${(USER && HOLDINGS.length)?`<div class="handoff" style="background:var(--accent-soft);border-left-color:var(--accent);margin-top:10px">📌 把这条收获挂到某个持仓的 thesis：
+        <select id="thesisSel" class="vi-in" style="padding:5px 8px;margin:0 4px">${HOLDINGS.map(h=>`<option value="${VI.esc(h.ticker)}">${VI.esc(h.ticker)}${h.name?' '+VI.esc(h.name):''}</option>`).join('')}</select>
+        <button class="btn btn-ghost btn-sm" id="thesisBtn">挂上</button> <span class="status" id="thesisSt"></span></div>`:''}
     </div></div>`;
   m.classList.add('open');
   m.onclick = e => { if(e.target===m) m.classList.remove('open'); };
@@ -88,16 +104,43 @@ async function openItem(slug){
     const res = await VI.api('/api/canon/'+slug+'/read', {body:{note, minutes: 30}});
     const st = $('markst');
     if(res.ok){ st.textContent = note?'已记下 ✓':'已标为已读 ✓'; st.className='status ok'; VI.celebrate(res.data.new_achievements);
-      const item = ITEMS.find(x=>x.slug===slug); if(item) item.read=true; renderList(); }
+      const item = ITEMS.find(x=>x.slug===slug); if(item) item.read=true; renderList();
+      const rn = $('readNext');
+      if(rn && (it.related_terms||[]).length){
+        rn.className='handoff';
+        rn.innerHTML = `👉 下一步：这篇关联 ${it.related_terms.length} 个术语，去把它们打底 → ` +
+          it.related_terms.map(s=>`<a href="#" onclick="VI.showTerm('${s}');return false">${s}</a>`).join('　');
+      }
+    }
     else { st.textContent = (res.data&&res.data.error)||'失败'; st.className='status err'; }
+  });
+  const tb = $('thesisBtn');
+  if(tb) tb.addEventListener('click', async ()=>{
+    const note = $('note').value.trim(); const tst = $('thesisSt');
+    if(!note){ tst.textContent='先在上面写一句收获'; tst.className='status err'; return; }
+    const tk = $('thesisSel').value; tb.disabled=true; tst.textContent='挂上中…'; tst.className='status';
+    try{
+      const cur = (((await VI.api('/api/holdings')).data||{}).holdings)||[];
+      const h = cur.find(x=>x.ticker===tk);
+      if(h) h.note = (h.note?h.note+' / ':'') + `[${it.title}] ${note}`;
+      const rr = await VI.api('/api/holdings', {method:'PUT', body:{holdings:cur}});
+      if(rr.ok){ tst.textContent='已挂到 '+tk+' 的 thesis ✓'; tst.className='status ok'; }
+      else { tb.disabled=false; tst.textContent=(rr.data&&rr.data.error)||'失败'; tst.className='status err'; }
+    }catch(e){ tb.disabled=false; tst.textContent='网络错误'; tst.className='status err'; }
   });
 }
 window.openItem = openItem;
 
 async function load(){
   USER = await VI.me(); VI.nav('canon', USER); await VI.loadAchTitles();
+  try{ if(USER) HOLDINGS = (((await VI.api('/api/holdings')).data||{}).holdings)||[]; }catch(e){}
   const r = await VI.api('/api/canon'); ITEMS = (r.data&&r.data.items)||[];
   renderFilters(); renderList();
+  window.VI = window.VI || {};
+  window.VI.pageContext = () => {
+    const lines = ITEMS.map(i => `- [${tierLabel(i.tier)}] ${i.title}（${KINDS[i.kind]||i.kind}，约${Math.round((i.est_minutes||0)/60)}h）${i.read?'[已开始]':''}：${(i.why||'').replace(/\s+/g,' ').slice(0,55)}`);
+    return `页面：一手内容库（大师一手内容清单，按层级，越前越基础）。用户已开始 ${ITEMS.filter(x=>x.read).length}/${ITEMS.length} 篇。\n清单：\n${lines.join('\n')}`;
+  };
 }
 load();
 </script>

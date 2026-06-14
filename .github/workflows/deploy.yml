@@ -1,6 +1,9 @@
-# GitHub Actions — 自动构建并部署 value-investment 静态站点
+# GitHub Actions — 自动构建并部署 value-investment React SPA（web/）
 #
 # 触发条件：push 到 main 分支，或在 Actions 页面手动触发 (workflow_dispatch)。
+#
+# 部署的是 web/ 下的 React/Vite 应用（npm run build → web/dist → rsync 到服务器）。
+# 后端 API（server/portfolio-api）单独部署，不在此流程内。
 #
 # 需要在仓库 Settings → Secrets and variables → Actions 中设置以下 4 个 Secret：
 #   DEPLOY_SSH_KEY   部署用的 SSH 私钥（对应公钥需加入服务器的 authorized_keys）
@@ -9,6 +12,8 @@
 #   DEPLOY_USER      SSH 登录用户名
 #
 # 注意：本文件是公开仓库的一部分，绝不在此硬编码任何服务器信息，全部走 Secrets。
+# 前提：服务器已安装 SPA nginx vhost（server/nginx-value-investment-spa.conf），
+#       使客户端路由回退到 /index.html。
 
 name: Deploy
 
@@ -31,18 +36,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
 
-      - name: Install build dependencies
-        run: pip install -r requirements-build.txt
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
 
-      - name: Build static site
-        run: python build.py
+      - name: Build React SPA
+        working-directory: web
+        run: npm run build   # = sync-content + tsc + vite build → web/dist
 
-      - name: Deploy to server via rsync
+      - name: Deploy web/dist to server via rsync
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_deploy
@@ -50,4 +59,4 @@ jobs:
           ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
           rsync -avz --delete \
             -e "ssh -i ~/.ssh/id_deploy -p $DEPLOY_PORT -o StrictHostKeyChecking=accept-new" \
-            dist/ "$DEPLOY_USER@$DEPLOY_HOST:/var/www/value-investment/"
+            web/dist/ "$DEPLOY_USER@$DEPLOY_HOST:/var/www/value-investment/"

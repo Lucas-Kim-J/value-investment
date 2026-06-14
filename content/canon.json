@@ -251,7 +251,7 @@
       "他承认的错误属于「分析错」还是「行为错」，我犯过同类错吗？",
       "如果抛开他说的标的，这套思路能套到我能力圈里的什么生意上？"
     ],
-    "related_terms": ["dhandho", "circle-of-competence", "13f-clone"]
+    "related_terms": ["dhandho", "circle-of-competence", "13f-filing"]
   },
   {
     "slug": "guy-spier-education-value-investor",
@@ -346,7 +346,7 @@
       "这个估值的最大不确定性来自商业判断还是来自数学？",
       "我能否向一个怀疑者逐条为我的关键假设辩护？"
     ],
-    "related_terms": ["intrinsic-value", "reverse-dcf", "ev-ebit"]
+    "related_terms": ["intrinsic-value", "reverse-dcf", "ev-ebit-同行对比"]
   },
   {
     "slug": "fisher-common-stocks-uncommon-profits",
@@ -384,7 +384,7 @@
       "这份数据已经滞后约 45 天，期间发生了什么可能让它失效？",
       "这是该机构的核心重仓还是边角试验仓，仓位变化说明了什么？"
     ],
-    "related_terms": ["13f-clone", "intrinsic-value"]
+    "related_terms": ["13f-filing", "intrinsic-value"]
   },
   {
     "slug": "tool-10k-10q-filings",
@@ -403,7 +403,7 @@
       "今年风险因素里新增/删改了哪条，背后发生了什么？",
       "财报口径的利润和我估算的 owner earnings 差在哪、为什么？"
     ],
-    "related_terms": ["owner-earnings", "ev-ebit"]
+    "related_terms": ["owner-earnings", "ev-ebit-同行对比"]
   },
   {
     "slug": "tool-cninfo-a-share-filings",
@@ -441,7 +441,7 @@
       "演讲者的利益与动机会如何影响他呈现的内容？",
       "如果由我从零验证这个逻辑，我会先去查证哪一点？"
     ],
-    "related_terms": ["13f-clone", "second-level-thinking"]
+    "related_terms": ["13f-filing", "second-level-thinking"]
   },
   {
     "slug": "tool-fund-quarterly-letters",
