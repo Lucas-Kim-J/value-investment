@@ -5,7 +5,8 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py .
+# app.py imports sibling modules (capture, notion_kb, market_data) — copy them all.
+COPY *.py .
 
 EXPOSE 8787
 CMD ["gunicorn", "-w", "2", "--timeout", "300", "-b", "0.0.0.0:8787", "app:app"]

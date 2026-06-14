@@ -40,6 +40,7 @@ import psycopg2.extras
 from cryptography.fernet import Fernet
 from flask import Flask, jsonify, request, session
 import capture as _capture
+import market_data as _md
 import notion_kb as _nkb
 
 CODES_FILE = Path(os.environ.get("VI_CODES_FILE", "/etc/value-investment/access-codes.json"))
@@ -328,6 +329,17 @@ def _init_db() -> None:
                 username   TEXT PRIMARY KEY,
                 token_enc  TEXT NOT NULL,
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )""")
+        # market-data cache: real fundamentals/news for the 公司分析 dashboard.
+        # Shared across users (data is public), keyed by (ticker, market, kind).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS company_data_cache (
+                ticker     TEXT NOT NULL,
+                market     TEXT NOT NULL DEFAULT '',
+                kind       TEXT NOT NULL,           -- 'snapshot' | 'news'
+                payload    JSONB NOT NULL,
+                fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                PRIMARY KEY (ticker, market, kind)
             )""")
 
 
@@ -926,7 +938,73 @@ def list_achievements():
 
 # ---------- company analysis (one-click + archive) ----------
 
-def compose_analysis_prompt(user: str, company: dict) -> str:
+def _fmt(v, unit=""):
+    return "数据缺失" if v is None else (f"{v:g}{unit}")
+
+
+def _format_company_data(snap: dict, nws: dict) -> str:
+    """Compact real-data card injected into the prompt so hermes reasons on actual
+    numbers (no fabrication). Missing fields are stated as 数据缺失, never guessed."""
+    if not snap:
+        return "（暂无可用的真实数据——数据源未返回；请明确说明数据缺失，不要编造任何数字。）"
+    p, q, m = snap.get("profile") or {}, snap.get("quote") or {}, snap.get("metrics") or {}
+    f, vh = snap.get("financials") or {}, snap.get("valuation_history") or {}
+    cur = q.get("currency") or ""
+    lines = []
+    prof = "、".join(x for x in [p.get("sector"), p.get("industry")] if x) or "数据缺失"
+    lines.append(f"公司：{p.get('name','')}（{snap.get('ticker','')}/{snap.get('market','')}） 行业：{prof}")
+    if p.get("summary"):
+        lines.append(f"主营简介：{str(p['summary'])[:280]}")
+    lines.append(
+        f"行情：现价 {_fmt(q.get('price'))} {cur} 市值 {_fmt(q.get('market_cap'))} "
+        f"涨跌 {_fmt(q.get('change_pct'),'%')}")
+    lines.append(
+        f"估值：P/E {_fmt(m.get('pe'))} 前瞻P/E {_fmt(m.get('forward_pe'))} P/B {_fmt(m.get('pb'))} "
+        f"P/S {_fmt(m.get('ps'))} 股息率 {_fmt(m.get('dividend_yield'),'%')}")
+    lines.append(
+        f"质量：ROE {_fmt(m.get('roe'),'%')} 毛利率 {_fmt(m.get('gross_margin'),'%')} "
+        f"净利率 {_fmt(m.get('net_margin'),'%')} 负债/权益 {_fmt(m.get('debt_to_equity'),'%')} "
+        f"流动比率 {_fmt(m.get('current_ratio'))}")
+    lines.append(
+        f"成长：营收增速 {_fmt(m.get('revenue_growth'),'%')} 盈利增速 {_fmt(m.get('earnings_growth'),'%')}")
+    # financial-statement trend (for 资金传导)
+    yrs = f.get("years") or []
+    if yrs:
+        def bil(xs):
+            return " ".join((f"{(x/1e9):.1f}" if x is not None else "—") for x in (xs or []))
+        lines.append(f"财报趋势（{yrs[0]}→{yrs[-1]}，单位十亿）：")
+        lines.append(f"  营收 {bil(f.get('revenue'))} ｜ 净利 {bil(f.get('net_income'))} ｜ 经营/自由现金流 {bil(f.get('fcf'))}")
+        nm = f.get("net_margin") or []
+        if any(x is not None for x in nm):
+            lines.append("  净利率% " + " ".join((f"{x:.0f}" if x is not None else "—") for x in nm))
+    # historical valuation percentile (for 历史镜像)
+    if vh:
+        if vh.get("pe_percentile") is not None or vh.get("pb_percentile") is not None:
+            lines.append(
+                f"历史估值分位（{vh.get('span','')}，0%=史上最便宜）：P/E {_fmt(vh.get('pe_percentile'),'%')} "
+                f"P/B {_fmt(vh.get('pb_percentile'),'%')} ←{vh.get('method','')}")
+        elif vh.get("price_percentile") is not None:
+            lines.append(
+                f"价格历史分位（{vh.get('span','')}）：{_fmt(vh.get('price_percentile'),'%')} ←{vh.get('method','')}")
+    # radar
+    r = snap.get("radar") or {}
+    if r.get("indicators"):
+        pairs = ", ".join(f"{i['name']}{('' if v is None else v)}" for i, v in zip(r["indicators"], r.get("values") or []))
+        lines.append(f"财务健康雷达(0-100)：{pairs}")
+    # primary-source filings + news headlines (for 资金传导 capital-allocation + catalysts)
+    fil = (nws or {}).get("filings") or []
+    if fil:
+        lines.append("近期一手文件：" + "；".join(f"[{x.get('form','')}]{x.get('title','')}"[:40] for x in fil[:6]))
+    news_items = (nws or {}).get("news") or []
+    if news_items:
+        lines.append("近期新闻标题：" + "；".join(str(x.get("title", ""))[:36] for x in news_items[:5]))
+    warns = snap.get("warnings") or []
+    if warns:
+        lines.append("数据告警：" + "；".join(warns))
+    return "\n".join(lines)
+
+
+def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, nws: dict | None = None) -> str:
     p = _build_learner_profile(user)
     if p["stage"] == "novice":
         stance = "用户是新手（一手内容读得还少）。多解释*为什么*，每用一个术语就一句话点明定义；强调先验证再深研；不要假设他懂反向 DCF / Owner Earnings。"
@@ -936,19 +1014,52 @@ def compose_analysis_prompt(user: str, company: dict) -> str:
         stance = "用户是进阶者。术语直接用、不解释；拔高到组合层面与 thesis 可证伪性，犀利、省略基础。"
     mastered = "、".join(p["mastered_terms"][:30]) or "（暂无）"
     recent_ctx = (("\n" + p["recent_context"]) if p.get("recent_context") else "")
+    data_card = _format_company_data(snap or {}, nws or {})
     return (
         f"{METHODOLOGY_CONTEXT}\n\n"
         f"【用户学习画像】阶段={p['stage']} 已读一手内容={p['canon_read']} 已掌握术语：{mastered}{recent_ctx}\n\n"
         f"【交流策略】{stance}\n\n"
-        f"【本次分析公司】{company.get('ticker')} {company.get('name', '')} 市场={company.get('market', '')}\n"
-        "任务：按价值投资方法论对这家公司做一次审视报告。结构固定为："
-        "## 生意是什么 / ## 护城河与质量 / ## 该看哪些估值信号（四工具）/ ## 风险与价值陷阱红旗 / ## 我该补哪些验证（Pabrai 三问 + 可证伪 thesis + 退出条件）。\n"
-        "硬约束：不给买卖建议/目标价；**绝不编造任何具体财务数字**——涉及数字一律写「→ 去官方原文核对」；数据不足就说数据不足，不要编。"
+        f"【本次分析公司】{company.get('ticker')} {company.get('name', '')} 市场={company.get('market', '')}\n\n"
+        f"【真实数据卡 · 请基于这些数字推理并引用具体数值】\n{data_card}\n\n"
+        "任务：按价值投资方法论审视这家公司。报告以下面【三大主轴】为主体，全部建立在上面的真实数据上、引用具体数字；最后用方法论检查落地。\n\n"
+        "## 一、第一性原理（生意的本质）\n"
+        "把生意拆到不能再拆：它本质在卖什么价值、客户为什么非买不可、凭什么能定价赚钱；护城河的第一性来源（成本/网络/品牌/转换成本/特许经营）是否成立、是否在弱化。用毛利率/净利率/ROE 佐证价值在哪创造、资本效率如何。\n\n"
+        "## 二、资金传导（钱怎么流，分三层）\n"
+        "1) 内部资金链：营收→毛利→营业利润→净利→自由现金流，每一环漏在哪（应收/存货/费用）；利润含金量（经营/自由现金流 vs 净利润，用趋势数据说话）；赚的钱去哪了（再投资 ROIC / 分红 / 回购，结合一手文件里的相关公告）。\n"
+        "2) 宏观传导：利率/流动性/政策如何传导到它这个环节，它处在传导链的上游还是末端、受益还是受损。\n"
+        "3) 产业链上下游：它在产业链的位置、对上下游的议价权、利润池集中在哪一环。\n\n"
+        "## 三、历史镜像（放进历史看）\n"
+        "用上面的历史估值分位判断当前贵贱（便宜区 0-25%？）；它在过去周期里如何表现；历史上有哪些类似的生意/情形，后来演变成赢家还是价值陷阱；现在更像均值回归机会还是结构性变化（Marks 周期框架）。\n\n"
+        "## 四、落地检查（方法论）\n"
+        "- 价值陷阱红旗逐条核对（低 P/E 但结构衰退 / 高股息靠借债 / 经营现金流长期<净利润 / 应收增速>营收增速 / 商誉过高等），用数据指出有没有、有多严重。\n"
+        "- Pabrai 三问（最坏亏多少 / 能否承受 / 赔率≥2:1）现在能回答到什么程度、还缺什么。\n"
+        "- 给出一个可证伪的 thesis（哪个具体事件发生就证明看错）+ 明确退出条件。\n"
+        "- 我还需要去原文核对 / 补充哪些验证。\n\n"
+        "硬约束：\n"
+        "- 只基于【真实数据卡】里的数字推理，**引用具体数值**；数据卡里没有的，写「数据缺失 / 需去原文核对」，**绝不编造任何数字**。\n"
+        "- 区分「数据事实」与「你的推断」，推断要标明（如：推断/需验证）。\n"
+        "- 不给买卖建议、不给目标价。"
     )
 
 
-def _run_analysis_job(analysis_id: int, prompt: str) -> None:
+def _run_analysis_job(analysis_id: int, user: str, ticker: str, name: str, market: str) -> None:
+    """Background job: fetch real data (cached), compose the data-grounded prompt, run hermes."""
     try:
+        snap = _cache_get(ticker, market, "snapshot")
+        if snap is None:
+            snap = _md.snapshot(ticker, market, name)
+            try:
+                _cache_put(ticker, market, "snapshot", snap)
+            except Exception:  # noqa: BLE001
+                pass
+        nws = _cache_get(ticker, market, "news")
+        if nws is None:
+            nws = _md.news(ticker, market, name)
+            try:
+                _cache_put(ticker, market, "news", nws)
+            except Exception:  # noqa: BLE001
+                pass
+        prompt = compose_analysis_prompt(user, {"ticker": ticker, "name": name, "market": market}, snap, nws)
         report = run_hermes(prompt)
         with _db() as c, c.cursor() as cur:
             cur.execute("UPDATE company_analyses SET status='done', report=%s, generated_at=now() WHERE id=%s", (report, analysis_id))
@@ -977,13 +1088,13 @@ def start_analysis():
         if run and run["started_at"] and time.time() - run["started_at"] < 300:
             return {"id": run["id"], "status": "running"}
     profile = _build_learner_profile(user)
-    prompt = compose_analysis_prompt(user, {"ticker": ticker, "name": name, "market": market})
     with _db() as c, c.cursor() as cur:
         cur.execute("""INSERT INTO company_analyses(username,market,ticker,company_name,status,profile_snap,started_at)
             VALUES (%s,%s,%s,%s,'running',%s,%s) RETURNING id""",
             (user, market, ticker, name, json.dumps({"stage": profile["stage"]}), time.time()))
         aid = cur.fetchone()[0]
-    threading.Thread(target=_run_analysis_job, args=(aid, prompt), daemon=True).start()
+    # data fetch + prompt compose happen in the background job so the POST returns instantly
+    threading.Thread(target=_run_analysis_job, args=(aid, user, ticker, name, market), daemon=True).start()
     return {"id": aid, "status": "running"}
 
 
@@ -1024,6 +1135,71 @@ def get_analysis(aid):
     d["created_at"] = d["created_at"].isoformat() if d.get("created_at") else None
     d["generated_at"] = d["generated_at"].isoformat() if d.get("generated_at") else None
     return jsonify(d)
+
+
+# ---------- real market data (dashboard: fundamentals / charts / 消息流) ----------
+# Cached in company_data_cache (public data, shared across users). TTL by kind;
+# ?fresh=1 forces a refetch.
+
+_CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600}
+
+
+def _cache_get(ticker: str, market: str, kind: str):
+    ttl = _CACHE_TTL.get(kind, 3600)
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute(
+            "SELECT payload, extract(epoch FROM now()-fetched_at) AS age "
+            "FROM company_data_cache WHERE ticker=%s AND market=%s AND kind=%s",
+            (ticker, market, kind))
+        r = cur.fetchone()
+    if r and r["age"] is not None and r["age"] < ttl:
+        d = r["payload"]
+        d["_cached"] = True
+        d["_age_s"] = int(r["age"])
+        return d
+    return None
+
+
+def _cache_put(ticker: str, market: str, kind: str, payload: dict) -> None:
+    with _db() as c, c.cursor() as cur:
+        cur.execute(
+            "INSERT INTO company_data_cache(ticker,market,kind,payload,fetched_at) "
+            "VALUES (%s,%s,%s,%s,now()) "
+            "ON CONFLICT (ticker,market,kind) DO UPDATE SET payload=EXCLUDED.payload, fetched_at=now()",
+            (ticker, market, kind, json.dumps(payload)))
+
+
+def _company_data(kind: str, fetch):
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    ticker = (request.args.get("ticker") or "").strip().upper()[:32]
+    if not ticker:
+        return {"error": "缺 ticker"}, 400
+    market = (request.args.get("market") or "美股")[:16]
+    fresh = request.args.get("fresh") == "1"
+    if not fresh:
+        cached = _cache_get(ticker, market, kind)
+        if cached is not None:
+            return jsonify(cached)
+    data = fetch(ticker, market)
+    try:
+        _cache_put(ticker, market, kind, data)
+    except Exception:  # noqa: BLE001 — cache write failure must not break the response
+        pass
+    return jsonify(data)
+
+
+@app.get("/api/companies/snapshot")
+def company_snapshot():
+    name = (request.args.get("name") or "")[:64]
+    return _company_data("snapshot", lambda tk, mk: _md.snapshot(tk, mk, name))
+
+
+@app.get("/api/companies/news")
+def company_news():
+    name = (request.args.get("name") or "")[:64]
+    return _company_data("news", lambda tk, mk: _md.news(tk, mk, name))
 
 
 # ---------- hermes chat (global learning companion) ----------
