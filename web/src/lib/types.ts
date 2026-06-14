@@ -200,6 +200,11 @@ export interface CompanySnapshot {
     red_flags?: { name: string; hit: boolean; detail: string }[];
     flag_count?: number;
   };
+  history_position?: {
+    span?: string;
+    metrics?: { name: string; unit: string; current: number; min: number; max: number; avg: number; position: number; state: string }[];
+    note?: string;
+  };
   warnings?: string[];
   _cached?: boolean;
   _age_s?: number;

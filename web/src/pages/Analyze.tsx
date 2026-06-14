@@ -413,6 +413,26 @@ export default function Analyze() {
             </div>
           )}
 
+          {/* 历史镜像 — 盈利周期位置 */}
+          {snap.history_position?.metrics && snap.history_position.metrics.length > 0 && (
+            <div className="ca-panel ca-consensus">
+              <h3 style={{ margin: 0 }}>📜 历史镜像 · 盈利周期位置（{snap.history_position.span}）</h3>
+              <p className="hint">当前指标在自己历史区间的位置（0%=历史最低，100%=历史最高）。市场是否把当前的峰值/谷值当常态外推？</p>
+              {snap.history_position.metrics.map((m, i) => (
+                <div className="ca-posrow" key={i}>
+                  <span className="pn">{m.name}</span>
+                  <span className="pv">{m.current}{m.unit}</span>
+                  <div className="ca-postrack" title={`区间 ${m.min}~${m.max}，均值 ${m.avg}`}>
+                    <div className="ca-posfill" style={{ width: m.position + "%" }} />
+                  </div>
+                  <span className="pr">{m.min}~{m.max}{m.unit}</span>
+                  <span className={"ca-verdict " + (m.position >= 80 ? "rich" : m.position <= 20 ? "cheap" : "fair")}>{m.position}% · {m.state}</span>
+                </div>
+              ))}
+              {snap.history_position.note && <div className="ca-bet" style={{ marginTop: 10 }}>★ {snap.history_position.note}</div>}
+            </div>
+          )}
+
           <div className="ca-panel" style={{ marginBottom: 14 }}>
             <h3>💹 价格走势（近 5 年 · 月）</h3>
             <p className="hint">仅供感受波动与位置；价值投资看的是生意与估值，不是图形。</p>

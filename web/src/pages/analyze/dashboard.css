@@ -57,6 +57,15 @@
 .ca-deep.yes { color: var(--good); }
 .ca-deep.no { color: var(--muted); }
 
+/* historical-mirror cycle position bars */
+.ca-posrow { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.ca-posrow:last-of-type { border-bottom: none; }
+.ca-posrow .pn { min-width: 84px; color: var(--fg); font-weight: 600; }
+.ca-posrow .pv { min-width: 64px; color: var(--fg); }
+.ca-posrow .pr { min-width: 110px; color: var(--muted); text-align: right; }
+.ca-postrack { flex: 1; height: 8px; background: var(--code-bg); border-radius: 4px; overflow: hidden; min-width: 80px; }
+.ca-posfill { height: 100%; background: var(--accent); border-radius: 4px; }
+
 /* earnings-quality red flags */
 .ca-flag { display: flex; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
 .ca-flag:last-child { border-bottom: none; }

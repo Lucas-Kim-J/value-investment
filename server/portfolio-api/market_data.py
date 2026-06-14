@@ -827,6 +827,10 @@ def _snapshot_cn(code, market, name=""):
         )
     except Exception as e:  # noqa: BLE001
         warnings.append(f"估值信号计算失败：{str(e)[:120]}")
+    try:
+        out["history_position"] = _fx.history_position(out.get("financials") or {})
+    except Exception:  # noqa: BLE001
+        pass
     return out
 
 
@@ -865,7 +869,8 @@ def _base_snapshot(ticker, market):
         "as_of": datetime.now(timezone.utc).isoformat(),
         "profile": {"name": ticker}, "quote": {}, "metrics": {},
         "financials": {}, "price_history": {}, "radar": {},
-        "valuation_history": {}, "valuation_signals": {}, "quality_signals": {}, "warnings": [],
+        "valuation_history": {}, "valuation_signals": {}, "quality_signals": {},
+        "history_position": {}, "warnings": [],
     }
 
 
@@ -1012,6 +1017,10 @@ def _snapshot_us(ticker: str, market: str = "美股") -> dict:
         )
     except Exception as e:  # noqa: BLE001
         warnings.append(f"盈余质量取证失败：{str(e)[:120]}")
+    try:
+        out["history_position"] = _fx.history_position(out.get("financials") or {})
+    except Exception:  # noqa: BLE001
+        pass
     out["_t_cached"] = False
     return out
 
