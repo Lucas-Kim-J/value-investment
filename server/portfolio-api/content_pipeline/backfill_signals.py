@@ -1,41 +1,59 @@
 #!/usr/bin/env python3
-"""One-time SILENT backfill: generate signal cards for already-listed FREE episodes
-that don't have one yet — transcribe + distill + store, but NEVER push to Feishu.
+"""One-time ONBOARD / SILENT backfill for 小宇宙 podcast feeds.
 
-Use it to populate the website's history without spamming the Feishu feed with a
-burst of old cards. Resumable: a saved transcript is reused, an existing card skips
-the episode. Bounded to the episodes currently embedded on the podcast page (~15).
+Two jobs, both without ever pushing to Feishu (the absence of a deliverer is what
+makes it silent — so the website's history gets populated without spamming the feed):
 
-Run on the server (real whisper + hermes + PG):
-    venv/bin/python -m content_pipeline.backfill_signals            # all that need cards
-    venv/bin/python -m content_pipeline.backfill_signals --limit 1  # validate one first
+  1. SEED the back-catalog: insert a row for EVERY currently-listed episode (free
+     AND paid). Once a row exists the daily poll treats it as "seen" and won't fire
+     an A-notice for it — this is what stops a newly-tracked podcast from back-blasting
+     its entire history into Feishu on the next cron tick.
+  2. CARD the latest `--limit` FREE, card-less episodes (transcribe + distill + store).
+     `--limit 0` cards them all (used for the original 非共识 backfill).
+
+Resumable: a saved transcript is reused, an existing card skips the episode.
+
+Run on the server (real whisper/Groq + hermes + PG), with the SAME env as the cron
+(e.g. VI_TRANSCRIBER=groq, GROQ_API_KEY, VI_DATABASE_URL):
+
+    # onboard the two long-form podcasts, 4 newest free episodes each:
+    venv/bin/python -m content_pipeline.backfill_signals --limit 4 \
+        626b46ea9cbbf0451cf5a962 65539db173f6183e975cfccc
+
+    venv/bin/python -m content_pipeline.backfill_signals --limit 1 <pid>   # validate one first
+    venv/bin/python -m content_pipeline.backfill_signals                   # all tracked, all free
 """
 from __future__ import annotations
 
 import argparse
-import os
 
 from content_pipeline.adapters.xiaoyuzhou import XiaoyuzhouAdapter
 from content_pipeline.distiller import Distiller
 from content_pipeline.models import STATUS
+from content_pipeline.podcasts import podcast_ids
 from content_pipeline.store import PgStore
 from content_pipeline.transcriber import make_transcriber
 
 
 def backfill(adapter, store, transcriber, distiller, limit: int = 0, log=print) -> int:
-    """Generate + store a signal card for each free, card-less episode. No delivery
-    (the absence of a deliverer is what makes this silent). Returns count carded."""
+    """Seed every listed episode as 'seen', then card the latest `limit` free, card-less
+    ones (0 = all free). No delivery. Returns the count carded."""
     store.init_schema()
-    items = [it for it in adapter.list_items() if not it.is_paid]
-    todo = [it for it in items
+    items = adapter.list_items()
+    # 1) Seed the whole catalog so the daily poll never back-blasts it as "new".
+    #    ON CONFLICT DO NOTHING keeps already-known rows (and their cards) untouched.
+    for it in items:
+        store.add(it)
+    free = [it for it in items if not it.is_paid]
+    todo = [it for it in free
             if not (store.get(it.source, it.external_id) or {}).get("signal_card")]
     if limit:
-        todo = todo[:limit]
-    log(f"backfill: {len(todo)} free episode(s) need a card (of {len(items)} free listed)")
+        todo = todo[:limit]            # free list is newest-first → the latest N
+    log(f"backfill: seeded {len(items)} listed episode(s) as seen; "
+        f"carding {len(todo)} latest free (of {len(free)} free listed)")
     done = 0
     for it in todo:
         try:
-            store.add(it)  # ensure row + carry image_url/show_title (ON CONFLICT DO NOTHING)
             row = store.get(it.source, it.external_id) or {}
             transcript = row.get("transcript")
             if not transcript:
@@ -55,11 +73,20 @@ def backfill(adapter, store, transcriber, distiller, limit: int = 0, log=print) 
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Silent signal-card backfill (no Feishu)")
-    parser.add_argument("--limit", type=int, default=0, help="max episodes (0 = all that need it)")
+    parser = argparse.ArgumentParser(description="Silent onboard/backfill (seed catalog + card N, no Feishu)")
+    parser.add_argument("--limit", type=int, default=0,
+                        help="max episodes to card PER podcast (0 = all free)")
+    parser.add_argument("pids", nargs="*",
+                        help="podcast id(s) to onboard (default: all tracked / env)")
     args = parser.parse_args(argv)
-    pid = os.environ.get("VI_PIPELINE_PODCAST_ID", "6978a31df828d4e9f2787d3d")
-    backfill(XiaoyuzhouAdapter(pid), PgStore(), make_transcriber(), Distiller(), limit=args.limit)
+
+    pids = args.pids or podcast_ids()
+    store, transcriber, distiller = PgStore(), make_transcriber(), Distiller()
+    total = 0
+    for pid in pids:
+        print(f"\n=== backfill {pid} (limit={args.limit or 'all free'}) ===")
+        total += backfill(XiaoyuzhouAdapter(pid), store, transcriber, distiller, limit=args.limit)
+    print(f"\nALL done: {total} card(s) across {len(pids)} podcast(s)")
     return 0
 
 

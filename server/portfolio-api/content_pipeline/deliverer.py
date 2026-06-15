@@ -10,11 +10,16 @@ from content_pipeline.models import ContentItem
 _TARGET = os.environ.get("VI_PIPELINE_FEISHU_TARGET", "feishu")
 # Deep link back to the website's 信号 page (configurable per deployment).
 _SIGNALS_URL = os.environ.get("VI_SIGNALS_URL", "http://154.36.153.46/signals")
+_DEFAULT_SHOW = "非共识的20分钟"
+
+
+def _show(item: ContentItem) -> str:
+    return item.show_title or _DEFAULT_SHOW
 
 
 def render_new_notice(item: ContentItem) -> str:
     paid = "（付费集，管道够不着，需自听）" if item.is_paid else ""
-    return f"🎙️ 新集{paid}：{item.title}\n{item.url}"
+    return f"🎙️ {_show(item)} · 新集{paid}：{item.title}\n{item.url}"
 
 
 def render_signal_card(item: ContentItem, card: dict) -> str:
@@ -22,7 +27,8 @@ def render_signal_card(item: ContentItem, card: dict) -> str:
     relisten = "值得回听" if wr.get("yes") else "可跳过"
     stamps = "；".join(wr.get("timestamps") or [])
     lines = [
-        f"🧭 信号卡 · {item.title}",
+        f"🧭 信号卡 · {_show(item)}",
+        f"《{item.title}》",
         "",
         f"主旨：{card.get('tldr','')}",
         f"非共识：{card.get('non_consensus','')}",
@@ -49,10 +55,10 @@ class Deliverer:
         self._send = runner
 
     def send_new_notice(self, item: ContentItem) -> None:
-        self._send(render_new_notice(item), "🎙️ 非共识的20分钟 · 新集")
+        self._send(render_new_notice(item), f"🎙️ {_show(item)} · 新集")
 
     def send_signal_card(self, item: ContentItem, card: dict) -> None:
-        self._send(render_signal_card(item, card), "🧭 信号卡 · 非共识的20分钟")
+        self._send(render_signal_card(item, card), f"🧭 信号卡 · {_show(item)}")
 
     def send_alert(self, text: str) -> None:
         self._send(text, "⚠️ 内容管道告警")

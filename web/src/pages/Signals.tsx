@@ -82,7 +82,8 @@ export default function Signals() {
     });
   }, []);
 
-  const show = items[0]?.show_title || "非共识的20分钟";
+  const shows = Array.from(new Set(items.map((i) => i.show_title).filter(Boolean)));
+  const show = shows.length ? shows.join(" · ") : "非共识的20分钟";
 
   return (
     <>

@@ -2,10 +2,10 @@ from content_pipeline.models import ContentItem
 from content_pipeline.deliverer import render_new_notice, render_signal_card, Deliverer
 
 
-def _item(paid=False):
+def _item(paid=False, show_title=None):
     return ContentItem(source="xiaoyuzhou", external_id="e1", title="Ep 9 | 测试",
                        url="https://x/episode/e1", published_at="p",
-                       is_paid=paid, media_url="m")
+                       is_paid=paid, media_url="m", show_title=show_title)
 
 
 def _card():
@@ -50,3 +50,25 @@ def test_deliverer_send_signal_card_calls_runner():
     d = Deliverer(runner=lambda text, subject: sent.append((subject, text)))
     d.send_signal_card(_item(), _card())
     assert "资金传导" in sent[0][1]
+
+
+def test_render_uses_show_title_when_present():
+    it = _item(show_title="张小珺Jùn｜商业访谈录")
+    assert "张小珺" in render_new_notice(it)
+    assert "张小珺" in render_signal_card(it, _card())
+
+
+def test_render_falls_back_to_default_show_when_missing():
+    # show_title=None → keeps the original 非共识的20分钟 label
+    assert "非共识的20分钟" in render_new_notice(_item())
+    assert "非共识的20分钟" in render_signal_card(_item(), _card())
+
+
+def test_deliverer_subject_carries_show_title():
+    sent = []
+    d = Deliverer(runner=lambda text, subject: sent.append((subject, text)))
+    it = _item(show_title="The Wanderers 流浪者")
+    d.send_new_notice(it)
+    d.send_signal_card(it, _card())
+    assert "The Wanderers 流浪者" in sent[0][0]   # 新集 subject
+    assert "The Wanderers 流浪者" in sent[1][0]   # 信号卡 subject

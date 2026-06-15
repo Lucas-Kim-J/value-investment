@@ -57,7 +57,7 @@ def test_backfill_cards_free_cardless_episodes_silently():
     assert tr.calls and dis.calls == ["e1", "e2"]
 
 
-def test_backfill_skips_paid_and_already_carded():
+def test_backfill_seeds_all_then_cards_free_cardless():
     store = MemoryStore()
     carded = _item("e0")
     store.add(carded)
@@ -65,10 +65,27 @@ def test_backfill_skips_paid_and_already_carded():
     adapter = FakeAdapter([carded, _item("e1"), _item("paid", paid=True)])
     tr, dis = FakeTranscriber(), FakeDistiller()
     done = backfill(adapter, store, tr, dis, log=lambda *_: None)
-    assert done == 1                       # only e1
-    assert dis.calls == ["e1"]             # e0 (carded) + paid skipped
+    assert done == 1                       # only e1 carded
+    assert dis.calls == ["e1"]             # e0 (already carded) + paid skipped
     assert store.get("xiaoyuzhou", "e0")["signal_card"]["tldr"] == "existing"  # untouched
-    assert store.get("xiaoyuzhou", "paid") is None
+    # paid is now SEEDED (a row marks it 'seen') but never carded — so the daily
+    # poll won't later treat it as new, yet it stays off the website (no card).
+    paid = store.get("xiaoyuzhou", "paid")
+    assert paid is not None and paid["signal_card"] is None
+
+
+def test_backfill_seeds_whole_catalog_even_beyond_limit():
+    # 5 free episodes, card only the latest 2 — but ALL 5 must be seeded so the daily
+    # poll never back-blasts the other 3 into Feishu as "new".
+    store = MemoryStore()
+    eps = [_item(f"e{i}") for i in range(5)]
+    done = backfill(FakeAdapter(eps), store, FakeTranscriber(), FakeDistiller(),
+                    limit=2, log=lambda *_: None)
+    assert done == 2
+    assert len(store.seen_ids("xiaoyuzhou")) == 5          # every episode seeded
+    carded = [e.external_id for e in eps
+              if store.get("xiaoyuzhou", e.external_id)["signal_card"]]
+    assert len(carded) == 2                                # only 2 carded, 3 seeded-but-cardless
 
 
 def test_backfill_limit_caps_work():

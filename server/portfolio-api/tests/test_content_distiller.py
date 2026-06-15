@@ -23,6 +23,13 @@ def test_build_input_includes_title_and_transcript_and_pillars():
     assert "第一性原理" in s and "资金传导" in s and "历史镜像" in s
 
 
+def test_build_input_uses_show_title_when_present():
+    it = ContentItem(source="xiaoyuzhou", external_id="e1", title="t", url="u",
+                     published_at="p", is_paid=False, media_url="m",
+                     show_title="The Wanderers 流浪者")
+    assert "The Wanderers 流浪者" in build_distill_input(it, "转录")
+
+
 def test_parse_signal_card_accepts_plain_json():
     card = parse_signal_card(json.dumps(_valid_card(), ensure_ascii=False))
     assert card["pillar"] == "资金传导"

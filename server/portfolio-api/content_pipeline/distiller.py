@@ -19,8 +19,9 @@ _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.S)
 
 def build_distill_input(item: ContentItem, transcript: str) -> str:
     """The instruction + transcript handed to the vi-podcast-distill skill."""
+    show = item.show_title or "非共识的20分钟"
     return (
-        f"播客《非共识的20分钟》单集：{item.title}\n"
+        f"播客《{show}》单集：{item.title}\n"
         f"链接：{item.url}\n\n"
         "请按 vi-podcast-distill 技能，把下面的转录蒸馏成一张『信号卡』，"
         "只输出一个 JSON 对象（可包在 ```json 代码块里），字段：\n"
