@@ -250,3 +250,27 @@ export interface ChatTurn { question?: string; reply?: string }
 export interface AsyncJob { status: "running" | "done" | "error" | string; reply?: string; error?: string }
 export interface CuratedTerm { term: string; term_en?: string; definition?: string; slug: string }
 export interface ExplainResp { id: number; curated?: CuratedTerm | null; error?: string }
+
+export interface SignalCard {
+  tldr: string;
+  non_consensus: string;
+  new_angle: string;
+  pillar: string;
+  caution: string;
+  worth_relisten: { yes: boolean; timestamps: string[] };
+}
+
+export interface Signal {
+  external_id: string;
+  source: string;
+  show_title?: string | null;
+  image_url?: string | null;
+  title: string;
+  url: string;
+  published_at?: string | null;
+  card: SignalCard;
+}
+
+export interface SignalDetail extends Signal {
+  transcript?: string | null;
+}
