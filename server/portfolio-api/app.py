@@ -618,6 +618,31 @@ def push_report():
 RDC = psycopg2.extras.RealDictCursor
 
 
+def _signal_row_to_dict(row: dict, include_transcript: bool = False) -> dict:
+    """Shape a content_items row into the /api/signals payload. Pure (no I/O).
+    signal_card is JSONB (psycopg2 → dict) but tolerate a JSON string too."""
+    card = row.get("signal_card")
+    if isinstance(card, str):
+        try:
+            card = json.loads(card)
+        except ValueError:
+            card = None
+    pub = row.get("published_at")
+    out = {
+        "external_id": row.get("external_id"),
+        "source": row.get("source"),
+        "show_title": row.get("show_title"),
+        "image_url": row.get("image_url"),
+        "title": row.get("title"),
+        "url": row.get("url"),
+        "published_at": pub.isoformat() if hasattr(pub, "isoformat") else pub,
+        "card": card,
+    }
+    if include_transcript:
+        out["transcript"] = row.get("transcript")
+    return out
+
+
 def _reap_stale(table: str, user: str) -> None:
     """Mark rows stuck in 'running' >5min as error (worker-restart orphans).
     `table` is a fixed literal ('company_analyses' / 'reports'), never user input."""
