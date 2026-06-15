@@ -12,17 +12,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 
-from content_pipeline.adapters.base import AdapterParseError
 from content_pipeline.adapters.xiaoyuzhou import XiaoyuzhouAdapter
 from content_pipeline.deliverer import Deliverer
 from content_pipeline.distiller import Distiller
+from content_pipeline.podcasts import podcast_ids
 from content_pipeline.transcriber import Transcriber, make_transcriber
 from content_pipeline import orchestrator
-
-PODCAST_ID = os.environ.get("VI_PIPELINE_PODCAST_ID", "6978a31df828d4e9f2787d3d")
 
 
 def main(argv=None) -> int:
@@ -31,7 +28,7 @@ def main(argv=None) -> int:
                         help="Mock whisper+hermes, in-memory store, print actions only")
     args = parser.parse_args(argv)
 
-    adapter = XiaoyuzhouAdapter(PODCAST_ID)
+    adapters = [XiaoyuzhouAdapter(pid) for pid in podcast_ids()]
 
     if args.dry_run:
         from content_pipeline.store import MemoryStore
@@ -53,17 +50,15 @@ def main(argv=None) -> int:
         distiller = Distiller()
         deliverer = Deliverer()
 
-    try:
-        orchestrator.run_once(adapter, store, transcriber, distiller, deliverer)
-    except AdapterParseError as e:
-        msg = f"⚠️ 适配器需修（{adapter.source}）：{e}"
+    errors = orchestrator.run_many(adapters, store, transcriber, distiller, deliverer)
+    for adapter, e in errors:
+        msg = f"⚠️ 适配器需修（{adapter.source}/{getattr(adapter, 'podcast_id', '?')}）：{e}"
         print(msg, file=sys.stderr)
         try:
             deliverer.send_alert(msg)
         except Exception:  # noqa: BLE001
             pass
-        return 1
-    return 0
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":

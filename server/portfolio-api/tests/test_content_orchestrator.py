@@ -156,3 +156,31 @@ def test_adapter_parse_error_propagates():
     adapter = FakeAdapter([], raise_on_list=True)
     with pytest.raises(AdapterParseError):
         _run(adapter, store, FakeTranscriber(), FakeDistiller(), FakeDeliverer())
+
+
+# ---- run_many: multiple feeds sharing one source ----
+
+def test_run_many_discovers_each_feed_then_processes_once():
+    store = MemoryStore()
+    feed1 = FakeAdapter([_item("a"), _item("b")])
+    feed2 = FakeAdapter([_item("c", paid=True), _item("d")])
+    deliv = FakeDeliverer()
+    errors = orchestrator.run_many([feed1, feed2], store,
+                                   FakeTranscriber(), FakeDistiller(), deliv)
+    assert errors == []
+    assert set(deliv.notices) == {"a", "b", "c", "d"}      # every feed's new episodes A-noticed
+    for eid in ("a", "b", "d"):
+        assert store.get("xiaoyuzhou", eid)["status"] == STATUS.DELIVERED
+    assert store.get("xiaoyuzhou", "c")["status"] == STATUS.SKIPPED_PAID
+
+
+def test_run_many_isolates_a_broken_feed():
+    store = MemoryStore()
+    good = FakeAdapter([_item("g")])
+    bad = FakeAdapter([], raise_on_list=True)
+    deliv = FakeDeliverer()
+    errors = orchestrator.run_many([good, bad], store,
+                                   FakeTranscriber(), FakeDistiller(), deliv)
+    assert len(errors) == 1 and errors[0][0] is bad        # broken feed reported, not raised
+    assert store.get("xiaoyuzhou", "g")["status"] == STATUS.DELIVERED   # healthy feed still ran
+    assert "g" in deliv.notices

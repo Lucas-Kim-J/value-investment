@@ -45,4 +45,18 @@ describe("Signals", () => {
     render(<Signals />);
     expect(await screen.findByText(/还没有信号卡/)).toBeInTheDocument();
   });
+
+  it("lists every tracked show in the lane subtitle", async () => {
+    const { apiGet } = await import("../lib/api");
+    const two = [
+      sample,
+      { ...sample, external_id: "e8", show_title: "张小珺Jùn｜商业访谈录", title: "对谈 Ep 145" },
+    ];
+    (apiGet as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true, status: 200, data: { items: two } });
+    render(<Signals />);
+    await screen.findByText("对谈 Ep 145");
+    const lane = screen.getByText(/每天 08:00 自动更新/);
+    expect(lane).toHaveTextContent("非共识的20分钟");
+    expect(lane).toHaveTextContent("张小珺");
+  });
 });

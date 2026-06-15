@@ -4,6 +4,7 @@ Idempotent and resumable via the Store state machine. Pure-ish: all I/O is
 behind the injected adapter/store/transcriber/distiller/deliverer seams."""
 from __future__ import annotations
 
+from content_pipeline.adapters.base import AdapterParseError
 from content_pipeline.models import STATUS
 
 MAX_RETRIES = 3
@@ -49,8 +50,35 @@ def process_item(adapter, item, store, transcriber, distiller, deliverer,
 
 
 def run_once(adapter, store, transcriber, distiller, deliverer, max_retries=MAX_RETRIES):
-    """One full poll cycle. Lets AdapterParseError propagate (caller alerts)."""
+    """One full poll cycle for a SINGLE feed. Lets AdapterParseError propagate
+    (caller alerts)."""
     store.init_schema()
     discover(adapter, store, deliverer)
     for it in store.resumable(adapter.source, max_retries):
         process_item(adapter, it, store, transcriber, distiller, deliverer, max_retries)
+
+
+def run_many(adapters, store, transcriber, distiller, deliverer, max_retries=MAX_RETRIES):
+    """One poll cycle across SEVERAL feeds (e.g. multiple 小宇宙 podcasts that share
+    the 'xiaoyuzhou' source). Discover each feed first so every feed's new episodes
+    get their A-notice, then run ONE processing pass per distinct source over all
+    resumable items — media is fetched by absolute URL, so any adapter of a source
+    can fetch any of that source's items.
+
+    A feed whose page can't be parsed (AdapterParseError) is collected and returned
+    rather than raised, so one broken feed can't starve the healthy ones. Returns the
+    list of (adapter, error) pairs for the caller to alert on (empty = all clean)."""
+    store.init_schema()
+    errors = []
+    for adapter in adapters:
+        try:
+            discover(adapter, store, deliverer)
+        except AdapterParseError as e:
+            errors.append((adapter, e))
+    fetcher_by_source = {}
+    for adapter in adapters:
+        fetcher_by_source.setdefault(adapter.source, adapter)
+    for source, fetcher in fetcher_by_source.items():
+        for it in store.resumable(source, max_retries):
+            process_item(fetcher, it, store, transcriber, distiller, deliverer, max_retries)
+    return errors
