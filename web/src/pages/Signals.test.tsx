@@ -38,4 +38,11 @@ describe("Signals", () => {
     await waitFor(() => expect(screen.getByText(/转录全文内容/)).toBeInTheDocument());
     expect(apiGet).toHaveBeenCalledWith("/api/signals/e7");
   });
+
+  it("shows the empty state when there are no signals", async () => {
+    const { apiGet } = await import("../lib/api");
+    (apiGet as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true, status: 200, data: { items: [] } });
+    render(<Signals />);
+    expect(await screen.findByText(/还没有信号卡/)).toBeInTheDocument();
+  });
 });
