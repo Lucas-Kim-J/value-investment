@@ -19,7 +19,7 @@ from content_pipeline.adapters.xiaoyuzhou import XiaoyuzhouAdapter
 from content_pipeline.distiller import Distiller
 from content_pipeline.models import STATUS
 from content_pipeline.store import PgStore
-from content_pipeline.transcriber import Transcriber
+from content_pipeline.transcriber import make_transcriber
 
 
 def backfill(adapter, store, transcriber, distiller, limit: int = 0, log=print) -> int:
@@ -59,7 +59,7 @@ def main(argv=None) -> int:
     parser.add_argument("--limit", type=int, default=0, help="max episodes (0 = all that need it)")
     args = parser.parse_args(argv)
     pid = os.environ.get("VI_PIPELINE_PODCAST_ID", "6978a31df828d4e9f2787d3d")
-    backfill(XiaoyuzhouAdapter(pid), PgStore(), Transcriber(), Distiller(), limit=args.limit)
+    backfill(XiaoyuzhouAdapter(pid), PgStore(), make_transcriber(), Distiller(), limit=args.limit)
     return 0
 
 
