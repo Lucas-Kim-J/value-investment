@@ -11,6 +11,7 @@ const Learn = lazy(() => import("./pages/Learn"));
 const Canon = lazy(() => import("./pages/Canon"));
 const Portfolio = lazy(() => import("./pages/Portfolio"));
 const Analyze = lazy(() => import("./pages/Analyze"));
+const Signals = lazy(() => import("./pages/Signals"));
 const Doc = lazy(() => import("./pages/Doc"));
 const Stub = lazy(() => import("./pages/Stub"));
 
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
       { path: "/canon", element: <Canon /> },
       { path: "/portfolio", element: <Portfolio /> },
       { path: "/analyze", element: <Analyze /> },
+      { path: "/signals", element: <Signals /> },
       { path: "/doc/*", element: <Doc /> },
       { path: "*", element: <Stub /> },
     ],

@@ -14,6 +14,8 @@ class ContentItem:
     published_at: str        # ISO 8601 string
     is_paid: bool = False
     media_url: str | None = None
+    image_url: str | None = None     # cover art (podcast-level, same for all episodes)
+    show_title: str | None = None    # e.g. 非共识的20分钟
 
 
 class STATUS:

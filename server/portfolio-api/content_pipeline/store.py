@@ -16,7 +16,8 @@ from content_pipeline.models import ContentItem, STATUS, RESUMABLE
 def _row(item: ContentItem) -> dict:
     return {"source": item.source, "external_id": item.external_id, "title": item.title,
             "url": item.url, "published_at": item.published_at, "is_paid": item.is_paid,
-            "media_url": item.media_url, "status": STATUS.NEW, "transcript": None,
+            "media_url": item.media_url, "image_url": item.image_url,
+            "show_title": item.show_title, "status": STATUS.NEW, "transcript": None,
             "signal_card": None, "error": None, "error_count": 0}
 
 
@@ -25,7 +26,8 @@ def _to_item(row: dict) -> ContentItem:
     return ContentItem(source=row["source"], external_id=row["external_id"],
                        title=row["title"], url=row["url"],
                        published_at=pub.isoformat() if hasattr(pub, "isoformat") else (pub or ""),
-                       is_paid=row["is_paid"], media_url=row["media_url"])
+                       is_paid=row["is_paid"], media_url=row["media_url"],
+                       image_url=row.get("image_url"), show_title=row.get("show_title"))
 
 
 class MemoryStore:
@@ -106,6 +108,8 @@ class PgStore:
                     published_at TIMESTAMPTZ,
                     is_paid      BOOLEAN NOT NULL DEFAULT FALSE,
                     media_url    TEXT,
+                    image_url    TEXT,
+                    show_title   TEXT,
                     status       TEXT NOT NULL DEFAULT 'new',
                     transcript   TEXT,
                     signal_card  JSONB,
@@ -117,6 +121,8 @@ class PgStore:
                 );
                 CREATE INDEX IF NOT EXISTS content_items_status_idx
                     ON content_items(source, status);
+                ALTER TABLE content_items ADD COLUMN IF NOT EXISTS image_url  TEXT;
+                ALTER TABLE content_items ADD COLUMN IF NOT EXISTS show_title TEXT;
             """)
 
     def seen_ids(self, source) -> set:
@@ -128,11 +134,13 @@ class PgStore:
         with _db() as c, c.cursor() as cur:
             cur.execute("""
                 INSERT INTO content_items
-                    (source, external_id, title, url, published_at, is_paid, media_url, status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,'new')
+                    (source, external_id, title, url, published_at, is_paid, media_url,
+                     image_url, show_title, status)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'new')
                 ON CONFLICT (source, external_id) DO NOTHING
             """, (item.source, item.external_id, item.title, item.url,
-                  item.published_at or None, item.is_paid, item.media_url))
+                  item.published_at or None, item.is_paid, item.media_url,
+                  item.image_url, item.show_title))
 
     def get(self, source, eid):
         with _db() as c, c.cursor(cursor_factory=RDC) as cur:

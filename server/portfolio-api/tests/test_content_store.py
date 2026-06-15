@@ -70,3 +70,14 @@ def test_pgstore_roundtrip():
     assert "smoke-1" in s.seen_ids("xiaoyuzhou")
     s.set_status("xiaoyuzhou", "smoke-1", STATUS.NOTIFIED)
     assert any(i.external_id == "smoke-1" for i in s.resumable("xiaoyuzhou"))
+
+
+def test_memorystore_persists_image_and_show_title():
+    s = MemoryStore()
+    it = ContentItem(source="xiaoyuzhou", external_id="a", title="T", url="u",
+                     published_at="2026-06-13T16:00:00.000Z", is_paid=False, media_url="m",
+                     image_url="https://image/x.jpg", show_title="非共识的20分钟")
+    s.add(it)
+    row = s.get("xiaoyuzhou", "a")
+    assert row["image_url"] == "https://image/x.jpg"
+    assert row["show_title"] == "非共识的20分钟"

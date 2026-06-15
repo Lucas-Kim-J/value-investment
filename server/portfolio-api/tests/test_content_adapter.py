@@ -109,3 +109,30 @@ def test_fetch_media_without_media_url_raises():
                      url="u", published_at="p", is_paid=True, media_url=None)
     with pytest.raises(ValueError):
         ad.fetch_media(it)
+
+
+def test_parses_show_title_and_cover_image():
+    payload = {"props": {"pageProps": {"podcast": {
+        "title": "非共识的20分钟",
+        "image": {"middlePicUrl": "https://image.xyzcdn.net/cover.jpg@middle"},
+        "episodes": [{
+            "eid": "e9", "title": "Ep 9", "pubDate": "2026-06-13T16:00:00.000Z",
+            "payType": "FREE", "enclosure": {"url": "https://m/e9.m4a"},
+        }],
+    }}}}
+    import json as _json
+    html = f'<script id="__NEXT_DATA__" type="application/json">{_json.dumps(payload)}</script>'
+    items = parse_episodes(html, PID)
+    assert items[0].show_title == "非共识的20分钟"
+    assert items[0].image_url == "https://image.xyzcdn.net/cover.jpg@middle"
+
+
+def test_parses_missing_image_as_none():
+    payload = {"props": {"pageProps": {"podcast": {
+        "title": "X", "episodes": [{"eid": "e1", "title": "T",
+            "pubDate": "2026-06-12T00:00:00.000Z", "payType": "FREE"}]}}}}
+    import json as _json
+    html = f'<script id="__NEXT_DATA__" type="application/json">{_json.dumps(payload)}</script>'
+    items = parse_episodes(html, PID)
+    assert items[0].image_url is None
+    assert items[0].show_title == "X"

@@ -33,6 +33,10 @@ def parse_episodes(html: str, pid: str) -> list[ContentItem]:
     if not isinstance(episodes, list):
         raise AdapterParseError("episodes is not a list")
 
+    podcast = data["props"]["pageProps"]["podcast"]
+    show_title = podcast.get("title")
+    image_url = (podcast.get("image") or {}).get("middlePicUrl")
+
     items: list[ContentItem] = []
     for ep in episodes:
         eid = ep.get("eid")
@@ -46,6 +50,8 @@ def parse_episodes(html: str, pid: str) -> list[ContentItem]:
             published_at=ep.get("pubDate", ""),
             is_paid=(ep.get("payType") != "FREE"),
             media_url=(ep.get("enclosure") or {}).get("url"),
+            image_url=image_url,
+            show_title=show_title,
         ))
     return items
 
