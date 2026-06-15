@@ -40,8 +40,7 @@ function Card({ sig }: { sig: Signal }) {
           <h3 className="ttl">{sig.title}</h3>
           <div className="sig-meta">
             <span className="pill">{c.pillar || "—"}</span>
-            <span className="src"><img src={XYZ_LOGO} alt="小宇宙" />{sig.show_title || "—"}</span>
-            <span>· {fmtDate(sig.published_at)}</span>
+            <span>{fmtDate(sig.published_at)}</span>
           </div>
           <p className="sig-snip"><b>主旨</b>:{c.tldr || "—"}</p>
         </div>
@@ -70,10 +69,31 @@ function Card({ sig }: { sig: Signal }) {
   );
 }
 
+type ShowGroup = { title: string; image?: string | null; items: Signal[] };
+
+// Group cards by 栏目 (show), preserving the incoming order (API sorts newest-first,
+// so the most-recently-updated show floats to the top).
+function groupByShow(list: Signal[]): ShowGroup[] {
+  const groups: ShowGroup[] = [];
+  const idx = new Map<string, number>();
+  for (const it of list) {
+    const t = it.show_title || "未知来源";
+    let i = idx.get(t);
+    if (i === undefined) {
+      i = groups.length;
+      idx.set(t, i);
+      groups.push({ title: t, image: it.image_url, items: [] });
+    }
+    groups[i].items.push(it);
+  }
+  return groups;
+}
+
 export default function Signals() {
   const user = useMe();
   const [items, setItems] = useState<Signal[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [active, setActive] = useState<string | null>(null); // null = 全部
 
   useEffect(() => {
     apiGet<{ items: Signal[] }>("/api/signals").then((r) => {
@@ -82,8 +102,9 @@ export default function Signals() {
     });
   }, []);
 
-  const shows = Array.from(new Set(items.map((i) => i.show_title).filter(Boolean)));
-  const show = shows.length ? shows.join(" · ") : "非共识的20分钟";
+  const allShows = groupByShow(items);            // stable chip order + per-show counts
+  const visible = active ? items.filter((i) => (i.show_title || "未知来源") === active) : items;
+  const groups = groupByShow(visible);
 
   return (
     <>
@@ -101,20 +122,43 @@ export default function Signals() {
         ))}
       </div>
 
-      <div className="sig-lane">
-        <img className="logo" src={XYZ_LOGO} alt="小宇宙" />
-        <span className="lane-t">小宇宙</span>
-        <span className="lane-s">· {show} · 每天 08:00 自动更新</span>
-      </div>
+      {items.length > 0 && (
+        <div className="sig-shows">
+          <button className={`show-chip all${active === null ? " on" : ""}`} onClick={() => setActive(null)}>
+            全部<span className="sc-n">{items.length}</span>
+          </button>
+          {allShows.map((s) => (
+            <button
+              key={s.title}
+              className={`show-chip${active === s.title ? " on" : ""}`}
+              onClick={() => setActive(s.title)}
+            >
+              <img src={s.image || XYZ_LOGO} alt="" />
+              <span className="sc-t">{s.title}</span>
+              <span className="sc-n">{s.items.length}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {user === null && <p className="status">登录后查看信号。</p>}
       {loaded && items.length === 0 && user && (
         <p className="status">还没有信号卡——管道每天 08:00 自动更新。</p>
       )}
 
-      <div className="sig-list">
-        {items.map((s) => <Card key={s.external_id} sig={s} />)}
-      </div>
+      {groups.map((g) => (
+        <section className="sig-group" key={g.title}>
+          <div className="sig-lane">
+            <img className="logo" src={g.image || XYZ_LOGO} alt="" />
+            <span className="lane-t">{g.title}</span>
+            <img className="plat" src={XYZ_LOGO} alt="小宇宙" />
+            <span className="lane-s">· {g.items.length} 条 · 每天 08:00 自动更新</span>
+          </div>
+          <div className="sig-list">
+            {g.items.map((s) => <Card key={s.external_id} sig={s} />)}
+          </div>
+        </section>
+      ))}
     </>
   );
 }
