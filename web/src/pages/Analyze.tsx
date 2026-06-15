@@ -362,7 +362,8 @@ export default function Analyze() {
                     </table>
                   </div>
                   <p className="hint" style={{ marginTop: 10 }}>
-                    ★行 = 本公司在同行中的百分位：估值 P/E {pctChip(peers.percentiles.pe)} · EV/EBITDA {pctChip(peers.percentiles.ev_ebitda)}（低=比同行便宜）；
+                    ★行 = 本公司在同行中的百分位：估值 P/E {pctChip(peers.percentiles.pe)} · P/B {pctChip(peers.percentiles.pb)}
+                    {peers.percentiles.ev_ebitda != null ? ` · EV/EBITDA ${pctChip(peers.percentiles.ev_ebitda)}` : ""}（低=比同行便宜）；
                     质量 ROE {pctChip(peers.percentiles.roe)} · 净利率 {pctChip(peers.percentiles.net_margin)}（高=比同行好）
                   </p>
                 </>

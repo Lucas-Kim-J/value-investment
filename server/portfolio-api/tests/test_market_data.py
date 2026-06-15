@@ -149,9 +149,25 @@ def test_peer_verdict_expensive_low_quality():
     assert verdict.startswith("偏贵") and flag and "高估" in flag
 
 
-def test_peer_comparison_non_us_graceful():
-    p = md.peer_comparison("600519", "A股")
-    assert p["rows"] == [] and p["warnings"] and "A股" in p["warnings"][0]
+def test_cn_peer_groups_lookup():
+    assert md._CN_PEER_OF.get("600519") == "白酒"
+    assert "000858" in md._CN_PEER_GROUPS["白酒"]            # 五粮液 is a 茅台 peer
+    assert md._CN_PEER_OF.get("600036") == "银行"
+    # every code is a valid 6-digit A-share code (catches typo entries in the curated map)
+    assert all(len(c) == 6 and c.isdigit() for c in md._CN_PEER_OF)
+
+
+def test_peer_verdict_falls_back_to_pe_when_no_ev_ebitda():
+    rows = [{"is_self": True, "roe": 30}, {"roe": 10}, {"roe": 12}, {"roe": 15}]
+    pct = {"pe": 20, "pb": 25, "roe": 80, "net_margin": 70}   # cheap P/E + high ROE
+    verdict, flag = md.peer_verdict_and_flag(rows, pct)
+    assert verdict.startswith("便宜") and "P/E" in verdict
+    assert flag and "错杀" in flag
+
+
+def test_peer_comparison_uncovered_cn_graceful():
+    p = md.peer_comparison("301999", "A股")   # not in the curated map
+    assert p["rows"] == [] and p["warnings"] and "同行库" in p["warnings"][0]
 
 
 def test_snapshot_unsupported_market_is_graceful_stub():

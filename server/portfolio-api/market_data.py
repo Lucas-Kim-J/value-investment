@@ -285,19 +285,22 @@ def _rank_pctile(rows, key, value):
 def peer_verdict_and_flag(rows, percentiles):
     """Tool ③ EV/EBITDA peer verdict (cheapest 30% AND ROE not below peer median) +
     a 错杀/高估 mispricing flag. Pure — separated so it's unit-testable."""
+    # valuation percentile: EV/EBITDA preferred (US); fall back to P/E (A股 has no EV/EBITDA)
     evp = percentiles.get("ev_ebitda")
+    valp = evp if evp is not None else percentiles.get("pe")
+    label = "EV/EBITDA" if evp is not None else "P/E"
     self_row = next((r for r in rows if r.get("is_self")), rows[0] if rows else {})
     roes = sorted(r["roe"] for r in rows if r.get("roe") is not None)
     roe_med = roes[len(roes) // 2] if roes else None
     roe_ok = self_row.get("roe") is not None and roe_med is not None and self_row["roe"] >= roe_med
-    if evp is None:
+    if valp is None:
         verdict = "数据缺失"
-    elif evp <= 30 and roe_ok:
-        verdict = "便宜（同行最便宜30%且ROE不输）"
-    elif evp >= 70:
-        verdict = "偏贵（同行偏贵端）"
+    elif valp <= 30 and roe_ok:
+        verdict = f"便宜（{label} 同行最便宜30%且ROE不输）"
+    elif valp >= 70:
+        verdict = f"偏贵（{label} 同行偏贵端）"
     else:
-        verdict = "合理（同行中段）"
+        verdict = f"合理（{label} 同行中段）"
 
     val_p = [percentiles[k] for k in ("ev_ebitda", "pe") if percentiles.get(k) is not None]
     q_p = [percentiles[k] for k in ("roe", "gross_margin", "net_margin") if percentiles.get(k) is not None]
@@ -315,13 +318,109 @@ def peer_verdict_and_flag(rows, percentiles):
     return verdict, flag
 
 
+# Curated A-share peer groups — hand-picked liquid comps per industry (the 东财/申万
+# constituent endpoints are unreachable from our hosts; curated comps are also cleaner
+# than 东财's noisy buckets for a value tool). {industry: {code: name}}.
+_CN_PEER_GROUPS = {
+    "白酒": {"600519": "贵州茅台", "000858": "五粮液", "000568": "泸州老窖", "600809": "山西汾酒",
+            "002304": "洋河股份", "000799": "酒鬼酒", "600779": "水井坊", "603369": "今世缘"},
+    "银行": {"600036": "招商银行", "601166": "兴业银行", "600000": "浦发银行", "601398": "工商银行",
+            "601939": "建设银行", "601328": "交通银行", "002142": "宁波银行", "600015": "华夏银行"},
+    "保险": {"601318": "中国平安", "601601": "中国太保", "601628": "中国人寿", "601336": "新华保险", "601319": "中国人保"},
+    "券商": {"600030": "中信证券", "600837": "海通证券", "601688": "华泰证券", "000776": "广发证券",
+            "601211": "国泰君安", "600999": "招商证券", "300059": "东方财富"},
+    "家电": {"000651": "格力电器", "000333": "美的集团", "600690": "海尔智家", "002508": "老板电器",
+            "000921": "海信家电", "603868": "飞科电器"},
+    "新能源车与锂电": {"300750": "宁德时代", "002594": "比亚迪", "002460": "赣锋锂业", "300014": "亿纬锂能",
+                  "002466": "天齐锂业", "300207": "欣旺达"},
+    "光伏": {"601012": "隆基绿能", "002129": "TCL中环", "300274": "阳光电源", "002459": "晶澳科技", "688599": "天合光能"},
+    "医药与CXO": {"600276": "恒瑞医药", "300760": "迈瑞医疗", "603259": "药明康德", "300347": "泰格医药",
+              "600196": "复星医药", "002821": "凯莱英"},
+    "食品饮料": {"603288": "海天味业", "600887": "伊利股份", "603899": "晨光股份", "000895": "双汇发展",
+            "605499": "东鹏饮料", "600872": "中炬高新"},
+    "半导体": {"688981": "中芯国际", "603501": "韦尔股份", "002371": "北方华创", "688012": "中微公司",
+            "603986": "兆易创新", "688041": "海光信息"},
+    "消费电子": {"002475": "立讯精密", "002241": "歌尔股份", "300433": "蓝思科技", "002138": "顺络电子"},
+    "地产": {"600048": "保利发展", "000002": "万科A", "001979": "招商蛇口", "600606": "绿地控股"},
+    "煤炭": {"601088": "中国神华", "600188": "兖矿能源", "601225": "陕西煤业", "600985": "淮北矿业"},
+    "有色与黄金": {"600362": "江西铜业", "603993": "洛阳钼业", "601899": "紫金矿业", "600547": "山东黄金"},
+    "石油石化": {"600028": "中国石化", "601857": "中国石油", "600688": "上海石化"},
+    "汽车整车": {"600104": "上汽集团", "000625": "长安汽车", "601238": "广汽集团", "000800": "一汽解放"},
+    "科技与软件": {"600588": "用友网络", "002230": "科大讯飞", "002415": "海康威视", "600845": "宝信软件"},
+}
+_CN_PEER_OF = {code: ind for ind, members in _CN_PEER_GROUPS.items() for code in members}
+
+
+def _cn_peer_metrics(code, name):
+    """One A-share peer's comparable metrics from value_em (PE/PB/市值) + financial_abstract (ROE/利润率/增速)."""
+    import akshare as ak
+    row = {"ticker": code, "name": name, "market_cap": None, "pe": None, "pb": None, "ps": None,
+           "ev_ebitda": None, "roe": None, "gross_margin": None, "net_margin": None, "revenue_growth": None}
+    try:
+        v = _retry(lambda: ak.stock_value_em(symbol=code)).iloc[-1]
+        row.update(market_cap=_num(v.get("总市值")), pe=_num(v.get("PE(TTM)")),
+                   pb=_num(v.get("市净率")), ps=_num(v.get("市销率")))
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        fa = _retry(lambda: ak.stock_financial_abstract(symbol=code))
+        byk = {}
+        for _, r in fa.iterrows():
+            k = r.get("指标")
+            if k is not None and k not in byk:
+                byk[k] = r
+        cols = sorted(c for c in fa.columns if re.fullmatch(r"\d{4}1231", str(c)))
+
+        def latest(lbl):
+            r = byk.get(lbl)
+            if r is None:
+                return None
+            for c in reversed(cols):
+                val = _num(r.get(c))
+                if val is not None:
+                    return val
+            return None
+        row.update(roe=latest("净资产收益率(ROE)"), gross_margin=latest("毛利率"),
+                   net_margin=latest("销售净利率"), revenue_growth=latest("营业总收入增长率"))
+    except Exception:  # noqa: BLE001
+        pass
+    return row
+
+
+def _cn_peer_comparison(code, max_peers=6):
+    out = {"ticker": code, "market": "A股", "industry": None, "rows": [],
+           "percentiles": {}, "ev_ebit_verdict": "数据缺失", "mispricing": None, "warnings": []}
+    ind = _CN_PEER_OF.get(code)
+    if not ind:
+        out["warnings"].append("该股未在内置同行库（覆盖主要行业龙头；可手动扩充 _CN_PEER_GROUPS）。")
+        return out
+    out["industry"] = ind
+    members = _CN_PEER_GROUPS[ind]
+    peer_codes = [c for c in members if c != code and len(c) == 6][:max_peers]
+    rows = [{**_cn_peer_metrics(code, members.get(code, code)), "is_self": True}]
+    for c in peer_codes:
+        m = _cn_peer_metrics(c, members[c])
+        if m.get("pe") is not None or m.get("pb") is not None:
+            rows.append({**m, "is_self": False})
+    out["rows"] = rows
+    if len(rows) < 3:
+        out["warnings"].append("可比同行样本不足。")
+        return out
+    dims = ["pe", "pb", "ps", "roe", "gross_margin", "net_margin", "revenue_growth"]
+    out["percentiles"] = {d: _rank_pctile(rows, d, rows[0].get(d)) for d in dims}
+    out["ev_ebit_verdict"], out["mispricing"] = peer_verdict_and_flag(rows, out["percentiles"])
+    return out
+
+
 def peer_comparison(ticker, market, max_peers=8):
-    """Industry peer comparison. US via yfinance Industry; A-share not wired yet."""
+    """Industry peer comparison. US via yfinance Industry; A-share via curated groups."""
     ticker = (ticker or "").strip().upper()
+    if _is_cn(market):
+        return _cn_peer_comparison(_cn_code(ticker))
     out = {"ticker": ticker, "market": market, "industry": None, "rows": [],
            "percentiles": {}, "ev_ebit_verdict": "数据缺失", "mispricing": None, "warnings": []}
     if not _is_us(market):
-        out["warnings"].append("同行对比暂仅支持美股（A股同行数据待接入）。")
+        out["warnings"].append("同行对比暂仅支持美股 + A股。")
         return out
     try:
         import yfinance as yf
