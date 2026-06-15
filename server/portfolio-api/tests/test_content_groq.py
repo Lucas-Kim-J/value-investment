@@ -95,6 +95,16 @@ def test_groq_chunks_when_over_cap_and_joins(tmp_path):
     assert out["text"] == "[a_chunk000.m4a][a_chunk001.m4a]"
 
 
+def test_groq_model_from_env(monkeypatch):
+    monkeypatch.setenv("VI_GROQ_MODEL", "whisper-large-v3")
+    assert GroqTranscriber(api_key="k").model == "whisper-large-v3"
+
+
+def test_groq_model_defaults_turbo(monkeypatch):
+    monkeypatch.delenv("VI_GROQ_MODEL", raising=False)
+    assert GroqTranscriber(api_key="k").model == "whisper-large-v3-turbo"
+
+
 def test_groq_requires_api_key(tmp_path, monkeypatch):
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     f = _write(tmp_path, "a.m4a", 5)

@@ -59,10 +59,11 @@ def _ffmpeg_split(path: Path, seconds: int = _CHUNK_SECONDS) -> list[Path]:
 class GroqTranscriber:
     """Same interface as Transcriber: transcribe(path) -> {"text", "segments"}."""
 
-    def __init__(self, api_key: str | None = None, model: str = "whisper-large-v3-turbo",
+    def __init__(self, api_key: str | None = None, model: str | None = None,
                  max_bytes: int = _MAX_BYTES, poster=None, splitter=None):
         self.api_key = api_key if api_key is not None else os.environ.get("GROQ_API_KEY")
-        self.model = model
+        # VI_GROQ_MODEL: 'whisper-large-v3' (max quality) or 'whisper-large-v3-turbo' (faster/cheaper)
+        self.model = model or os.environ.get("VI_GROQ_MODEL", "whisper-large-v3-turbo")
         self.max_bytes = max_bytes
         self._post = poster or _groq_post
         self._split = splitter or _ffmpeg_split
