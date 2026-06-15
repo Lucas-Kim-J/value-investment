@@ -8,6 +8,8 @@ import subprocess
 from content_pipeline.models import ContentItem
 
 _TARGET = os.environ.get("VI_PIPELINE_FEISHU_TARGET", "feishu")
+# Deep link back to the website's 信号 page (configurable per deployment).
+_SIGNALS_URL = os.environ.get("VI_SIGNALS_URL", "http://154.36.153.46/signals")
 
 
 def render_new_notice(item: ContentItem) -> str:
@@ -30,6 +32,7 @@ def render_signal_card(item: ContentItem, card: dict) -> str:
         f"回听：{relisten}" + (f"（{stamps}）" if stamps else ""),
         "",
         f"原集：{item.url}",
+        f"🔗 在网站看全部：{_SIGNALS_URL}",
     ]
     return "\n".join(lines)
 
