@@ -643,6 +643,36 @@ def _signal_row_to_dict(row: dict, include_transcript: bool = False) -> dict:
     return out
 
 
+# ---------- content signals (read-only feed over the pipeline's content_items) ----------
+
+@app.get("/api/signals")
+def list_signals():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute(
+            "SELECT external_id, source, show_title, image_url, title, url, published_at, signal_card "
+            "FROM content_items WHERE signal_card IS NOT NULL "
+            "ORDER BY published_at DESC NULLS LAST LIMIT 50")
+        rows = [dict(r) for r in cur.fetchall()]
+    return jsonify({"items": [_signal_row_to_dict(r) for r in rows]})
+
+
+@app.get("/api/signals/<eid>")
+def get_signal(eid):
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute(
+            "SELECT external_id, source, show_title, image_url, title, url, published_at, "
+            "signal_card, transcript FROM content_items "
+            "WHERE external_id=%s AND signal_card IS NOT NULL", (eid,))
+        r = cur.fetchone()
+    if not r:
+        return {"error": "not found"}, 404
+    return jsonify(_signal_row_to_dict(dict(r), include_transcript=True))
+
+
 def _reap_stale(table: str, user: str) -> None:
     """Mark rows stuck in 'running' >5min as error (worker-restart orphans).
     `table` is a fixed literal ('company_analyses' / 'reports'), never user input."""

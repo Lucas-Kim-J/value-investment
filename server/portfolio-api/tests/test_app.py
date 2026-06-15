@@ -27,3 +27,9 @@ def test_signal_row_to_dict_parses_str_card_and_includes_transcript():
     d = app._signal_row_to_dict(row, include_transcript=True)
     assert d["card"]["tldr"] == "t"
     assert d["transcript"] == "全文"
+
+
+def test_signals_endpoints_require_login():
+    client = app.app.test_client()
+    assert client.get("/api/signals").status_code == 401
+    assert client.get("/api/signals/anything").status_code == 401
