@@ -30,3 +30,32 @@ class Transcriber:
         seg_dicts = [{"start": s.start, "end": s.end, "text": s.text} for s in segments]
         text, stamped = segments_to_text(seg_dicts)
         return {"text": text, "segments": stamped}
+
+
+class FallbackTranscriber:
+    """Try `primary`; on ANY failure (rate limit / quota / payment / network / error)
+    fall back to `fallback`. Lets us run Groq with local faster-whisper as the safety net."""
+
+    def __init__(self, primary, fallback, log=print):
+        self.primary = primary
+        self.fallback = fallback
+        self._log = log
+
+    def transcribe(self, audio_path) -> dict:
+        try:
+            return self.primary.transcribe(audio_path)
+        except Exception as e:  # noqa: BLE001 — any primary failure → local fallback
+            self._log(f"[transcriber] primary failed ({str(e)[:140]}); falling back to local")
+            return self.fallback.transcribe(audio_path)
+
+
+def make_transcriber():
+    """Pick the transcriber from VI_TRANSCRIBER: 'mock' | 'groq' | 'local' (default).
+    'groq' = Groq primary with local faster-whisper as automatic fallback."""
+    mode = os.environ.get("VI_TRANSCRIBER", "local").lower()
+    if mode == "mock":
+        return Transcriber(mode="mock")
+    if mode == "groq":
+        from content_pipeline.groq_transcriber import GroqTranscriber  # lazy: keep base import light
+        return FallbackTranscriber(GroqTranscriber(), Transcriber())
+    return Transcriber()

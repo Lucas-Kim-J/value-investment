@@ -19,7 +19,7 @@ from content_pipeline.adapters.base import AdapterParseError
 from content_pipeline.adapters.xiaoyuzhou import XiaoyuzhouAdapter
 from content_pipeline.deliverer import Deliverer
 from content_pipeline.distiller import Distiller
-from content_pipeline.transcriber import Transcriber
+from content_pipeline.transcriber import Transcriber, make_transcriber
 from content_pipeline import orchestrator
 
 PODCAST_ID = os.environ.get("VI_PIPELINE_PODCAST_ID", "6978a31df828d4e9f2787d3d")
@@ -49,7 +49,7 @@ def main(argv=None) -> int:
     else:
         from content_pipeline.store import PgStore
         store = PgStore()
-        transcriber = Transcriber()
+        transcriber = make_transcriber()   # VI_TRANSCRIBER=groq → Groq + local fallback
         distiller = Distiller()
         deliverer = Deliverer()
 
