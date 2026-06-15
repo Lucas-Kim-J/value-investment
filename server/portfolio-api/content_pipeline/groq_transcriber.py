@@ -22,6 +22,9 @@ GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 _MAX_BYTES = 24 * 1024 * 1024   # safety margin under Groq's 25MB cap
 _CHUNK_SECONDS = 600            # ~10 min/chunk (well under 25MB at podcast bitrates)
 _HTTP_TIMEOUT = 300
+# Groq's API is behind Cloudflare, which 403s the default "Python-urllib" UA
+# (CF error 1010). A normal browser/curl-style UA passes.
+_UA = "Mozilla/5.0 (compatible; value-investment-pipeline/1.0)"
 
 
 def _groq_post(path: Path, api_key: str, model: str, language: str = "zh") -> str:
@@ -38,6 +41,7 @@ def _groq_post(path: Path, api_key: str, model: str, language: str = "zh") -> st
     req = urllib.request.Request(
         GROQ_URL, data=bytes(body), method="POST",
         headers={"Authorization": f"Bearer {api_key}",
+                 "User-Agent": _UA,
                  "Content-Type": f"multipart/form-data; boundary={boundary}"})
     with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT) as r:
         return r.read().decode("utf-8", "replace").strip()
