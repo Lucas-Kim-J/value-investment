@@ -9,6 +9,16 @@ def test_segments_to_text_joins_with_timestamps():
     assert stamped[0]["text"] == "你好"
 
 
+def test_transcriber_model_from_env(monkeypatch):
+    monkeypatch.setenv("VI_WHISPER_MODEL", "medium")
+    assert Transcriber().model_name == "medium"
+
+
+def test_transcriber_model_defaults_large_v3(monkeypatch):
+    monkeypatch.delenv("VI_WHISPER_MODEL", raising=False)
+    assert Transcriber().model_name == "large-v3"
+
+
 def test_transcriber_mock_mode_returns_placeholder(tmp_path):
     f = tmp_path / "a.m4a"
     f.write_bytes(b"x")
