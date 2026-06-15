@@ -349,7 +349,7 @@ export default function Analyze() {
                         {peers.rows.map((r, i) => (
                           <tr key={i} className={r.is_self ? "self" : ""}>
                             <td>{r.ticker}{r.is_self ? " ★" : ""}</td>
-                            <td>{fmtMoney(r.market_cap, "USD") ?? "—"}</td>
+                            <td>{fmtMoney(r.market_cap, isCN ? "CNY" : "USD") ?? "—"}</td>
                             <td>{fmtX(r.pe) ?? "—"}</td>
                             <td>{r.ev_ebitda != null ? r.ev_ebitda + "×" : "—"}</td>
                             <td>{fmtPct(r.roe) ?? "—"}</td>
