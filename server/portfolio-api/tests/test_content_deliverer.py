@@ -31,6 +31,12 @@ def test_render_signal_card_has_all_fields():
         assert piece in s
 
 
+def test_render_signal_card_includes_signals_deeplink():
+    s = render_signal_card(_item(), _card())
+    assert "/signals" in s          # deep link back to the website's 信号 page
+    assert "在网站看" in s
+
+
 def test_deliverer_send_new_notice_calls_runner():
     sent = []
     d = Deliverer(runner=lambda text, subject: sent.append((subject, text)))
