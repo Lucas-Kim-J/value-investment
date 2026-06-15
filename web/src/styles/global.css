@@ -275,3 +275,37 @@ kbd { font-family: "SF Mono", Menlo, monospace; font-size: 11px; background: var
 .md-render table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 14px; }
 .md-render th, .md-render td { border: 1px solid var(--border); padding: 7px 11px; text-align: left; }
 .md-render th { background: var(--bg-soft); font-weight: 600; color: var(--fg); }
+
+/* ===== 信号 hub ===== */
+.sig-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0 6px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+.sig-tab { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; padding: 7px 13px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg-soft); color: var(--fg-soft); }
+.sig-tab.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.sig-tab.soon { color: var(--muted); opacity: .7; }
+.sig-tab.soon i { font-style: normal; font-size: 10.5px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0 6px; margin-left: 2px; }
+.sig-lane { display: flex; align-items: center; gap: 9px; margin: 22px 0 12px; }
+.sig-lane .logo { width: 22px; height: 22px; border-radius: 6px; }
+.sig-lane .lane-t { font-size: 15px; font-weight: 700; color: var(--fg); }
+.sig-lane .lane-s { font-size: 12.5px; color: var(--muted); }
+.sig-list { display: flex; flex-direction: column; gap: 14px; }
+.sig { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 12px; padding: 15px 18px; transition: border-color var(--t), box-shadow var(--t); }
+.sig:hover { border-color: var(--accent); box-shadow: var(--shadow-1); }
+.sig-top { display: flex; align-items: flex-start; gap: 14px; cursor: pointer; }
+.sig .thumb { width: 60px; height: 60px; border-radius: 10px; object-fit: cover; border: 1px solid var(--border); flex-shrink: 0; background: var(--bg); }
+.sig-main { flex: 1; min-width: 0; }
+.sig .ttl { font-size: 16px; font-weight: 600; color: var(--fg); margin: 0; line-height: 1.4; }
+.sig-meta { margin-top: 7px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sig-meta .pill { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
+.sig-meta .src { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.sig-meta .src img { width: 13px; height: 13px; border-radius: 3px; }
+.sig .chev { color: var(--muted); font-size: 13px; flex-shrink: 0; transition: transform var(--t); align-self: center; }
+.sig.open .chev { transform: rotate(180deg); }
+.sig-snip { margin: 9px 0 0; font-size: 13.5px; color: var(--fg-soft); line-height: 1.6; }
+.sig-snip b { color: var(--fg); }
+.sig-body { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.sig-body .fld { margin: 0 0 12px; font-size: 14px; line-height: 1.7; color: var(--fg-soft); }
+.sig-body .fld .k { display: block; font-size: 12px; font-weight: 700; letter-spacing: .04em; color: var(--accent); margin-bottom: 3px; }
+.sig-body .fld.warn .k { color: var(--warn); }
+.sig-body .relisten { font-size: 13px; color: var(--muted); margin: 2px 0 0; }
+.sig-body .acts { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.sig-body .trx { margin-top: 12px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 13px 15px; font-size: 13.5px; line-height: 1.75; color: var(--fg-soft); white-space: pre-wrap; }
+.sig-body .trx .note { display: block; color: var(--muted); font-size: 12px; margin-bottom: 8px; font-style: italic; }
