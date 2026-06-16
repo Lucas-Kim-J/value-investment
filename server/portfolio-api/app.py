@@ -43,6 +43,7 @@ import capture as _capture
 import cycle as _cyc
 import market_board as _mb
 import market_data as _md
+import market_cn as _mcn
 import market_cycle as _mc
 import market_rates as _mr
 import market_sentiment as _ms
@@ -1342,13 +1343,14 @@ def get_analysis(aid):
 
 _CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600, "peers": 12 * 3600, "cycle": 12 * 3600,
               "board": 24 * 3600, "rates": 12 * 3600, "sentiment": 6 * 3600, "review": 24 * 3600,
-              "leaders": 24 * 3600}
+              "leaders": 24 * 3600, "cn": 12 * 3600}
 _CYCLE_KEY = "__US_MARKET__"   # market-level cycle compass uses a synthetic ticker
 _BOARD_KEY = "__US_BOARD__"    # market-level board (体温计+板块热力图) synthetic ticker
 _RATES_KEY = "__US_RATES__"    # market-level 利率与央行 synthetic ticker
 _SENT_KEY = "__US_SENT__"      # market-level 情绪体温计 synthetic ticker
 _REVIEW_KEY = "__US_REVIEW__"  # market-level AI 审视 synthetic ticker
 _LEADERS_KEY = "__US_LEADERS__"  # market-level 板块龙头 synthetic ticker
+_CN_KEY = "__CN_MARKET__"      # A股 市场快照 synthetic ticker
 
 
 def _cache_get(ticker: str, market: str, kind: str):
@@ -1545,6 +1547,27 @@ def market_leaders_view():
         return {"error": "未登录"}, 401
     market = (request.args.get("market") or "美股")[:16]
     return jsonify(_leaders_snapshot(market, fresh=request.args.get("fresh") == "1"))
+
+
+def _cn_snapshot(fresh: bool = False) -> dict:
+    """A股 市场快照 (估值分位 + 利率政策 + 两融情绪), cached 12h + archived."""
+    if not fresh:
+        cached = _cache_get(_CN_KEY, "A股", "cn")
+        if cached is not None and cached.get("_schema") == _mcn.CN_SCHEMA:
+            return cached
+    data = _mcn.cn_market()
+    try:
+        _cache_put(_CN_KEY, "A股", "cn", data)
+    except Exception:  # noqa: BLE001
+        pass
+    return data
+
+
+@app.get("/api/market/cn")
+def market_cn_view():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    return jsonify(_cn_snapshot(fresh=request.args.get("fresh") == "1"))
 
 
 # ---------- 市场 AI 审视 (top-down consensus / 历史镜像 / 市场非共识) ----------

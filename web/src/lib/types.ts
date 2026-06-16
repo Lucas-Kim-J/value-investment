@@ -370,3 +370,17 @@ export interface SectorLeaders {
   note?: string;
   warnings: string[];
 }
+
+export interface MarketCN {
+  _schema?: number;
+  market: string;
+  valuation: { index?: string; pe?: number; percentile?: number | null; label?: string; level?: number | null; note?: string };
+  rates: {
+    policy_rates?: { name: string; value: string }[];
+    ten_year?: number; curve_slope?: number;
+    m2_yoy?: number | null; m1_yoy?: number | null; m1_m2_gap?: number | null; pmi?: number | null; note?: string;
+  };
+  sentiment: { margin_balance_yi?: number; trend_20d_pct?: number | null; as_of?: string; note?: string };
+  note?: string;
+  warnings: string[];
+}

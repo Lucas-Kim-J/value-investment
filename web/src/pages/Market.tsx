@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { apiGet, apiPost } from "../lib/api";
 import { useMe } from "../lib/hooks";
 import { Markdown } from "../shell/Markdown";
-import type { MarketBoard, MarketCycle, MarketRates, MarketSentiment, MarketReview, SectorLeaders } from "../lib/types";
+import type { MarketBoard, MarketCycle, MarketRates, MarketSentiment, MarketReview, SectorLeaders, MarketCN } from "../lib/types";
 import { CycleCompass } from "./market/CycleCompass";
 import "./analyze/dashboard.css";
 import "./market/market.css";
@@ -30,6 +30,12 @@ export default function Market() {
   const [review, setReview] = useState<MarketReview | null>(null);
   const [genBusy, setGenBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [mk, setMk] = useState<"美股" | "A股">("美股");
+  const [cn, setCn] = useState<MarketCN | null>(null);
+
+  useEffect(() => {
+    if (mk === "A股" && !cn) apiGet<MarketCN>("/api/market/cn").then((r) => setCn(r.data));
+  }, [mk, cn]);
 
   useEffect(() => {
     let on = true;
@@ -69,10 +75,18 @@ export default function Market() {
         <p>先看天气再选种子：市场贵不贵、钱多不多、广度好不好、哪个板块在领跑/拥挤、周期顺不顺风——单股价值判断要叠在这张图上看。</p>
       </div>
 
-      {user === null && <p className="status">登录后查看市场看板。</p>}
-      {user && !loaded && <p className="status">加载中…（首次计算广度需扫描标普成分，约 1 分钟）</p>}
+      <div className="sig-tabs" style={{ marginBottom: 14 }}>
+        {(["美股", "A股"] as const).map((m) => (
+          <span key={m} className={`sig-tab${mk === m ? " active" : ""}`} style={{ cursor: "pointer" }} onClick={() => setMk(m)}>
+            {m === "美股" ? "🇺🇸 美股" : "🇨🇳 A股"}
+          </span>
+        ))}
+      </div>
 
-      {board && (
+      {user === null && <p className="status">登录后查看市场看板。</p>}
+      {mk === "美股" && user && !loaded && <p className="status">加载中…（首次计算广度需扫描标普成分，约 1 分钟）</p>}
+
+      {mk === "美股" && board && (
         <>
           <div className="ca-panel ca-consensus">
             <h3 style={{ margin: 0 }}>🌡️ 市场体温计（美股）</h3>
@@ -118,7 +132,7 @@ export default function Market() {
         </>
       )}
 
-      {leaders && (leaders.sectors?.length ?? 0) > 0 && (
+      {mk === "美股" && leaders && (leaders.sectors?.length ?? 0) > 0 && (
         <div className="ca-panel ca-consensus">
           <h3 style={{ margin: 0 }}>🏆 板块龙头</h3>
           <p className="hint">各板块 ETF 权重前列 = 龙头；点 ticker 直接进公司分析（自上而下 → 自下而上）。</p>
@@ -138,7 +152,7 @@ export default function Market() {
         </div>
       )}
 
-      {rates && (rates.policy_rates?.length > 0 || rates.future_path?.market_implied) && (
+      {mk === "美股" && rates && (rates.policy_rates?.length > 0 || rates.future_path?.market_implied) && (
         <div className="ca-panel ca-consensus">
           <h3 style={{ margin: 0 }}>🏛️ 利率与央行（美股）</h3>
           <p className="hint">当前政策利率 + 未来路径双腿（市场隐含 vs Fed 点阵图，两者都是真实数据、非预测）+ 关键宏观。</p>
@@ -181,7 +195,7 @@ export default function Market() {
         </div>
       )}
 
-      {sentiment && (sentiment.fear_greed?.score != null || sentiment.vix_term?.label !== "数据缺失") && (
+      {mk === "美股" && sentiment && (sentiment.fear_greed?.score != null || sentiment.vix_term?.label !== "数据缺失") && (
         <div className="ca-panel ca-consensus">
           <h3 style={{ margin: 0 }}>😱 情绪体温计（美股）</h3>
           <p className="hint">逆向读：极度恐惧常在底部、极度贪婪常在过热。{sentiment.composite?.note}</p>
@@ -208,6 +222,7 @@ export default function Market() {
         </div>
       )}
 
+      {mk === "美股" && (<>
       <div className="ca-panel ca-consensus">
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <h3 style={{ margin: 0 }}>🧠 市场审视（AI · 共识 / 历史镜像 / 非共识）</h3>
@@ -225,6 +240,52 @@ export default function Market() {
       </div>
 
       <CycleCompass cycle={cycle} />
+      </>)}
+
+      {mk === "A股" && (
+        !cn ? <p className="status">加载 A股 市场数据中…（akshare，约 5–10 秒）</p> : (
+          <>
+            <div className="ca-panel ca-consensus">
+              <h3 style={{ margin: 0 }}>🌡️ A股 市场体温计</h3>
+              <p className="hint">{cn.note}</p>
+              <div className="mk-gauges">
+                <div className="mk-gauge">
+                  <div className="g-h">{cn.valuation?.index || "沪深300"} 估值 <span className={"ca-verdict " + valCls(cn.valuation?.level)}>{cn.valuation?.label || "—"}</span></div>
+                  <div className="g-big">{pct(cn.valuation?.percentile)}<span className="g-u"> 历史分位</span></div>
+                  <div className="g-sub">{cn.valuation?.pe != null ? `滚动 P/E ${cn.valuation.pe}` : "—"}</div>
+                  {cn.valuation?.note && <div className="g-note">{cn.valuation.note}</div>}
+                </div>
+                {cn.sentiment?.margin_balance_yi != null && (
+                  <div className="mk-gauge">
+                    <div className="g-h">两融情绪</div>
+                    <div className="g-big" style={{ fontSize: 18 }}>{signed(cn.sentiment.trend_20d_pct)}<span className="g-u"> 近20日</span></div>
+                    <div className="g-sub">{cn.sentiment.note}（截至 {cn.sentiment.as_of}）</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="ca-panel ca-consensus">
+              <h3 style={{ margin: 0 }}>🏛️ 利率与政策（A股）</h3>
+              <p className="hint">中国周期政策/信用驱动：看 LPR、中债曲线、M1-M2 剪刀差与 PMI 的政策&信用立场。</p>
+              <div className="mk-rates">
+                {(cn.rates?.policy_rates || []).map((r, i) => (
+                  <div className="mk-rate" key={i}><div className="rn">{r.name}</div><div className="rv">{r.value}</div></div>
+                ))}
+                {cn.rates?.m2_yoy != null && (
+                  <div className="mk-rate"><div className="rn">M2 / M1 同比</div><div className="rv" style={{ fontSize: 16 }}>{cn.rates.m2_yoy}% / {cn.rates.m1_yoy}%</div>{cn.rates.m1_m2_gap != null && <div className="rd">剪刀差 {cn.rates.m1_m2_gap > 0 ? "+" : ""}{cn.rates.m1_m2_gap}pp</div>}</div>
+                )}
+                {cn.rates?.pmi != null && (
+                  <div className="mk-rate"><div className="rn">官方制造业 PMI</div><div className="rv">{cn.rates.pmi}</div><div className="rd">{cn.rates.pmi >= 50 ? "扩张" : "收缩"}</div></div>
+                )}
+              </div>
+              {cn.rates?.note && <div className="ca-bet" style={{ marginTop: 10 }}>{cn.rates.note}</div>}
+            </div>
+
+            <p className="hint" style={{ padding: "0 4px" }}>板块热力图 / 板块龙头 / AI 市场审视 暂为美股专属；A股 周期与情绪扩展建设中。{(cn.warnings?.length ?? 0) > 0 ? "（" + cn.warnings.join("；") + "）" : ""}</p>
+          </>
+        )
+      )}
     </>
   );
 }
