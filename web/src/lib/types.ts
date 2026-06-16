@@ -330,3 +330,18 @@ export interface MarketBoard {
   crowding_note?: string;
   warnings: string[];
 }
+
+export interface MarketRates {
+  _schema?: number;
+  market: string;
+  policy_rates: { name: string; value: string; detail?: string; asof?: string | null }[];
+  future_path: {
+    market_implied?: { dgs2: number; gap_bps: number; direction: string; note: string } | null;
+    dot_plot?: { points: [number, number][]; direction: string; note: string } | null;
+    comparison?: string;
+    t10yff?: number | null;
+  };
+  macro: { name: string; value: string; trend?: string | null; asof?: string | null }[];
+  fred_enabled?: boolean;
+  warnings: string[];
+}

@@ -44,6 +44,7 @@ import cycle as _cyc
 import market_board as _mb
 import market_data as _md
 import market_cycle as _mc
+import market_rates as _mr
 import notion_kb as _nkb
 
 CODES_FILE = Path(os.environ.get("VI_CODES_FILE", "/etc/value-investment/access-codes.json"))
@@ -1338,9 +1339,11 @@ def get_analysis(aid):
 # Cached in company_data_cache (public data, shared across users). TTL by kind;
 # ?fresh=1 forces a refetch.
 
-_CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600, "peers": 12 * 3600, "cycle": 12 * 3600, "board": 24 * 3600}
+_CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600, "peers": 12 * 3600, "cycle": 12 * 3600,
+              "board": 24 * 3600, "rates": 12 * 3600}
 _CYCLE_KEY = "__US_MARKET__"   # market-level cycle compass uses a synthetic ticker
 _BOARD_KEY = "__US_BOARD__"    # market-level board (体温计+板块热力图) synthetic ticker
+_RATES_KEY = "__US_RATES__"    # market-level 利率与央行 synthetic ticker
 
 
 def _cache_get(ticker: str, market: str, kind: str):
@@ -1463,6 +1466,31 @@ def market_board_view():
         return {"error": "未登录"}, 401
     market = (request.args.get("market") or "美股")[:16]
     return jsonify(_board_snapshot(market, fresh=request.args.get("fresh") == "1"))
+
+
+def _rates_snapshot(market: str = "美股", fresh: bool = False) -> dict:
+    """利率与央行 (政策利率 + 未来路径双腿 + 关键宏观), cached 12h + archived. US only."""
+    if not _md._is_us(market):
+        return {"market": market, "policy_rates": [], "macro": [], "future_path": {},
+                "warnings": ["利率与央行目前以美联储为主；其他央行建设中"]}
+    if not fresh:
+        cached = _cache_get(_RATES_KEY, "美股", "rates")
+        if cached is not None and cached.get("_schema") == _mr.RATES_SCHEMA:
+            return cached
+    data = _mr.us_rates()
+    try:
+        _cache_put(_RATES_KEY, "美股", "rates", data)
+    except Exception:  # noqa: BLE001
+        pass
+    return data
+
+
+@app.get("/api/market/rates")
+def market_rates_view():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    market = (request.args.get("market") or "美股")[:16]
+    return jsonify(_rates_snapshot(market, fresh=request.args.get("fresh") == "1"))
 
 
 @app.get("/api/companies/archive")

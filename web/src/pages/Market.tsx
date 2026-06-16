@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiGet } from "../lib/api";
 import { useMe } from "../lib/hooks";
-import type { MarketBoard, MarketCycle } from "../lib/types";
+import type { MarketBoard, MarketCycle, MarketRates } from "../lib/types";
 import { CycleCompass } from "./market/CycleCompass";
 import "./analyze/dashboard.css";
 import "./market/market.css";
@@ -10,6 +10,8 @@ import "./market/market.css";
 const heatCls = (q: string) => (q === "领先" ? "cheap" : q === "落后" ? "rich" : "fair");
 // valuation: 极贵(level4)=red caution, 便宜(level1)=green, else amber
 const valCls = (lvl?: number | null) => (lvl == null ? "na" : lvl >= 4 ? "rich" : lvl <= 1 ? "cheap" : "fair");
+// rate path: 降息(easing)=green, 加息/偏紧=red, 持平=amber
+const pathCls = (d?: string) => (!d ? "na" : d.includes("降息") ? "cheap" : d.includes("加息") || d.includes("偏紧") ? "rich" : "fair");
 const pct = (x?: number | null) => (x == null ? "—" : x + "%");
 const signed = (x?: number | null) => (x == null ? "—" : (x > 0 ? "+" : "") + x + "%");
 
@@ -18,11 +20,13 @@ export default function Market() {
   const nav = useNavigate();
   const [board, setBoard] = useState<MarketBoard | null>(null);
   const [cycle, setCycle] = useState<MarketCycle | null>(null);
+  const [rates, setRates] = useState<MarketRates | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let on = true;
     apiGet<MarketCycle>("/api/market/cycle?market=美股").then((r) => { if (on) setCycle(r.data); });
+    apiGet<MarketRates>("/api/market/rates?market=美股").then((r) => { if (on) setRates(r.data); });
     apiGet<MarketBoard>("/api/market/board?market=美股").then((r) => {
       if (r.status === 401) { nav("/login", { replace: true }); return; }
       if (on) { setBoard(r.data); setLoaded(true); }
@@ -87,6 +91,49 @@ export default function Market() {
 
           {(board.warnings?.length ?? 0) > 0 && <p className="hint" style={{ padding: "0 4px" }}>{board.warnings.join("；")}</p>}
         </>
+      )}
+
+      {rates && (rates.policy_rates?.length > 0 || rates.future_path?.market_implied) && (
+        <div className="ca-panel ca-consensus">
+          <h3 style={{ margin: 0 }}>🏛️ 利率与央行（美股）</h3>
+          <p className="hint">当前政策利率 + 未来路径双腿（市场隐含 vs Fed 点阵图，两者都是真实数据、非预测）+ 关键宏观。</p>
+          <div className="mk-rates">
+            {rates.policy_rates.map((r, i) => (
+              <div className="mk-rate" key={i}>
+                <div className="rn">{r.name}</div>
+                <div className="rv">{r.value}</div>
+                {r.detail && <div className="rd">{r.detail}</div>}
+              </div>
+            ))}
+          </div>
+          <div className="ca-tools" style={{ marginTop: 12 }}>
+            {rates.future_path?.market_implied && (
+              <div className="ca-tool">
+                <div className="tn">未来 · 腿A 市场隐含 <span className={"ca-verdict " + pathCls(rates.future_path.market_implied.direction)}>{rates.future_path.market_implied.direction}</span></div>
+                <div className="td">{rates.future_path.market_implied.note}</div>
+              </div>
+            )}
+            {rates.future_path?.dot_plot && (
+              <div className="ca-tool">
+                <div className="tn">未来 · 腿B Fed点阵图 <span className={"ca-verdict " + pathCls(rates.future_path.dot_plot.direction)}>{rates.future_path.dot_plot.direction}</span></div>
+                <div className="td">{rates.future_path.dot_plot.note}</div>
+              </div>
+            )}
+          </div>
+          {rates.future_path?.comparison && <div className="ca-bet">{rates.future_path.comparison}</div>}
+          {rates.macro?.length > 0 && (
+            <div className="mk-rates" style={{ marginTop: 4 }}>
+              {rates.macro.map((m, i) => (
+                <div className="mk-rate" key={i}>
+                  <div className="rn">{m.name}</div>
+                  <div className="rv">{m.value}</div>
+                  {m.trend && <div className="rd">{m.trend}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+          {(rates.warnings?.length ?? 0) > 0 && <p className="hint" style={{ marginTop: 8 }}>{rates.warnings.join("；")}</p>}
+        </div>
       )}
 
       <CycleCompass cycle={cycle} />
