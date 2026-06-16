@@ -11,25 +11,37 @@ export function PhotoImport({ onAdd }: { onAdd: (rows: NewRow[]) => void }) {
   const stRef = useRef<HTMLSpanElement>(null);
 
   async function parse(file: File) {
-    setSt({ msg: "识别中…（hermes 读图，约 30-60 秒）", cls: "" });
+    setSt({ msg: "上传中…", cls: "" });
     setParsed(null);
     stRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     const fd = new FormData();
     fd.append("image", file);
     try {
+      // POST returns instantly (kicks off a background job) — the long-held connection
+      // that ran hermes vision ~30-90s was getting dropped as 499 / "Failed to fetch".
       const r = await fetch("/api/holdings/parse-image", { method: "POST", credentials: "same-origin", body: fd });
-      if (r.status === 401) {
-        window.location.href = "/login";
-        return;
-      }
-      const d = await r.json().catch(() => ({}));
+      if (r.status === 401) { window.location.href = "/login"; return; }
       if (!r.ok) {
-        setSt({ msg: d.error || "识别失败 " + r.status, cls: "err" });
+        const d = await r.json().catch(() => ({}));
+        setSt({ msg: d.error || "上传失败 " + r.status, cls: "err" });
         return;
       }
-      setParsed(d.holdings || []);
-      setWarnings(d.warnings || []);
-      setSt({ msg: "识别完成 ✓ 核对后加入", cls: "ok" });
+      setSt({ msg: "识别中…（hermes 读图，约 30-90 秒）", cls: "" });
+      for (let i = 0; i < 60; i++) {                       // poll up to ~5 min
+        await new Promise((res) => setTimeout(res, 5000));
+        const pr = await fetch("/api/holdings/parse-image", { method: "GET", credentials: "same-origin" });
+        if (pr.status === 401) { window.location.href = "/login"; return; }
+        const d = await pr.json().catch(() => ({}));
+        if (d.status === "done") {
+          setParsed(d.holdings || []);
+          setWarnings(d.warnings || []);
+          setSt({ msg: "识别完成 ✓ 核对后加入", cls: "ok" });
+          return;
+        }
+        if (d.status === "error") { setSt({ msg: d.error || "识别失败", cls: "err" }); return; }
+        // status === "running" → keep polling
+      }
+      setSt({ msg: "识别超时，请重试", cls: "err" });
     } catch (e) {
       setSt({ msg: "网络错误：" + (e as Error).message, cls: "err" });
     }
