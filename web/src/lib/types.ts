@@ -362,3 +362,11 @@ export interface MarketReview {
   error?: string;
   _age_s?: number;
 }
+
+export interface SectorLeaders {
+  _schema?: number;
+  market: string;
+  sectors: { etf: string; name: string; leaders: { ticker: string; name: string; weight: number }[] }[];
+  note?: string;
+  warnings: string[];
+}

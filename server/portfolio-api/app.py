@@ -1341,12 +1341,14 @@ def get_analysis(aid):
 # ?fresh=1 forces a refetch.
 
 _CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600, "peers": 12 * 3600, "cycle": 12 * 3600,
-              "board": 24 * 3600, "rates": 12 * 3600, "sentiment": 6 * 3600, "review": 24 * 3600}
+              "board": 24 * 3600, "rates": 12 * 3600, "sentiment": 6 * 3600, "review": 24 * 3600,
+              "leaders": 24 * 3600}
 _CYCLE_KEY = "__US_MARKET__"   # market-level cycle compass uses a synthetic ticker
 _BOARD_KEY = "__US_BOARD__"    # market-level board (体温计+板块热力图) synthetic ticker
 _RATES_KEY = "__US_RATES__"    # market-level 利率与央行 synthetic ticker
 _SENT_KEY = "__US_SENT__"      # market-level 情绪体温计 synthetic ticker
 _REVIEW_KEY = "__US_REVIEW__"  # market-level AI 审视 synthetic ticker
+_LEADERS_KEY = "__US_LEADERS__"  # market-level 板块龙头 synthetic ticker
 
 
 def _cache_get(ticker: str, market: str, kind: str):
@@ -1519,6 +1521,30 @@ def market_sentiment_view():
         return {"error": "未登录"}, 401
     market = (request.args.get("market") or "美股")[:16]
     return jsonify(_sentiment_snapshot(market, fresh=request.args.get("fresh") == "1"))
+
+
+def _leaders_snapshot(market: str = "美股", fresh: bool = False) -> dict:
+    """板块龙头 (SPDR sector-ETF top holdings), cached 24h + archived. US only."""
+    if not _md._is_us(market):
+        return {"market": market, "sectors": [], "warnings": ["板块龙头目前仅支持美股"]}
+    if not fresh:
+        cached = _cache_get(_LEADERS_KEY, "美股", "leaders")
+        if cached is not None and cached.get("_schema") == _mb.LEADERS_SCHEMA:
+            return cached
+    data = _mb.us_sector_leaders()
+    try:
+        _cache_put(_LEADERS_KEY, "美股", "leaders", data)
+    except Exception:  # noqa: BLE001
+        pass
+    return data
+
+
+@app.get("/api/market/leaders")
+def market_leaders_view():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    market = (request.args.get("market") or "美股")[:16]
+    return jsonify(_leaders_snapshot(market, fresh=request.args.get("fresh") == "1"))
 
 
 # ---------- 市场 AI 审视 (top-down consensus / 历史镜像 / 市场非共识) ----------

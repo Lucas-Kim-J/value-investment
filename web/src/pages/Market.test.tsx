@@ -56,12 +56,21 @@ const sentiment = {
   warnings: [],
 };
 const review = { status: "none" };
+const leaders = {
+  market: "美股",
+  sectors: [
+    { etf: "XLK", name: "科技", leaders: [{ ticker: "NVDA", name: "NVIDIA", weight: 13.1 }, { ticker: "AAPL", name: "Apple", weight: 11.0 }] },
+    { etf: "XLF", name: "金融", leaders: [{ ticker: "BRK.B", name: "Berkshire", weight: 11.9 }] },
+  ],
+  note: "龙头=板块 ETF 权重前列", warnings: [],
+};
 
 vi.mock("../lib/api", () => ({
   apiGet: vi.fn((p: string) =>
     p.startsWith("/api/market/board") ? Promise.resolve({ ok: true, status: 200, data: board })
       : p.startsWith("/api/market/rates") ? Promise.resolve({ ok: true, status: 200, data: rates })
       : p.startsWith("/api/market/sentiment") ? Promise.resolve({ ok: true, status: 200, data: sentiment })
+      : p.startsWith("/api/market/leaders") ? Promise.resolve({ ok: true, status: 200, data: leaders })
       : p.startsWith("/api/market/review") ? Promise.resolve({ ok: true, status: 200, data: review })
       : Promise.resolve({ ok: true, status: 200, data: cycle })),
   apiPost: vi.fn(() => Promise.resolve({ ok: true, status: 200, data: { status: "running" } })),
@@ -85,5 +94,8 @@ describe("Market", () => {
     expect(screen.getByText(/情绪体温计/)).toBeInTheDocument();           // 情绪 panel
     expect(screen.getByText(/CNN 恐惧贪婪/)).toBeInTheDocument();
     expect(screen.getByText(/共识 \/ 历史镜像 \/ 非共识/)).toBeInTheDocument();  // AI 审视 section
+    expect(screen.getByText("🏆 板块龙头")).toBeInTheDocument();           // 板块龙头 panel
+    const nvda = screen.getByText("NVDA").closest("a");                  // leader → company analysis link
+    expect(nvda).toHaveAttribute("href", expect.stringContaining("/analyze?ticker=NVDA"));
   });
 });

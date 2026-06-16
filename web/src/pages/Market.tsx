@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { apiGet, apiPost } from "../lib/api";
 import { useMe } from "../lib/hooks";
 import { Markdown } from "../shell/Markdown";
-import type { MarketBoard, MarketCycle, MarketRates, MarketSentiment, MarketReview } from "../lib/types";
+import type { MarketBoard, MarketCycle, MarketRates, MarketSentiment, MarketReview, SectorLeaders } from "../lib/types";
 import { CycleCompass } from "./market/CycleCompass";
 import "./analyze/dashboard.css";
 import "./market/market.css";
@@ -26,6 +26,7 @@ export default function Market() {
   const [cycle, setCycle] = useState<MarketCycle | null>(null);
   const [rates, setRates] = useState<MarketRates | null>(null);
   const [sentiment, setSentiment] = useState<MarketSentiment | null>(null);
+  const [leaders, setLeaders] = useState<SectorLeaders | null>(null);
   const [review, setReview] = useState<MarketReview | null>(null);
   const [genBusy, setGenBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -35,6 +36,7 @@ export default function Market() {
     apiGet<MarketCycle>("/api/market/cycle?market=美股").then((r) => { if (on) setCycle(r.data); });
     apiGet<MarketRates>("/api/market/rates?market=美股").then((r) => { if (on) setRates(r.data); });
     apiGet<MarketSentiment>("/api/market/sentiment?market=美股").then((r) => { if (on) setSentiment(r.data); });
+    apiGet<SectorLeaders>("/api/market/leaders?market=美股").then((r) => { if (on) setLeaders(r.data); });
     apiGet<MarketReview>("/api/market/review").then((r) => { if (on) setReview(r.data); });
     apiGet<MarketBoard>("/api/market/board?market=美股").then((r) => {
       if (r.status === 401) { nav("/login", { replace: true }); return; }
@@ -114,6 +116,26 @@ export default function Market() {
 
           {(board.warnings?.length ?? 0) > 0 && <p className="hint" style={{ padding: "0 4px" }}>{board.warnings.join("；")}</p>}
         </>
+      )}
+
+      {leaders && (leaders.sectors?.length ?? 0) > 0 && (
+        <div className="ca-panel ca-consensus">
+          <h3 style={{ margin: 0 }}>🏆 板块龙头</h3>
+          <p className="hint">各板块 ETF 权重前列 = 龙头；点 ticker 直接进公司分析（自上而下 → 自下而上）。</p>
+          {leaders.sectors.map((s) => (
+            <div className="mk-lead" key={s.etf}>
+              <span className="mk-lead-sec">{s.name}</span>
+              <span className="mk-lead-chips">
+                {s.leaders.map((l) => (
+                  <Link key={l.ticker} className="mk-lead-chip" title={l.name}
+                    to={`/analyze?ticker=${encodeURIComponent(l.ticker.replace(/\./g, "-"))}&market=${encodeURIComponent("美股")}`}>
+                    {l.ticker}<i>{l.weight}%</i>
+                  </Link>
+                ))}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
 
       {rates && (rates.policy_rates?.length > 0 || rates.future_path?.market_implied) && (

@@ -20,9 +20,18 @@ import board
 import market_cycle as _mc   # reuse _http (text), _pct_rank, cape
 
 BOARD_SCHEMA = 1
+LEADERS_SCHEMA = 1
 _CONSTITUENTS_URL = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
-_SSGA_URL = ("https://www.ssga.com/us/en/institutional/library-content/products/fund-data/"
-             "etfs/us/holdings-daily-us-en-spy.xlsx")
+_SSGA_HOLDINGS = ("https://www.ssga.com/us/en/institutional/library-content/products/fund-data/"
+                  "etfs/us/holdings-daily-us-en-{etf}.xlsx")
+_SSGA_URL = _SSGA_HOLDINGS.format(etf="spy")
+# SPDR GICS sector ETFs (State Street) — SMH (semis) is VanEck, not here; its leaders
+# overlap 科技's top names (NVDA/MU/AMD), so we skip a separate semis row.
+_SPDR_SECTORS = {
+    "XLK": "科技", "XLF": "金融", "XLE": "能源", "XLV": "医疗", "XLI": "工业",
+    "XLY": "可选消费", "XLP": "必需消费", "XLU": "公用事业", "XLB": "材料",
+    "XLRE": "房地产", "XLC": "通信",
+}
 
 # sector ETF → 中文名. SMH (semis) is a tech subset but tracked separately (Lucas asked
 # about 半导体 specifically).
@@ -92,6 +101,44 @@ def ssga_concentration() -> tuple:
         return top7, board.herfindahl(weights)
     except Exception:  # noqa: BLE001
         return None, None
+
+
+def _spdr_holdings(etf: str) -> list:
+    """Top holdings of an SSGA SPDR sector ETF → [{ticker,name,weight}] (desc by weight)."""
+    import pandas as pd
+    df = pd.read_excel(io.BytesIO(_bytes(_SSGA_HOLDINGS.format(etf=etf.lower()))), engine="openpyxl", header=None)
+    ni = ti = wi = hdr = None
+    for i in range(min(12, len(df))):
+        row = [str(x).strip() for x in df.iloc[i].values]
+        if "Weight" in row and "Ticker" in row and "Name" in row:
+            ni, ti, wi, hdr = row.index("Name"), row.index("Ticker"), row.index("Weight"), i
+            break
+    if hdr is None:
+        return []
+    out = []
+    for j in range(hdr + 1, len(df)):
+        try:
+            w = float(df.iloc[j, wi])
+        except (TypeError, ValueError):
+            continue
+        tk, nm = str(df.iloc[j, ti]).strip(), str(df.iloc[j, ni]).strip()
+        if 0 < w < 100 and tk and tk.lower() != "nan":
+            out.append({"ticker": tk, "name": nm, "weight": round(w, 2)})
+    return out
+
+
+def us_sector_leaders(top: int = 5) -> dict:
+    """Per-sector leaders = each SPDR sector ETF's top-N holdings (links to 公司分析)."""
+    sectors, warnings = [], []
+    for etf, name in _SPDR_SECTORS.items():
+        try:
+            h = _spdr_holdings(etf)[:top]
+            if h:
+                sectors.append({"etf": etf, "name": name, "leaders": h})
+        except Exception:  # noqa: BLE001
+            warnings.append(f"{name}持仓缺失")
+    return {"_schema": LEADERS_SCHEMA, "market": "美股", "sectors": sectors,
+            "note": "龙头=板块 ETF 权重前列；点击直接进公司分析。", "warnings": warnings}
 
 
 def _rel(series, spy, n: int) -> float | None:
