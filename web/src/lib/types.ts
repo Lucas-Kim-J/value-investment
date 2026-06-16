@@ -302,3 +302,31 @@ export interface MarketCycle {
   fred_enabled: boolean;
   warnings: string[];
 }
+
+export interface SectorHeat {
+  ticker: string;
+  name: string;
+  quadrant: string;
+  heat: number | null;
+  rs_6m: number | null;
+  rs_3m: number | null;
+}
+
+export interface MarketBoard {
+  _schema?: number;
+  market: string;
+  temperature: { valuation?: string; breadth?: string; concentrated?: boolean | null; hot?: boolean; note?: string };
+  valuation: {
+    percentile: number | null; level: number | null; label: string; note: string;
+    pe?: { value: number; percentile: number | null } | null;
+    cape?: { value: number; percentile: number | null } | null;
+  };
+  concentration: {
+    top_n_weight: number | null; herfindahl: number | null; rsp_spy_percentile: number | null;
+    top_n: number; concentrated: boolean | null; label: string; detail: string;
+  };
+  breadth: { pct_above_200: number | null; pct_above_50: number | null; level: number | null; label: string; healthy: boolean | null; n?: number | null };
+  sectors: SectorHeat[];
+  crowding_note?: string;
+  warnings: string[];
+}

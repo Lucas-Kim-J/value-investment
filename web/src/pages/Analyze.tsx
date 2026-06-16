@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { apiGet, apiPost } from "../lib/api";
 import { useMe } from "../lib/hooks";
@@ -14,10 +14,8 @@ const MARKETS = ["美股", "A股", "港股", "加密"];
 const SNAPSHOT_SCHEMA = 2; // keep in sync with market_data.SNAPSHOT_SCHEMA
 const verdictCls = (v: string) =>
   v === "便宜" ? "cheap" : v === "偏贵" ? "rich" : v === "合理" ? "fair" : "na";
-// cycle: risk-on (level≥4) = green, late/neutral = amber, risk-off (≤2) = red
+// cycle strip: risk-on (level≥4) = green, late/neutral = amber, risk-off (≤2) = red
 const cyclePosCls = (lvl?: number) => (lvl == null ? "na" : lvl >= 4 ? "cheap" : lvl <= 2 ? "rich" : "fair");
-const lensCls = (s?: number | null) => (s == null ? "na" : s > 0 ? "cheap" : s < 0 ? "rich" : "fair");
-const tiltCls = (v: string) => (v === "✓" ? "cheap" : v === "✕" ? "rich" : "fair");
 const pcStr = (x?: number | null) => (x == null ? "数据缺失" : (x * 100).toFixed(1) + "%");
 const mispCls = (f?: string | null) => (!f ? "na" : f.includes("错杀") ? "cheap" : f.includes("高估") ? "rich" : "fair");
 // percentile cell color: for valuation lower=cheaper(good-ish), for quality higher=better. neutral chip.
@@ -453,44 +451,14 @@ export default function Analyze() {
             </div>
           )}
 
-          {/* 市场周期罗盘 — top-down cycle context (market-level) */}
+          {/* 市场周期 — 紧凑条；完整罗盘 + 体温计 + 板块热力图见 🌐市场 */}
           {cycle?.composite?.position && (
-            <div className="ca-panel ca-consensus">
-              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                <h3 style={{ margin: 0 }}>🧭 市场周期罗盘（{cycle.market}）</h3>
-                <span className={"ca-verdict " + cyclePosCls(cycle.composite.level)}>{cycle.composite.position}</span>
-                <span className={"ca-deep " + (cycle.composite.tailwind === "顺风" ? "yes" : "no")}>
-                  周期对风险资产：{cycle.composite.tailwind}
-                </span>
-                {cycle.recession_prob != null && (
-                  <span className="hint" style={{ margin: 0 }}>· 衰退概率(曲线估) {cycle.recession_prob}%</span>
-                )}
-              </div>
-              <p className="hint">自上而下看周期：现在在周期哪一段、对风险资产顺风还是逆风。判断对、若处在差周期回报也有限——叠加周期看仓位/风格。</p>
-              {cycle.cape_flag?.on && <div className="ca-bet">★ {cycle.cape_flag.note}</div>}
-              <div className="ca-tools">
-                {cycle.lenses.map((l, i) => (
-                  <div className="ca-tool" key={i}>
-                    <div className="tn">{l.title} <span className={"ca-verdict " + lensCls(l.score)}>{l.label}</span></div>
-                    <div className="td">{l.detail || (l.score == null ? "数据缺失" : "")}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="ca-tilt">
-                <span className="hint" style={{ margin: 0 }}>当前 regime 资产倾向：</span>
-                {Object.entries(cycle.asset_tilt).map(([k, v]) => (
-                  <span key={k} className={"ca-verdict " + tiltCls(v)}>{v} {k}</span>
-                ))}
-              </div>
-              {(cycle.warnings?.length ?? 0) > 0 && (
-                <p className="hint" style={{ marginTop: 8 }}>{cycle.warnings.join("；")}</p>
-              )}
-            </div>
-          )}
-          {cycle && !cycle.composite?.position && (cycle.warnings?.length ?? 0) > 0 && (
-            <div className="ca-panel ca-consensus">
-              <h3 style={{ margin: 0 }}>🧭 市场周期罗盘</h3>
-              <div className="ca-skel" style={{ textAlign: "left", padding: "10px 0" }}>{cycle.warnings[0]}</div>
+            <div className="ca-panel ca-consensus" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 700 }}>🧭 市场周期</span>
+              <span className={"ca-verdict " + cyclePosCls(cycle.composite.level)}>{cycle.composite.position}</span>
+              <span className={"ca-deep " + (cycle.composite.tailwind === "顺风" ? "yes" : "no")}>对风险资产：{cycle.composite.tailwind}</span>
+              {cycle.cape_flag?.on && <span className="hint" style={{ margin: 0 }}>· 估值天花板，叠加价值看仓位/风格</span>}
+              <Link className="hint" style={{ margin: 0, marginLeft: "auto" }} to="/market">完整市场看板 →</Link>
             </div>
           )}
 

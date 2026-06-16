@@ -1,0 +1,22 @@
+/* ===== 🌐 市场看板 ===== */
+.mk-gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
+.mk-gauge { border: 1px solid var(--border); border-radius: 11px; padding: 14px 16px; background: var(--bg); }
+.mk-gauge .g-h { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.mk-gauge .g-big { font-size: 26px; font-weight: 800; color: var(--fg); line-height: 1.1; }
+.mk-gauge .g-u { font-size: 12px; font-weight: 500; color: var(--muted); }
+.mk-gauge .g-sub { font-size: 12px; color: var(--fg-soft); margin-top: 6px; line-height: 1.5; }
+.mk-gauge .g-note { font-size: 12px; color: var(--warn); margin-top: 6px; line-height: 1.5; }
+
+.mk-heat { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
+.mk-sector { border: 1px solid var(--border); border-left-width: 3px; border-radius: 10px; padding: 12px 13px; background: var(--bg); }
+.mk-sector.cheap { border-left-color: var(--good); }
+.mk-sector.rich { border-left-color: var(--warn); }
+.mk-sector.fair { border-left-color: var(--accent); }
+.mk-sector .s-n { font-size: 14px; font-weight: 700; color: var(--fg); display: flex; align-items: baseline; gap: 6px; }
+.mk-sector .s-t { font-size: 11px; font-weight: 500; color: var(--muted); }
+.mk-sector .s-heat { font-size: 22px; font-weight: 800; margin-top: 4px; }
+.mk-sector.cheap .s-heat { color: var(--good); }
+.mk-sector.rich .s-heat { color: var(--warn); }
+.mk-sector.fair .s-heat { color: var(--accent); }
+.mk-sector .s-q { font-size: 12px; color: var(--fg-soft); margin-top: 2px; }
+.mk-sector .s-rs { font-size: 11px; color: var(--muted); margin-top: 4px; }

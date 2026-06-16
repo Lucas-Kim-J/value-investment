@@ -41,6 +41,7 @@ from cryptography.fernet import Fernet
 from flask import Flask, jsonify, request, session
 import capture as _capture
 import cycle as _cyc
+import market_board as _mb
 import market_data as _md
 import market_cycle as _mc
 import notion_kb as _nkb
@@ -1337,8 +1338,9 @@ def get_analysis(aid):
 # Cached in company_data_cache (public data, shared across users). TTL by kind;
 # ?fresh=1 forces a refetch.
 
-_CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600, "peers": 12 * 3600, "cycle": 12 * 3600}
+_CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600, "peers": 12 * 3600, "cycle": 12 * 3600, "board": 24 * 3600}
 _CYCLE_KEY = "__US_MARKET__"   # market-level cycle compass uses a synthetic ticker
+_BOARD_KEY = "__US_BOARD__"    # market-level board (体温计+板块热力图) synthetic ticker
 
 
 def _cache_get(ticker: str, market: str, kind: str):
@@ -1435,6 +1437,32 @@ def market_cycle_view():
         return {"error": "未登录"}, 401
     market = (request.args.get("market") or "美股")[:16]
     return jsonify(_cycle_snapshot(market, fresh=request.args.get("fresh") == "1"))
+
+
+def _board_snapshot(market: str = "美股", fresh: bool = False) -> dict:
+    """Market board (体温计 + 板块热力图), cached 24h + archived. US only for now;
+    auto-refetches when the cached payload predates the current BOARD_SCHEMA."""
+    if not _md._is_us(market):
+        return {"market": market, "sectors": [], "temperature": {},
+                "warnings": ["市场看板目前仅支持美股；A股版建设中"]}
+    if not fresh:
+        cached = _cache_get(_BOARD_KEY, "美股", "board")
+        if cached is not None and cached.get("_schema") == _mb.BOARD_SCHEMA:
+            return cached
+    data = _mb.us_board()
+    try:
+        _cache_put(_BOARD_KEY, "美股", "board", data)
+    except Exception:  # noqa: BLE001
+        pass
+    return data
+
+
+@app.get("/api/market/board")
+def market_board_view():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    market = (request.args.get("market") or "美股")[:16]
+    return jsonify(_board_snapshot(market, fresh=request.args.get("fresh") == "1"))
 
 
 @app.get("/api/companies/archive")

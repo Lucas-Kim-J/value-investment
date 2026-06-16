@@ -9,6 +9,7 @@ const ITEMS: ReadonlyArray<readonly [string, string]> = [
   ["/wiki", "🔍 术语"],
   ["/portfolio", "💼 我的持仓"],
   ["/analyze", "🏢 公司分析"],
+  ["/market", "🌐 市场"],
   ["/signals", "📡 信号"],
   ["/achievements", "🏅 成就"],
 ];
