@@ -30,6 +30,29 @@ def test_build_input_uses_show_title_when_present():
     assert "The Wanderers 流浪者" in build_distill_input(it, "转录")
 
 
+def test_fit_transcript_keeps_short_unchanged():
+    from content_pipeline.distiller import _fit_transcript
+    s = "短转录内容" * 50
+    assert _fit_transcript(s) == s
+
+
+def test_fit_transcript_trims_oversized_to_head_tail_with_marker():
+    from content_pipeline.distiller import _fit_transcript, _MAX_TRANSCRIPT_BYTES
+    big = "字" * 200_000                      # ~600KB utf-8 (a 4–7h episode)
+    out = _fit_transcript(big)
+    assert len(out.encode("utf-8")) <= _MAX_TRANSCRIPT_BYTES + 200   # fits the argv budget
+    assert "省略" in out                       # elision marker present
+    assert out.startswith("字") and out.rstrip().endswith("字")       # head + tail kept
+
+
+def test_build_input_caps_oversized_transcript_under_arg_limit():
+    from content_pipeline.distiller import _MAX_TRANSCRIPT_BYTES
+    it = ContentItem(source="xiaoyuzhou", external_id="e1", title="t", url="u",
+                     published_at="p", is_paid=False, media_url="m", show_title="X")
+    s = build_distill_input(it, "字" * 200_000)
+    assert len(s.encode("utf-8")) <= _MAX_TRANSCRIPT_BYTES + 4000     # whole prompt stays safe
+
+
 def test_parse_signal_card_accepts_plain_json():
     card = parse_signal_card(json.dumps(_valid_card(), ensure_ascii=False))
     assert card["pillar"] == "资金传导"

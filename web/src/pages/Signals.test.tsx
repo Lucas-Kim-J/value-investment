@@ -46,17 +46,30 @@ describe("Signals", () => {
     expect(await screen.findByText(/还没有信号卡/)).toBeInTheDocument();
   });
 
-  it("lists every tracked show in the lane subtitle", async () => {
+  const twoShows = [
+    sample,
+    { ...sample, external_id: "e8", show_title: "张小珺Jùn｜商业访谈录", title: "对谈 Ep 145" },
+  ];
+
+  it("shows a 全部 chip + a chip/group per 栏目", async () => {
     const { apiGet } = await import("../lib/api");
-    const two = [
-      sample,
-      { ...sample, external_id: "e8", show_title: "张小珺Jùn｜商业访谈录", title: "对谈 Ep 145" },
-    ];
-    (apiGet as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true, status: 200, data: { items: two } });
+    (apiGet as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true, status: 200, data: { items: twoShows } });
     render(<Signals />);
     await screen.findByText("对谈 Ep 145");
-    const lane = screen.getByText(/每天 08:00 自动更新/);
-    expect(lane).toHaveTextContent("非共识的20分钟");
-    expect(lane).toHaveTextContent("张小珺");
+    expect(screen.getByRole("button", { name: /全部/ })).toBeInTheDocument();
+    // each show appears in both its chip and its group header
+    expect(screen.getAllByText("非共识的20分钟").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/张小珺/).length).toBeGreaterThan(0);
+  });
+
+  it("filters to a single 栏目 when its chip is clicked", async () => {
+    const { apiGet } = await import("../lib/api");
+    (apiGet as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true, status: 200, data: { items: twoShows } });
+    render(<Signals />);
+    await screen.findByText("对谈 Ep 145");
+    expect(screen.getByText("美联储 Ep 7")).toBeInTheDocument();          // both visible under 全部
+    fireEvent.click(screen.getByRole("button", { name: /张小珺/ }));      // filter to 张小珺
+    expect(screen.queryByText("美联储 Ep 7")).not.toBeInTheDocument();    // 非共识 card hidden
+    expect(screen.getByText("对谈 Ep 145")).toBeInTheDocument();          // 张小珺 card stays
   });
 });

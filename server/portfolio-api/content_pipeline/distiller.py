@@ -16,10 +16,31 @@ _PROFILE = os.environ.get("VI_PIPELINE_PROFILE", "app-lucas")
 _SKILL = "vi-podcast-distill"
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.S)
 
+# hermes takes the whole prompt as ONE CLI argument, and Linux caps a single argv
+# string at MAX_ARG_STRLEN (128KB). Long-form episodes (张小珺 4–7h → 50–60k 字 →
+# 150–190KB utf-8) blow past it → "[Errno 7] Argument list too long: 'hermes'".
+# Keep the prompt safely under the cap by trimming an over-long transcript to
+# head+tail (a podcast states its thesis early and recaps late, so both ends carry
+# the most signal); the full transcript is still archived + linked on the site.
+_MAX_TRANSCRIPT_BYTES = 110_000
+
+
+def _fit_transcript(transcript: str, budget_bytes: int = _MAX_TRANSCRIPT_BYTES) -> str:
+    """Return the transcript unchanged if it fits the argv budget, else head+tail
+    (2/3 head, 1/3 tail) with an elision marker. Byte-based (CJK is 3 bytes/char)."""
+    b = (transcript or "").encode("utf-8")
+    if len(b) <= budget_bytes:
+        return transcript or ""
+    head = b[: budget_bytes * 2 // 3].decode("utf-8", "ignore")
+    tail = b[-(budget_bytes // 3):].decode("utf-8", "ignore")
+    elided = len(b) - len(head.encode("utf-8")) - len(tail.encode("utf-8"))
+    return f"{head}\n\n……（原集过长，此处省略约 {elided} 字节；完整转录见原集/网站）……\n\n{tail}"
+
 
 def build_distill_input(item: ContentItem, transcript: str) -> str:
     """The instruction + transcript handed to the vi-podcast-distill skill."""
     show = item.show_title or "非共识的20分钟"
+    transcript = _fit_transcript(transcript)
     return (
         f"播客《{show}》单集：{item.title}\n"
         f"链接：{item.url}\n\n"
