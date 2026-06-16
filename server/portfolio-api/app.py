@@ -45,6 +45,7 @@ import market_board as _mb
 import market_data as _md
 import market_cycle as _mc
 import market_rates as _mr
+import market_sentiment as _ms
 import notion_kb as _nkb
 
 CODES_FILE = Path(os.environ.get("VI_CODES_FILE", "/etc/value-investment/access-codes.json"))
@@ -1340,10 +1341,12 @@ def get_analysis(aid):
 # ?fresh=1 forces a refetch.
 
 _CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600, "peers": 12 * 3600, "cycle": 12 * 3600,
-              "board": 24 * 3600, "rates": 12 * 3600}
+              "board": 24 * 3600, "rates": 12 * 3600, "sentiment": 6 * 3600, "review": 24 * 3600}
 _CYCLE_KEY = "__US_MARKET__"   # market-level cycle compass uses a synthetic ticker
 _BOARD_KEY = "__US_BOARD__"    # market-level board (体温计+板块热力图) synthetic ticker
 _RATES_KEY = "__US_RATES__"    # market-level 利率与央行 synthetic ticker
+_SENT_KEY = "__US_SENT__"      # market-level 情绪体温计 synthetic ticker
+_REVIEW_KEY = "__US_REVIEW__"  # market-level AI 审视 synthetic ticker
 
 
 def _cache_get(ticker: str, market: str, kind: str):
@@ -1491,6 +1494,173 @@ def market_rates_view():
         return {"error": "未登录"}, 401
     market = (request.args.get("market") or "美股")[:16]
     return jsonify(_rates_snapshot(market, fresh=request.args.get("fresh") == "1"))
+
+
+def _sentiment_snapshot(market: str = "美股", fresh: bool = False) -> dict:
+    """情绪体温计 (CNN 恐惧贪婪 + VIX 期限), cached 6h + archived. US only."""
+    if not _md._is_us(market):
+        return {"market": market, "fear_greed": {}, "vix_term": {}, "composite": {},
+                "warnings": ["情绪体温计目前仅支持美股"]}
+    if not fresh:
+        cached = _cache_get(_SENT_KEY, "美股", "sentiment")
+        if cached is not None and cached.get("_schema") == _ms.SENT_SCHEMA:
+            return cached
+    data = _ms.us_sentiment()
+    try:
+        _cache_put(_SENT_KEY, "美股", "sentiment", data)
+    except Exception:  # noqa: BLE001
+        pass
+    return data
+
+
+@app.get("/api/market/sentiment")
+def market_sentiment_view():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    market = (request.args.get("market") or "美股")[:16]
+    return jsonify(_sentiment_snapshot(market, fresh=request.args.get("fresh") == "1"))
+
+
+# ---------- 市场 AI 审视 (top-down consensus / 历史镜像 / 市场非共识) ----------
+
+def _recent_signal_cards(limit: int = 12) -> list:
+    """Practitioners' distilled views from the content pipeline (non-consensus angles)."""
+    try:
+        with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+            cur.execute("SELECT show_title, title, signal_card FROM content_items "
+                        "WHERE signal_card IS NOT NULL ORDER BY published_at DESC NULLS LAST LIMIT %s", (limit,))
+            rows = cur.fetchall()
+    except Exception:  # noqa: BLE001
+        return []
+    out = []
+    for r in rows:
+        card = r["signal_card"]
+        if isinstance(card, str):
+            try:
+                card = json.loads(card)
+            except ValueError:
+                card = {}
+        out.append({"show_title": r.get("show_title"), "title": r.get("title"), "card": card or {}})
+    return out
+
+
+def _format_market_data(cyc: dict, brd: dict, rt: dict, sent: dict, signals: list) -> str:
+    """Compact real-data 市场数据卡 for the top-down AI review (no fabrication)."""
+    L = []
+    comp = (cyc or {}).get("composite") or {}
+    if comp.get("position"):
+        L.append(f"周期定位：{comp['position']}（对风险资产{comp['tailwind']}，综合分 {comp.get('score')}）")
+        used = [l for l in (cyc.get("lenses") or []) if l.get("score") is not None]
+        if used:
+            L.append("  周期透镜：" + "；".join(f"{l['title']}{l['label']}({l['score']:+d})" for l in used))
+        cf = (cyc or {}).get("cape_flag") or {}
+        if cf.get("on"):
+            L.append(f"  ★估值天花板：{cf.get('note')}")
+    v, c, b = (brd or {}).get("valuation") or {}, (brd or {}).get("concentration") or {}, (brd or {}).get("breadth") or {}
+    if v.get("label"):
+        L.append(f"市场估值：{v['label']}（历史分位 {v.get('percentile')}%；S&P P/E {(v.get('pe') or {}).get('value')} / CAPE {(v.get('cape') or {}).get('value')}）")
+    if c.get("label"):
+        L.append(f"集中度：{c['label']}（{c.get('detail')}）")
+    if b.get("label"):
+        L.append(f"广度：{b['label']}（{b.get('pct_above_200')}% 个股 >200日线）")
+    secs = (brd or {}).get("sectors") or []
+    if secs:
+        t, bo = secs[0], secs[-1]
+        L.append(f"板块热力：最强 {t['name']}（{t['quadrant']} {t['heat']:+}%），最弱 {bo['name']}（{bo['quadrant']} {bo['heat']:+}%）")
+    pr, fp, mac = (rt or {}).get("policy_rates") or [], (rt or {}).get("future_path") or {}, (rt or {}).get("macro") or []
+    if pr:
+        L.append("政策利率：" + "；".join(f"{p['name']} {p['value']}" for p in pr))
+    if fp.get("market_implied"):
+        L.append(f"未来·市场隐含：{fp['market_implied']['note']}")
+    if fp.get("dot_plot"):
+        L.append(f"未来·点阵图：{fp['dot_plot']['note']}")
+    if fp.get("comparison"):
+        L.append(f"  ★对照：{fp['comparison']}")
+    if mac:
+        L.append("关键宏观：" + "；".join(f"{m['name']} {m['value']}" + (f"({m['trend']})" if m.get("trend") else "") for m in mac))
+    fg, vt = (sent or {}).get("fear_greed") or {}, (sent or {}).get("vix_term") or {}
+    if fg.get("label") and fg["label"] != "数据缺失":
+        L.append(f"情绪：恐惧贪婪 {fg['label']}（{fg.get('score')}）；VIX 期限 {vt.get('label')}")
+    if signals:
+        L.append("近期一手观点（播客信号卡，practitioners 的非共识/新角度——供参考、勿当事实）：")
+        for s in signals[:10]:
+            card = s.get("card") or {}
+            nc = str(card.get("non_consensus", ""))[:64]
+            na = str(card.get("new_angle", ""))[:40]
+            L.append(f"  · [{s.get('show_title', '')}] 非共识:{nc}｜角度:{na}")
+    return "\n".join(L) or "（市场数据暂缺）"
+
+
+def compose_market_prompt(cyc: dict, brd: dict, rt: dict, sent: dict, signals: list) -> str:
+    card = _format_market_data(cyc, brd, rt, sent, signals)
+    return (
+        f"{METHODOLOGY_CONTEXT}\n\n"
+        "你在做**自上而下的市场审视**（不是单个公司）。基于下面我们自己抓取并计算的真实市场数据 + 一手观点，做非共识研判。\n\n"
+        f"【真实市场数据卡 · 只基于这些数字推理、引用具体数值】\n{card}\n\n"
+        "分析哲学（源自《非共识的20分钟》）：公开数据大家都有、共识多已 price in。你的价值在于**基于真实数据找出市场层面『现实可能与共识不同』的非共识点**，并诚实标注**可能错在哪、概率多大**。重机制、不预测点位。\n\n"
+        "报告结构（全部建立在【真实市场数据卡】上、引用具体数字）：\n\n"
+        "## 一、当前市场共识 + 为什么\n用数据卡说清市场现在主流在 price in 什么（估值分位、利率路径、情绪、板块领跑），以及**为什么**形成这种共识。\n\n"
+        "## 二、历史镜像\n当前(估值分位/利率与曲线/广度/集中度/情绪)的组合，像历史上哪个阶段？给「更像 ___ 还是 ___」并说明像/不像在哪；市场是否把当前外推成常态。\n\n"
+        "## 三、市场级非共识信号（最关键）\n给 1–3 条：数据显示 X，而共识/价格隐含 Y，差距多大、依托哪个信号。每条配：赔率与盈亏不对称 / **我可能错在哪 + 校准概率** / 拥挤与反身性 / 可证伪触发点。可结合一手观点，但标明哪些是数据事实、哪些是他人判断。\n\n"
+        "## 四、对配置的含义（框架，非荐股）\n当前 regime + 估值天花板下，偏向哪类资产/风格/现金与对冲水平；价值投资者此刻该把安全边际、持有期、仓位往哪调。\n\n"
+        "硬约束：\n- 每节精炼 3–6 句；只基于数据卡数字、引用具体数值；没有的写「数据缺失」，**绝不编造**。\n- 区分「数据事实 / 判断 / 概率」，判断都标为估计。\n- 不给个股买卖建议、不预测点位/目标价。"
+    )
+
+
+def _review_get() -> dict | None:
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT payload, extract(epoch FROM now()-fetched_at) AS age "
+                    "FROM company_data_cache WHERE ticker=%s AND market='美股' AND kind='review'", (_REVIEW_KEY,))
+        r = cur.fetchone()
+    if not r:
+        return None
+    d = r["payload"]
+    d["_age_s"] = int(r["age"] or 0)
+    return d
+
+
+def _review_set(payload: dict, archive: bool = False) -> None:
+    blob = json.dumps(payload, ensure_ascii=False)
+    with _db() as c, c.cursor() as cur:
+        cur.execute("INSERT INTO company_data_cache(ticker,market,kind,payload,fetched_at) "
+                    "VALUES (%s,'美股','review',%s,now()) "
+                    "ON CONFLICT (ticker,market,kind) DO UPDATE SET payload=EXCLUDED.payload, fetched_at=now()",
+                    (_REVIEW_KEY, blob))
+        if archive:
+            cur.execute("INSERT INTO company_data_archive(ticker,market,kind,payload) VALUES (%s,'美股','review',%s)",
+                        (_REVIEW_KEY, blob))
+
+
+def _run_market_review() -> None:
+    try:
+        cyc, brd = _cycle_snapshot("美股"), _board_snapshot("美股")
+        rt, sent = _rates_snapshot("美股"), _sentiment_snapshot("美股")
+        prompt = compose_market_prompt(cyc, brd, rt, sent, _recent_signal_cards())
+        report = run_hermes(prompt)
+        _review_set({"status": "done", "report": report, "generated_at": time.time()}, archive=True)
+    except subprocess.TimeoutExpired:
+        _review_set({"status": "error", "error": "生成超时（>300s）"})
+    except Exception as e:  # noqa: BLE001
+        _review_set({"status": "error", "error": str(e)[:300]})
+
+
+@app.get("/api/market/review")
+def market_review_get():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    return jsonify(_review_get() or {"status": "none"})
+
+
+@app.post("/api/market/review")
+def market_review_start():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    cur = _review_get()
+    if cur and cur.get("status") == "running" and cur.get("_age_s", 9999) < 600:
+        return {"status": "running"}
+    _review_set({"status": "running", "started": time.time()})
+    threading.Thread(target=_run_market_review, daemon=True).start()
+    return {"status": "running"}
 
 
 @app.get("/api/companies/archive")

@@ -47,13 +47,24 @@ const rates = {
   warnings: [],
 };
 
+const sentiment = {
+  market: "美股",
+  fear_greed: { score: 40.7, level: 2, label: "恐惧", contrarian: "偏谨慎乐观", rating: "恐惧",
+                subs: [{ name: "市场动量", rating: "极度贪婪" }, { name: "期权 Put/Call", rating: "恐惧" }] },
+  vix_term: { ivts: 0.86, vix: 17.68, vix3m: 20.51, label: "波动率 contango（健康）", detail: "VIX/VIX3M=0.86" },
+  composite: { label: "恐惧贪婪 恐惧(40.7) · 波动率 contango", note: "偏谨慎乐观" },
+  warnings: [],
+};
+const review = { status: "none" };
+
 vi.mock("../lib/api", () => ({
   apiGet: vi.fn((p: string) =>
-    p.startsWith("/api/market/board")
-      ? Promise.resolve({ ok: true, status: 200, data: board })
-      : p.startsWith("/api/market/rates")
-        ? Promise.resolve({ ok: true, status: 200, data: rates })
-        : Promise.resolve({ ok: true, status: 200, data: cycle })),
+    p.startsWith("/api/market/board") ? Promise.resolve({ ok: true, status: 200, data: board })
+      : p.startsWith("/api/market/rates") ? Promise.resolve({ ok: true, status: 200, data: rates })
+      : p.startsWith("/api/market/sentiment") ? Promise.resolve({ ok: true, status: 200, data: sentiment })
+      : p.startsWith("/api/market/review") ? Promise.resolve({ ok: true, status: 200, data: review })
+      : Promise.resolve({ ok: true, status: 200, data: cycle })),
+  apiPost: vi.fn(() => Promise.resolve({ ok: true, status: 200, data: { status: "running" } })),
 }));
 vi.mock("../lib/hooks", () => ({ useMe: () => "lucas" }));
 
@@ -71,5 +82,8 @@ describe("Market", () => {
     expect(screen.getByText("扩张 / risk-on")).toBeInTheDocument();       // 周期罗盘
     expect(screen.getByText(/利率与央行/)).toBeInTheDocument();           // 利率 panel
     expect(screen.getByText(/市场比 Fed 点阵图更鹰/)).toBeInTheDocument(); // 双腿对照
+    expect(screen.getByText(/情绪体温计/)).toBeInTheDocument();           // 情绪 panel
+    expect(screen.getByText(/CNN 恐惧贪婪/)).toBeInTheDocument();
+    expect(screen.getByText(/共识 \/ 历史镜像 \/ 非共识/)).toBeInTheDocument();  // AI 审视 section
   });
 });

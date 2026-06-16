@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiGet } from "../lib/api";
+import { apiGet, apiPost } from "../lib/api";
 import { useMe } from "../lib/hooks";
-import type { MarketBoard, MarketCycle, MarketRates } from "../lib/types";
+import { Markdown } from "../shell/Markdown";
+import type { MarketBoard, MarketCycle, MarketRates, MarketSentiment, MarketReview } from "../lib/types";
 import { CycleCompass } from "./market/CycleCompass";
 import "./analyze/dashboard.css";
 import "./market/market.css";
@@ -12,6 +13,9 @@ const heatCls = (q: string) => (q === "领先" ? "cheap" : q === "落后" ? "ric
 const valCls = (lvl?: number | null) => (lvl == null ? "na" : lvl >= 4 ? "rich" : lvl <= 1 ? "cheap" : "fair");
 // rate path: 降息(easing)=green, 加息/偏紧=red, 持平=amber
 const pathCls = (d?: string) => (!d ? "na" : d.includes("降息") ? "cheap" : d.includes("加息") || d.includes("偏紧") ? "rich" : "fair");
+// sentiment contrarian: extreme fear(≤2)=green opportunity, greed(≥4)=red caution
+const fgCls = (lvl?: number | null) => (lvl == null ? "na" : lvl <= 2 ? "cheap" : lvl >= 4 ? "rich" : "fair");
+const ratingCls = (r: string) => (r.includes("恐惧") ? "cheap" : r.includes("贪婪") ? "rich" : "fair");
 const pct = (x?: number | null) => (x == null ? "—" : x + "%");
 const signed = (x?: number | null) => (x == null ? "—" : (x > 0 ? "+" : "") + x + "%");
 
@@ -21,18 +25,37 @@ export default function Market() {
   const [board, setBoard] = useState<MarketBoard | null>(null);
   const [cycle, setCycle] = useState<MarketCycle | null>(null);
   const [rates, setRates] = useState<MarketRates | null>(null);
+  const [sentiment, setSentiment] = useState<MarketSentiment | null>(null);
+  const [review, setReview] = useState<MarketReview | null>(null);
+  const [genBusy, setGenBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let on = true;
     apiGet<MarketCycle>("/api/market/cycle?market=美股").then((r) => { if (on) setCycle(r.data); });
     apiGet<MarketRates>("/api/market/rates?market=美股").then((r) => { if (on) setRates(r.data); });
+    apiGet<MarketSentiment>("/api/market/sentiment?market=美股").then((r) => { if (on) setSentiment(r.data); });
+    apiGet<MarketReview>("/api/market/review").then((r) => { if (on) setReview(r.data); });
     apiGet<MarketBoard>("/api/market/board?market=美股").then((r) => {
       if (r.status === 401) { nav("/login", { replace: true }); return; }
       if (on) { setBoard(r.data); setLoaded(true); }
     });
     return () => { on = false; };
   }, [nav]);
+
+  async function genReview() {
+    if (genBusy) return;
+    setGenBusy(true);
+    setReview({ status: "running" });
+    await apiPost("/api/market/review", {});
+    for (let i = 0; i < 80; i++) {                       // poll up to ~6.5 min
+      await new Promise((r) => setTimeout(r, 5000));
+      const r = await apiGet<MarketReview>("/api/market/review");
+      if (r.data && r.data.status !== "running") { setReview(r.data); break; }
+      setReview(r.data);
+    }
+    setGenBusy(false);
+  }
 
   const v = board?.valuation, c = board?.concentration, b = board?.breadth, t = board?.temperature;
 
@@ -135,6 +158,49 @@ export default function Market() {
           {(rates.warnings?.length ?? 0) > 0 && <p className="hint" style={{ marginTop: 8 }}>{rates.warnings.join("；")}</p>}
         </div>
       )}
+
+      {sentiment && (sentiment.fear_greed?.score != null || sentiment.vix_term?.label !== "数据缺失") && (
+        <div className="ca-panel ca-consensus">
+          <h3 style={{ margin: 0 }}>😱 情绪体温计（美股）</h3>
+          <p className="hint">逆向读：极度恐惧常在底部、极度贪婪常在过热。{sentiment.composite?.note}</p>
+          <div className="mk-gauges">
+            <div className="mk-gauge">
+              <div className="g-h">CNN 恐惧贪婪 <span className={"ca-verdict " + fgCls(sentiment.fear_greed?.level)}>{sentiment.fear_greed?.label}</span></div>
+              <div className="g-big">{sentiment.fear_greed?.score ?? "—"}<span className="g-u"> / 100</span></div>
+              {sentiment.fear_greed?.contrarian && <div className="g-note" style={{ color: "var(--fg-soft)" }}>{sentiment.fear_greed.contrarian}</div>}
+            </div>
+            <div className="mk-gauge">
+              <div className="g-h">VIX 期限结构</div>
+              <div className="g-big" style={{ fontSize: 18 }}>{sentiment.vix_term?.label}</div>
+              {sentiment.vix_term?.detail && <div className="g-sub">{sentiment.vix_term.detail}</div>}
+            </div>
+          </div>
+          {(sentiment.fear_greed?.subs?.length ?? 0) > 0 && (
+            <div className="ca-tilt">
+              <span className="hint" style={{ margin: 0 }}>恐惧贪婪分项：</span>
+              {sentiment.fear_greed!.subs!.map((s, i) => (
+                <span key={i} className={"ca-verdict " + ratingCls(s.rating)}>{s.name}·{s.rating}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="ca-panel ca-consensus">
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+          <h3 style={{ margin: 0 }}>🧠 市场审视（AI · 共识 / 历史镜像 / 非共识）</h3>
+          <button className="ca-refresh" disabled={genBusy || review?.status === "running"} onClick={genReview}>
+            {genBusy || review?.status === "running" ? "生成中…（约 1 分钟）" : review?.report ? "🔄 重新生成" : "🧠 生成市场审视"}
+          </button>
+        </div>
+        <p className="hint">把上面全部真实市场数据 + 一手观点（播客信号卡）综合成：当前共识&为什么 / 历史镜像 / 市场级非共识 + 反证。不预测点位、不荐股。</p>
+        {review?.status === "error" && <p className="status err">生成失败：{review.error}</p>}
+        {review?.report
+          ? <div style={{ marginTop: 6 }}><Markdown>{review.report}</Markdown></div>
+          : (genBusy || review?.status === "running")
+            ? <div className="ca-skel" style={{ textAlign: "left", padding: "10px 0" }}>AI 正在综合市场数据…（约 1 分钟）</div>
+            : <p className="hint">点上方按钮，基于当前市场数据生成一次审视。</p>}
+      </div>
 
       <CycleCompass cycle={cycle} />
     </>

@@ -345,3 +345,20 @@ export interface MarketRates {
   fred_enabled?: boolean;
   warnings: string[];
 }
+
+export interface MarketSentiment {
+  _schema?: number;
+  market: string;
+  fear_greed: { score: number | null; level: number | null; label: string; contrarian?: string; rating?: string | null; subs?: { name: string; rating: string }[] };
+  vix_term: { ivts?: number; vix?: number; vix3m?: number; label: string; detail?: string };
+  composite: { label: string; note?: string };
+  warnings: string[];
+}
+
+export interface MarketReview {
+  status: "none" | "running" | "done" | "error";
+  report?: string;
+  generated_at?: number;
+  error?: string;
+  _age_s?: number;
+}
