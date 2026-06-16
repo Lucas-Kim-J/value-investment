@@ -3,6 +3,27 @@ import type { ParsedHolding } from "../../lib/types";
 
 export interface NewRow { market: string; ticker: string; name: string; note: string }
 
+/** Downscale a (possibly huge clipboard) image to <=maxDim px JPEG so the upload is small
+ * + fast and never trips the server body-size limit. Falls back to the original on error. */
+async function downscaleImage(file: Blob, maxDim = 1600, quality = 0.85): Promise<Blob> {
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+    if (scale >= 1 && file.size < 1_500_000) { bmp.close?.(); return file; }  // already small
+    const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bmp, 0, 0, w, h);
+    bmp.close?.();
+    const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, "image/jpeg", quality));
+    return blob && blob.size < file.size ? blob : file;
+  } catch {
+    return file;
+  }
+}
+
 export function PhotoImport({ onAdd }: { onAdd: (rows: NewRow[]) => void }) {
   const [st, setSt] = useState<{ msg: string; cls: string }>({ msg: "", cls: "" });
   const [parsed, setParsed] = useState<ParsedHolding[] | null>(null);
@@ -14,8 +35,9 @@ export function PhotoImport({ onAdd }: { onAdd: (rows: NewRow[]) => void }) {
     setSt({ msg: "上传中…", cls: "" });
     setParsed(null);
     stRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const img = await downscaleImage(file);   // shrink big clipboard screenshots first
     const fd = new FormData();
-    fd.append("image", file);
+    fd.append("image", img, "holdings.jpg");
     try {
       // POST returns instantly (kicks off a background job) — the long-held connection
       // that ran hermes vision ~30-90s was getting dropped as 499 / "Failed to fetch".
