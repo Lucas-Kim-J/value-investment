@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { apiGet, apiPost } from "../lib/api";
 import { useMe } from "../lib/hooks";
-import type { AnalysisDetail, AnalysisItem, CompanyNews, CompanyNewsItem, CompanyPeers, CompanySnapshot, Holding } from "../lib/types";
+import type { AnalysisDetail, AnalysisItem, CompanyNews, CompanyNewsItem, CompanyPeers, CompanySnapshot, Holding, MarketCycle } from "../lib/types";
 import { Markdown } from "../shell/Markdown";
 import { EChart } from "./analyze/EChart";
 import { fmtMoney, fmtPct, fmtPx, fmtX, priceOption, radarOption, relTime, trendOption } from "./analyze/charts";
@@ -14,6 +14,8 @@ const MARKETS = ["美股", "A股", "港股", "加密"];
 const SNAPSHOT_SCHEMA = 2; // keep in sync with market_data.SNAPSHOT_SCHEMA
 const verdictCls = (v: string) =>
   v === "便宜" ? "cheap" : v === "偏贵" ? "rich" : v === "合理" ? "fair" : "na";
+// cycle strip: risk-on (level≥4) = green, late/neutral = amber, risk-off (≤2) = red
+const cyclePosCls = (lvl?: number) => (lvl == null ? "na" : lvl >= 4 ? "cheap" : lvl <= 2 ? "rich" : "fair");
 const pcStr = (x?: number | null) => (x == null ? "数据缺失" : (x * 100).toFixed(1) + "%");
 const mispCls = (f?: string | null) => (!f ? "na" : f.includes("错杀") ? "cheap" : f.includes("高估") ? "rich" : "fair");
 // percentile cell color: for valuation lower=cheaper(good-ish), for quality higher=better. neutral chip.
@@ -58,6 +60,7 @@ export default function Analyze() {
   const [news, setNews] = useState<CompanyNews | null>(null);
   const [peers, setPeers] = useState<CompanyPeers | null>(null);
   const [peersLoading, setPeersLoading] = useState(false);
+  const [cycle, setCycle] = useState<MarketCycle | null>(null);
   const [dashLoading, setDashLoading] = useState(false);
   const cur = useRef<{ ticker: string; name: string; market: string } | null>(null);
 
@@ -88,6 +91,7 @@ export default function Analyze() {
     setSnap(null);
     setNews(null);
     setPeers(null);
+    setCycle(null);
     setReport(null);
     setAiSt({ msg: "", cls: "" });
     const f = fresh ? "&fresh=1" : "";
@@ -96,6 +100,10 @@ export default function Analyze() {
     setPeersLoading(true);
     apiGet<CompanyPeers>(`/api/companies/peers?${qs}${f}`).then((r) => {
       if (mounted.current) { setPeers(r.data); setPeersLoading(false); }
+    });
+    // top-down market cycle (market-level, cached daily) — fetched in parallel
+    apiGet<MarketCycle>(`/api/market/cycle?market=${encodeURIComponent(mk)}${f}`).then((r) => {
+      if (mounted.current) setCycle(r.data);
     });
     const [snapR, newsR] = await Promise.all([
       apiGet<CompanySnapshot>(`/api/companies/snapshot?${qs}${f}`),
@@ -440,6 +448,17 @@ export default function Analyze() {
                 </div>
               ))}
               {snap.history_position.note && <div className="ca-bet" style={{ marginTop: 10 }}>★ {snap.history_position.note}</div>}
+            </div>
+          )}
+
+          {/* 市场周期 — 紧凑条；完整罗盘 + 体温计 + 板块热力图见 🌐市场 */}
+          {cycle?.composite?.position && (
+            <div className="ca-panel ca-consensus" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 700 }}>🧭 市场周期</span>
+              <span className={"ca-verdict " + cyclePosCls(cycle.composite.level)}>{cycle.composite.position}</span>
+              <span className={"ca-deep " + (cycle.composite.tailwind === "顺风" ? "yes" : "no")}>对风险资产：{cycle.composite.tailwind}</span>
+              {cycle.cape_flag?.on && <span className="hint" style={{ margin: 0 }}>· 估值天花板，叠加价值看仓位/风格</span>}
+              <Link className="hint" style={{ margin: 0, marginLeft: "auto" }} to="/market">完整市场看板 →</Link>
             </div>
           )}
 

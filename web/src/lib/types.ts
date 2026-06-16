@@ -274,3 +274,113 @@ export interface Signal {
 export interface SignalDetail extends Signal {
   transcript?: string | null;
 }
+
+export interface CycleLens {
+  key: string;
+  title: string;
+  score: number | null;
+  label: string;
+  detail: string;
+}
+
+export interface MarketCycle {
+  _schema?: number;
+  market: string;
+  composite: {
+    score: number | null;
+    level: number;
+    position: string;
+    tailwind: string;
+    sahm_breaker: boolean;
+    lenses_used: string[];
+    lenses_missing: string[];
+  };
+  lenses: CycleLens[];
+  asset_tilt: Record<string, string>;
+  cape_flag: { on: boolean; note: string };
+  recession_prob: number | null;
+  fred_enabled: boolean;
+  warnings: string[];
+}
+
+export interface SectorHeat {
+  ticker: string;
+  name: string;
+  quadrant: string;
+  heat: number | null;
+  rs_6m: number | null;
+  rs_3m: number | null;
+}
+
+export interface MarketBoard {
+  _schema?: number;
+  market: string;
+  temperature: { valuation?: string; breadth?: string; concentrated?: boolean | null; hot?: boolean; note?: string };
+  valuation: {
+    percentile: number | null; level: number | null; label: string; note: string;
+    pe?: { value: number; percentile: number | null } | null;
+    cape?: { value: number; percentile: number | null } | null;
+  };
+  concentration: {
+    top_n_weight: number | null; herfindahl: number | null; rsp_spy_percentile: number | null;
+    top_n: number; concentrated: boolean | null; label: string; detail: string;
+  };
+  breadth: { pct_above_200: number | null; pct_above_50: number | null; level: number | null; label: string; healthy: boolean | null; n?: number | null };
+  sectors: SectorHeat[];
+  crowding_note?: string;
+  warnings: string[];
+}
+
+export interface MarketRates {
+  _schema?: number;
+  market: string;
+  policy_rates: { name: string; value: string; detail?: string; asof?: string | null }[];
+  future_path: {
+    market_implied?: { dgs2: number; gap_bps: number; direction: string; note: string } | null;
+    dot_plot?: { points: [number, number][]; direction: string; note: string } | null;
+    comparison?: string;
+    t10yff?: number | null;
+  };
+  macro: { name: string; value: string; trend?: string | null; asof?: string | null }[];
+  fred_enabled?: boolean;
+  warnings: string[];
+}
+
+export interface MarketSentiment {
+  _schema?: number;
+  market: string;
+  fear_greed: { score: number | null; level: number | null; label: string; contrarian?: string; rating?: string | null; subs?: { name: string; rating: string }[] };
+  vix_term: { ivts?: number; vix?: number; vix3m?: number; label: string; detail?: string };
+  composite: { label: string; note?: string };
+  warnings: string[];
+}
+
+export interface MarketReview {
+  status: "none" | "running" | "done" | "error";
+  report?: string;
+  generated_at?: number;
+  error?: string;
+  _age_s?: number;
+}
+
+export interface SectorLeaders {
+  _schema?: number;
+  market: string;
+  sectors: { etf: string; name: string; leaders: { ticker: string; name: string; weight: number }[] }[];
+  note?: string;
+  warnings: string[];
+}
+
+export interface MarketCN {
+  _schema?: number;
+  market: string;
+  valuation: { index?: string; pe?: number; percentile?: number | null; label?: string; level?: number | null; note?: string };
+  rates: {
+    policy_rates?: { name: string; value: string }[];
+    ten_year?: number; curve_slope?: number;
+    m2_yoy?: number | null; m1_yoy?: number | null; m1_m2_gap?: number | null; pmi?: number | null; note?: string;
+  };
+  sentiment: { margin_balance_yi?: number; trend_20d_pct?: number | null; as_of?: string; note?: string };
+  note?: string;
+  warnings: string[];
+}

@@ -40,7 +40,13 @@ import psycopg2.extras
 from cryptography.fernet import Fernet
 from flask import Flask, jsonify, request, session
 import capture as _capture
+import cycle as _cyc
+import market_board as _mb
 import market_data as _md
+import market_cn as _mcn
+import market_cycle as _mc
+import market_rates as _mr
+import market_sentiment as _ms
 import notion_kb as _nkb
 
 CODES_FILE = Path(os.environ.get("VI_CODES_FILE", "/etc/value-investment/access-codes.json"))
@@ -1011,7 +1017,48 @@ def _fmt(v, unit=""):
     return "数据缺失" if v is None else (f"{v:g}{unit}")
 
 
-def _format_company_data(snap: dict, nws: dict, peers: dict | None = None) -> str:
+def _value_verdict(snap: dict) -> str | None:
+    """Collapse the four-tools scoreboard into a single 便宜/合理/贵 for the value×cycle
+    overlay. ≥2 cheap votes → 便宜; ≥2 tools calling it 偏贵 → 贵; else 合理."""
+    vs = (snap or {}).get("valuation_signals") or {}
+    tools = vs.get("tools") or []
+    if not tools:
+        return None
+    if vs.get("cheap_count", 0) >= 2:
+        return "便宜"
+    if sum(1 for t in tools if "贵" in (t.get("verdict") or "")) >= 2:
+        return "贵"
+    return "合理"
+
+
+def _format_cycle_card(cyc: dict | None, snap: dict) -> list:
+    """Top-down market-cycle lines for the data card, incl. the value×cycle overlay."""
+    comp = (cyc or {}).get("composite") or {}
+    if not comp.get("position"):
+        return []
+    lines = [f"市场周期定位（{cyc.get('market', '美股')}·自上而下）：【{comp.get('position')}】"
+             f"对风险资产为【{comp.get('tailwind')}】（综合分 {comp.get('score')}）"]
+    used = [l for l in (cyc.get("lenses") or []) if l.get("score") is not None]
+    if used:
+        lines.append("  周期透镜：" + "；".join(f"{l['title']}·{l['label']}({l['score']:+d})" for l in used))
+    miss = comp.get("lenses_missing") or []
+    if miss:
+        lines.append(f"  （未接入透镜：{'/'.join(miss)}——当前以利率/估值/波动为主）")
+    cf = cyc.get("cape_flag") or {}
+    if cf.get("on"):
+        lines.append(f"  ★估值天花板：{cf.get('note')}")
+    tilt = cyc.get("asset_tilt") or {}
+    fav = [k for k, v in tilt.items() if v == "✓"]
+    avoid = [k for k, v in tilt.items() if v == "✕"]
+    if fav or avoid:
+        lines.append(f"  当前 regime 资产倾向：占优={'/'.join(fav) or '—'}；回避={'/'.join(avoid) or '—'}")
+    ov = _cyc.value_cycle_overlay(_value_verdict(snap), comp.get("tailwind"))
+    if ov:
+        lines.append(f"  ★价值×周期叠加：本股估值【{ov['value']}】×周期【{ov['tailwind']}】→ {ov['stance']}（{ov['note']}）")
+    return lines
+
+
+def _format_company_data(snap: dict, nws: dict, peers: dict | None = None, cycle: dict | None = None) -> str:
     """Compact real-data card injected into the prompt so hermes reasons on actual
     numbers (no fabrication). Missing fields are stated as 数据缺失, never guessed."""
     if not snap:
@@ -1066,6 +1113,8 @@ def _format_company_data(snap: dict, nws: dict, peers: dict | None = None) -> st
     if ms.get("note"):
         sens = ms.get("sensitivity") or {}
         lines.append(f"宏观资金传导：利率敏感度【{sens.get('score', '数据不足')}】——{ms['note']}")
+    # top-down market cycle (周期罗盘) + value×cycle overlay
+    lines.extend(_format_cycle_card(cycle, snap))
     # valuation consensus (four-tools scoreboard + reverse DCF) — the consensus anchor
     vs = snap.get("valuation_signals") or {}
     if vs.get("tools"):
@@ -1129,7 +1178,7 @@ def _format_company_data(snap: dict, nws: dict, peers: dict | None = None) -> st
     return "\n".join(lines)
 
 
-def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, nws: dict | None = None, peers: dict | None = None) -> str:
+def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, nws: dict | None = None, peers: dict | None = None, cycle: dict | None = None) -> str:
     p = _build_learner_profile(user)
     if p["stage"] == "novice":
         stance = "用户是新手（一手内容读得还少）。多解释*为什么*，每用一个术语就一句话点明定义；强调先验证再深研；不要假设他懂反向 DCF / Owner Earnings。"
@@ -1139,7 +1188,7 @@ def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, 
         stance = "用户是进阶者。术语直接用、不解释；拔高到组合层面与 thesis 可证伪性，犀利、省略基础。"
     mastered = "、".join(p["mastered_terms"][:30]) or "（暂无）"
     recent_ctx = (("\n" + p["recent_context"]) if p.get("recent_context") else "")
-    data_card = _format_company_data(snap or {}, nws or {}, peers or {})
+    data_card = _format_company_data(snap or {}, nws or {}, peers or {}, cycle or {})
     return (
         f"{METHODOLOGY_CONTEXT}\n\n"
         f"【用户学习画像】阶段={p['stage']} 已读一手内容={p['canon_read']} 已掌握术语：{mastered}{recent_ctx}\n\n"
@@ -1166,6 +1215,8 @@ def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, 
         "- **可证伪触发点**：哪个具体、可观测的事件发生就证明你看错。\n"
         "- **价值陷阱红旗核对**（用数据卡里的红旗：含金量不足 / 应收>营收增速 / 商誉过高 / 派息>盈利 / 增量ROIC衰减 / 低P/E但结构衰退）。\n"
         "- 我还需要去原文核对/补充哪些验证。\n\n"
+        "## 六、周期定位与下注框架（价值×周期）\n"
+        "用【市场周期定位】说明当前自上而下处于什么 regime、对风险资产是顺风/中性/逆风；若【估值天花板】旗标亮起，明确点出『即便周期顺风，远期回报也被压低』。然后把**上文单股价值判断 × 当前周期**叠加（参考数据卡里的『价值×周期叠加』）：说明这会如何调整**该有的安全边际、持有期、仓位轻重、以及更契合当前 regime 的风格/资产倾向**——直接回应『判断对、但若处在差周期回报也有限』。这是**框架与风险定位，不替用户做买卖决定、不给目标价**。若周期数据缺失就说明缺失。\n\n"
         "硬约束：\n"
         "- **篇幅精炼**：每节 3–6 句，非共识只给**最强的 1–2 条**；重质不重量，不要冗长堆砌（这也是为了快速生成）。\n"
         "- 只基于【真实数据卡】里的数字推理，**引用具体数值**；数据卡没有的写「数据缺失 / 需去原文核对」，**绝不编造任何数字**。\n"
@@ -1198,13 +1249,17 @@ def _run_analysis_job(analysis_id: int, user: str, ticker: str, name: str, marke
                 _cache_put(ticker, market, "peers", peers)
             except Exception:  # noqa: BLE001
                 peers = {}
-        prompt = compose_analysis_prompt(user, {"ticker": ticker, "name": name, "market": market}, snap, nws, peers)
+        try:
+            cyc = _cycle_snapshot(market)   # top-down market cycle (cached daily, US only)
+        except Exception:  # noqa: BLE001
+            cyc = {}
+        prompt = compose_analysis_prompt(user, {"ticker": ticker, "name": name, "market": market}, snap, nws, peers, cyc)
         report = run_hermes(prompt)
         # keep the exact data this report was generated from (reproducible / 排查)
-        data_snap = json.dumps({"snapshot": snap, "peers": peers,
+        data_snap = json.dumps({"snapshot": snap, "peers": peers, "cycle": cyc,
                                 "news": {"filings": len((nws or {}).get("filings") or []),
                                          "news": len((nws or {}).get("news") or [])},
-                                "data_card": _format_company_data(snap or {}, nws or {}, peers or {})})
+                                "data_card": _format_company_data(snap or {}, nws or {}, peers or {}, cyc)})
         with _db() as c, c.cursor() as cur:
             cur.execute("UPDATE company_analyses SET status='done', report=%s, data_snap=%s, generated_at=now() WHERE id=%s",
                         (report, data_snap, analysis_id))
@@ -1286,7 +1341,16 @@ def get_analysis(aid):
 # Cached in company_data_cache (public data, shared across users). TTL by kind;
 # ?fresh=1 forces a refetch.
 
-_CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600, "peers": 12 * 3600}
+_CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600, "peers": 12 * 3600, "cycle": 12 * 3600,
+              "board": 24 * 3600, "rates": 12 * 3600, "sentiment": 6 * 3600, "review": 24 * 3600,
+              "leaders": 24 * 3600, "cn": 12 * 3600}
+_CYCLE_KEY = "__US_MARKET__"   # market-level cycle compass uses a synthetic ticker
+_BOARD_KEY = "__US_BOARD__"    # market-level board (体温计+板块热力图) synthetic ticker
+_RATES_KEY = "__US_RATES__"    # market-level 利率与央行 synthetic ticker
+_SENT_KEY = "__US_SENT__"      # market-level 情绪体温计 synthetic ticker
+_REVIEW_KEY = "__US_REVIEW__"  # market-level AI 审视 synthetic ticker
+_LEADERS_KEY = "__US_LEADERS__"  # market-level 板块龙头 synthetic ticker
+_CN_KEY = "__CN_MARKET__"      # A股 市场快照 synthetic ticker
 
 
 def _cache_get(ticker: str, market: str, kind: str):
@@ -1357,6 +1421,295 @@ def company_peers():
     # separate endpoint (fetched in parallel by the frontend) — peer .info calls are
     # slow, so we don't let them block the main snapshot/dashboard.
     return _company_data("peers", lambda tk, mk: _md.peer_comparison(tk, mk))
+
+
+def _cycle_snapshot(market: str = "美股", fresh: bool = False) -> dict:
+    """Market-level cycle compass (cached daily + archived). US only for now;
+    auto-refetches when the cached payload predates the current CYCLE_SCHEMA."""
+    if not _md._is_us(market):
+        return {"market": market, "lenses": [], "composite": {},
+                "warnings": ["周期罗盘目前仅支持美股；A股周期建设中"]}
+    if not fresh:
+        cached = _cache_get(_CYCLE_KEY, "美股", "cycle")
+        if cached is not None and cached.get("_schema") == _mc.CYCLE_SCHEMA:
+            return cached
+    data = _mc.us_cycle()
+    try:
+        _cache_put(_CYCLE_KEY, "美股", "cycle", data)
+    except Exception:  # noqa: BLE001 — cache failure must not break the response
+        pass
+    return data
+
+
+@app.get("/api/market/cycle")
+def market_cycle_view():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    market = (request.args.get("market") or "美股")[:16]
+    return jsonify(_cycle_snapshot(market, fresh=request.args.get("fresh") == "1"))
+
+
+def _board_snapshot(market: str = "美股", fresh: bool = False) -> dict:
+    """Market board (体温计 + 板块热力图), cached 24h + archived. US only for now;
+    auto-refetches when the cached payload predates the current BOARD_SCHEMA."""
+    if not _md._is_us(market):
+        return {"market": market, "sectors": [], "temperature": {},
+                "warnings": ["市场看板目前仅支持美股；A股版建设中"]}
+    if not fresh:
+        cached = _cache_get(_BOARD_KEY, "美股", "board")
+        if cached is not None and cached.get("_schema") == _mb.BOARD_SCHEMA:
+            return cached
+    data = _mb.us_board()
+    try:
+        _cache_put(_BOARD_KEY, "美股", "board", data)
+    except Exception:  # noqa: BLE001
+        pass
+    return data
+
+
+@app.get("/api/market/board")
+def market_board_view():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    market = (request.args.get("market") or "美股")[:16]
+    return jsonify(_board_snapshot(market, fresh=request.args.get("fresh") == "1"))
+
+
+def _rates_snapshot(market: str = "美股", fresh: bool = False) -> dict:
+    """利率与央行 (政策利率 + 未来路径双腿 + 关键宏观), cached 12h + archived. US only."""
+    if not _md._is_us(market):
+        return {"market": market, "policy_rates": [], "macro": [], "future_path": {},
+                "warnings": ["利率与央行目前以美联储为主；其他央行建设中"]}
+    if not fresh:
+        cached = _cache_get(_RATES_KEY, "美股", "rates")
+        if cached is not None and cached.get("_schema") == _mr.RATES_SCHEMA:
+            return cached
+    data = _mr.us_rates()
+    try:
+        _cache_put(_RATES_KEY, "美股", "rates", data)
+    except Exception:  # noqa: BLE001
+        pass
+    return data
+
+
+@app.get("/api/market/rates")
+def market_rates_view():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    market = (request.args.get("market") or "美股")[:16]
+    return jsonify(_rates_snapshot(market, fresh=request.args.get("fresh") == "1"))
+
+
+def _sentiment_snapshot(market: str = "美股", fresh: bool = False) -> dict:
+    """情绪体温计 (CNN 恐惧贪婪 + VIX 期限), cached 6h + archived. US only."""
+    if not _md._is_us(market):
+        return {"market": market, "fear_greed": {}, "vix_term": {}, "composite": {},
+                "warnings": ["情绪体温计目前仅支持美股"]}
+    if not fresh:
+        cached = _cache_get(_SENT_KEY, "美股", "sentiment")
+        if cached is not None and cached.get("_schema") == _ms.SENT_SCHEMA:
+            return cached
+    data = _ms.us_sentiment()
+    try:
+        _cache_put(_SENT_KEY, "美股", "sentiment", data)
+    except Exception:  # noqa: BLE001
+        pass
+    return data
+
+
+@app.get("/api/market/sentiment")
+def market_sentiment_view():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    market = (request.args.get("market") or "美股")[:16]
+    return jsonify(_sentiment_snapshot(market, fresh=request.args.get("fresh") == "1"))
+
+
+def _leaders_snapshot(market: str = "美股", fresh: bool = False) -> dict:
+    """板块龙头 (SPDR sector-ETF top holdings), cached 24h + archived. US only."""
+    if not _md._is_us(market):
+        return {"market": market, "sectors": [], "warnings": ["板块龙头目前仅支持美股"]}
+    if not fresh:
+        cached = _cache_get(_LEADERS_KEY, "美股", "leaders")
+        if cached is not None and cached.get("_schema") == _mb.LEADERS_SCHEMA:
+            return cached
+    data = _mb.us_sector_leaders()
+    try:
+        _cache_put(_LEADERS_KEY, "美股", "leaders", data)
+    except Exception:  # noqa: BLE001
+        pass
+    return data
+
+
+@app.get("/api/market/leaders")
+def market_leaders_view():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    market = (request.args.get("market") or "美股")[:16]
+    return jsonify(_leaders_snapshot(market, fresh=request.args.get("fresh") == "1"))
+
+
+def _cn_snapshot(fresh: bool = False) -> dict:
+    """A股 市场快照 (估值分位 + 利率政策 + 两融情绪), cached 12h + archived."""
+    if not fresh:
+        cached = _cache_get(_CN_KEY, "A股", "cn")
+        if cached is not None and cached.get("_schema") == _mcn.CN_SCHEMA:
+            return cached
+    data = _mcn.cn_market()
+    try:
+        _cache_put(_CN_KEY, "A股", "cn", data)
+    except Exception:  # noqa: BLE001
+        pass
+    return data
+
+
+@app.get("/api/market/cn")
+def market_cn_view():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    return jsonify(_cn_snapshot(fresh=request.args.get("fresh") == "1"))
+
+
+# ---------- 市场 AI 审视 (top-down consensus / 历史镜像 / 市场非共识) ----------
+
+def _recent_signal_cards(limit: int = 12) -> list:
+    """Practitioners' distilled views from the content pipeline (non-consensus angles)."""
+    try:
+        with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+            cur.execute("SELECT show_title, title, signal_card FROM content_items "
+                        "WHERE signal_card IS NOT NULL ORDER BY published_at DESC NULLS LAST LIMIT %s", (limit,))
+            rows = cur.fetchall()
+    except Exception:  # noqa: BLE001
+        return []
+    out = []
+    for r in rows:
+        card = r["signal_card"]
+        if isinstance(card, str):
+            try:
+                card = json.loads(card)
+            except ValueError:
+                card = {}
+        out.append({"show_title": r.get("show_title"), "title": r.get("title"), "card": card or {}})
+    return out
+
+
+def _format_market_data(cyc: dict, brd: dict, rt: dict, sent: dict, signals: list) -> str:
+    """Compact real-data 市场数据卡 for the top-down AI review (no fabrication)."""
+    L = []
+    comp = (cyc or {}).get("composite") or {}
+    if comp.get("position"):
+        L.append(f"周期定位：{comp['position']}（对风险资产{comp['tailwind']}，综合分 {comp.get('score')}）")
+        used = [l for l in (cyc.get("lenses") or []) if l.get("score") is not None]
+        if used:
+            L.append("  周期透镜：" + "；".join(f"{l['title']}{l['label']}({l['score']:+d})" for l in used))
+        cf = (cyc or {}).get("cape_flag") or {}
+        if cf.get("on"):
+            L.append(f"  ★估值天花板：{cf.get('note')}")
+    v, c, b = (brd or {}).get("valuation") or {}, (brd or {}).get("concentration") or {}, (brd or {}).get("breadth") or {}
+    if v.get("label"):
+        L.append(f"市场估值：{v['label']}（历史分位 {v.get('percentile')}%；S&P P/E {(v.get('pe') or {}).get('value')} / CAPE {(v.get('cape') or {}).get('value')}）")
+    if c.get("label"):
+        L.append(f"集中度：{c['label']}（{c.get('detail')}）")
+    if b.get("label"):
+        L.append(f"广度：{b['label']}（{b.get('pct_above_200')}% 个股 >200日线）")
+    secs = (brd or {}).get("sectors") or []
+    if secs:
+        t, bo = secs[0], secs[-1]
+        L.append(f"板块热力：最强 {t['name']}（{t['quadrant']} {t['heat']:+}%），最弱 {bo['name']}（{bo['quadrant']} {bo['heat']:+}%）")
+    pr, fp, mac = (rt or {}).get("policy_rates") or [], (rt or {}).get("future_path") or {}, (rt or {}).get("macro") or []
+    if pr:
+        L.append("政策利率：" + "；".join(f"{p['name']} {p['value']}" for p in pr))
+    if fp.get("market_implied"):
+        L.append(f"未来·市场隐含：{fp['market_implied']['note']}")
+    if fp.get("dot_plot"):
+        L.append(f"未来·点阵图：{fp['dot_plot']['note']}")
+    if fp.get("comparison"):
+        L.append(f"  ★对照：{fp['comparison']}")
+    if mac:
+        L.append("关键宏观：" + "；".join(f"{m['name']} {m['value']}" + (f"({m['trend']})" if m.get("trend") else "") for m in mac))
+    fg, vt = (sent or {}).get("fear_greed") or {}, (sent or {}).get("vix_term") or {}
+    if fg.get("label") and fg["label"] != "数据缺失":
+        L.append(f"情绪：恐惧贪婪 {fg['label']}（{fg.get('score')}）；VIX 期限 {vt.get('label')}")
+    if signals:
+        L.append("近期一手观点（播客信号卡，practitioners 的非共识/新角度——供参考、勿当事实）：")
+        for s in signals[:10]:
+            card = s.get("card") or {}
+            nc = str(card.get("non_consensus", ""))[:64]
+            na = str(card.get("new_angle", ""))[:40]
+            L.append(f"  · [{s.get('show_title', '')}] 非共识:{nc}｜角度:{na}")
+    return "\n".join(L) or "（市场数据暂缺）"
+
+
+def compose_market_prompt(cyc: dict, brd: dict, rt: dict, sent: dict, signals: list) -> str:
+    card = _format_market_data(cyc, brd, rt, sent, signals)
+    return (
+        f"{METHODOLOGY_CONTEXT}\n\n"
+        "你在做**自上而下的市场审视**（不是单个公司）。基于下面我们自己抓取并计算的真实市场数据 + 一手观点，做非共识研判。\n\n"
+        f"【真实市场数据卡 · 只基于这些数字推理、引用具体数值】\n{card}\n\n"
+        "分析哲学（源自《非共识的20分钟》）：公开数据大家都有、共识多已 price in。你的价值在于**基于真实数据找出市场层面『现实可能与共识不同』的非共识点**，并诚实标注**可能错在哪、概率多大**。重机制、不预测点位。\n\n"
+        "报告结构（全部建立在【真实市场数据卡】上、引用具体数字）：\n\n"
+        "## 一、当前市场共识 + 为什么\n用数据卡说清市场现在主流在 price in 什么（估值分位、利率路径、情绪、板块领跑），以及**为什么**形成这种共识。\n\n"
+        "## 二、历史镜像\n当前(估值分位/利率与曲线/广度/集中度/情绪)的组合，像历史上哪个阶段？给「更像 ___ 还是 ___」并说明像/不像在哪；市场是否把当前外推成常态。\n\n"
+        "## 三、市场级非共识信号（最关键）\n给 1–3 条：数据显示 X，而共识/价格隐含 Y，差距多大、依托哪个信号。每条配：赔率与盈亏不对称 / **我可能错在哪 + 校准概率** / 拥挤与反身性 / 可证伪触发点。可结合一手观点，但标明哪些是数据事实、哪些是他人判断。\n\n"
+        "## 四、对配置的含义（框架，非荐股）\n当前 regime + 估值天花板下，偏向哪类资产/风格/现金与对冲水平；价值投资者此刻该把安全边际、持有期、仓位往哪调。\n\n"
+        "硬约束：\n- 每节精炼 3–6 句；只基于数据卡数字、引用具体数值；没有的写「数据缺失」，**绝不编造**。\n- 区分「数据事实 / 判断 / 概率」，判断都标为估计。\n- 不给个股买卖建议、不预测点位/目标价。"
+    )
+
+
+def _review_get() -> dict | None:
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT payload, extract(epoch FROM now()-fetched_at) AS age "
+                    "FROM company_data_cache WHERE ticker=%s AND market='美股' AND kind='review'", (_REVIEW_KEY,))
+        r = cur.fetchone()
+    if not r:
+        return None
+    d = r["payload"]
+    d["_age_s"] = int(r["age"] or 0)
+    return d
+
+
+def _review_set(payload: dict, archive: bool = False) -> None:
+    blob = json.dumps(payload, ensure_ascii=False)
+    with _db() as c, c.cursor() as cur:
+        cur.execute("INSERT INTO company_data_cache(ticker,market,kind,payload,fetched_at) "
+                    "VALUES (%s,'美股','review',%s,now()) "
+                    "ON CONFLICT (ticker,market,kind) DO UPDATE SET payload=EXCLUDED.payload, fetched_at=now()",
+                    (_REVIEW_KEY, blob))
+        if archive:
+            cur.execute("INSERT INTO company_data_archive(ticker,market,kind,payload) VALUES (%s,'美股','review',%s)",
+                        (_REVIEW_KEY, blob))
+
+
+def _run_market_review() -> None:
+    try:
+        cyc, brd = _cycle_snapshot("美股"), _board_snapshot("美股")
+        rt, sent = _rates_snapshot("美股"), _sentiment_snapshot("美股")
+        prompt = compose_market_prompt(cyc, brd, rt, sent, _recent_signal_cards())
+        report = run_hermes(prompt)
+        _review_set({"status": "done", "report": report, "generated_at": time.time()}, archive=True)
+    except subprocess.TimeoutExpired:
+        _review_set({"status": "error", "error": "生成超时（>300s）"})
+    except Exception as e:  # noqa: BLE001
+        _review_set({"status": "error", "error": str(e)[:300]})
+
+
+@app.get("/api/market/review")
+def market_review_get():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    return jsonify(_review_get() or {"status": "none"})
+
+
+@app.post("/api/market/review")
+def market_review_start():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    cur = _review_get()
+    if cur and cur.get("status") == "running" and cur.get("_age_s", 9999) < 600:
+        return {"status": "running"}
+    _review_set({"status": "running", "started": time.time()})
+    threading.Thread(target=_run_market_review, daemon=True).start()
+    return {"status": "running"}
 
 
 @app.get("/api/companies/archive")
