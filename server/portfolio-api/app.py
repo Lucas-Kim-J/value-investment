@@ -2307,9 +2307,58 @@ def provision_hermes():
     return report
 
 
+def _parse_key(user: str) -> str:
+    return ("__PARSE_" + (user or "").strip().lower())[:32]
+
+
+def _parse_get(user: str) -> dict | None:
+    with _db() as c, c.cursor(cursor_factory=RDC) as cur:
+        cur.execute("SELECT payload, extract(epoch FROM now()-fetched_at) AS age "
+                    "FROM company_data_cache WHERE ticker=%s AND market='-' AND kind='parse_job'", (_parse_key(user),))
+        r = cur.fetchone()
+    if not r:
+        return None
+    d = r["payload"]
+    d["_age_s"] = int(r["age"] or 0)
+    return d
+
+
+def _parse_set(user: str, payload: dict) -> None:
+    blob = json.dumps(payload, ensure_ascii=False)
+    with _db() as c, c.cursor() as cur:
+        cur.execute("INSERT INTO company_data_cache(ticker,market,kind,payload,fetched_at) "
+                    "VALUES (%s,'-','parse_job',%s,now()) "
+                    "ON CONFLICT (ticker,market,kind) DO UPDATE SET payload=EXCLUDED.payload, fetched_at=now()",
+                    (_parse_key(user), blob))
+
+
+def _run_parse_job(user: str, path: str) -> None:
+    """Background: hermes vision (~30-90s) → store holdings on the per-user parse job.
+    Runs off-request so the upload connection returns instantly (no client-side 499)."""
+    try:
+        data = run_skill(user, "vi-parse-holdings",
+                         "用 vi-parse-holdings 技能，从这张持仓/资产截图里提取所有持仓。严格只输出该 SKILL 定义的 JSON，不要解释、不要代码块围栏。",
+                         image_path=path)
+        if not data or not isinstance(data, dict):
+            _parse_set(user, {"status": "error", "error": "没认出持仓——换一张更清晰、含币种和数量的截图试试"})
+        else:
+            _parse_set(user, {"status": "done", "holdings": data.get("holdings") or [], "warnings": data.get("warnings") or []})
+    except subprocess.TimeoutExpired:
+        _parse_set(user, {"status": "error", "error": "识别超时，请重试或换张更清晰的图"})
+    except Exception as e:  # noqa: BLE001
+        _parse_set(user, {"status": "error", "error": "识别失败：" + str(e)[:160]})
+    finally:
+        try:
+            os.remove(path)
+        except Exception:  # noqa: BLE001
+            pass
+
+
 @app.post("/api/holdings/parse-image")
 def parse_holdings_image():
-    """Photo → holdings preview, via the vi-parse-holdings official skill (Hermes vision)."""
+    """Kick off photo→holdings recognition in the background (hermes vision is ~30-90s,
+    too long for one synchronous request → the client dropped it as 499/Failed to fetch).
+    Returns immediately; the frontend polls GET /api/holdings/parse-image."""
     user = _current_user()
     if not user:
         return {"error": "未登录"}, 401
@@ -2319,22 +2368,18 @@ def parse_holdings_image():
     fd, path = tempfile.mkstemp(prefix="vi-upload-", suffix=".img", dir="/tmp")
     os.close(fd)
     f.save(path)
-    try:
-        data = run_skill(user, "vi-parse-holdings",
-                         "用 vi-parse-holdings 技能，从这张持仓/资产截图里提取所有持仓。严格只输出该 SKILL 定义的 JSON，不要解释、不要代码块围栏。",
-                         image_path=path)
-    except subprocess.TimeoutExpired:
-        return {"error": "识别超时，请重试或换张更清晰的图"}, 502
-    except Exception as e:  # noqa: BLE001
-        return {"error": "识别失败：" + str(e)[:160]}, 502
-    finally:
-        try:
-            os.remove(path)
-        except Exception:  # noqa: BLE001
-            pass
-    if not data or not isinstance(data, dict):
-        return {"error": "没认出持仓——换一张更清晰、含币种和数量的截图试试"}, 502
-    return jsonify({"holdings": data.get("holdings") or [], "warnings": data.get("warnings") or []})
+    _parse_set(user, {"status": "running", "ts": time.time()})
+    threading.Thread(target=_run_parse_job, args=(user, path), daemon=True).start()
+    return {"status": "running"}
+
+
+@app.get("/api/holdings/parse-image")
+def parse_holdings_status():
+    """Latest parse job for this user: {status: running|done|error|none, holdings, warnings, error}."""
+    user = _current_user()
+    if not user:
+        return {"error": "未登录"}, 401
+    return jsonify(_parse_get(user) or {"status": "none"})
 
 
 # ---------- knowledge capture (buffer-first → Notion) ----------
