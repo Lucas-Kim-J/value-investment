@@ -40,7 +40,9 @@ import psycopg2.extras
 from cryptography.fernet import Fernet
 from flask import Flask, jsonify, request, session
 import capture as _capture
+import cycle as _cyc
 import market_data as _md
+import market_cycle as _mc
 import notion_kb as _nkb
 
 CODES_FILE = Path(os.environ.get("VI_CODES_FILE", "/etc/value-investment/access-codes.json"))
@@ -1011,7 +1013,48 @@ def _fmt(v, unit=""):
     return "数据缺失" if v is None else (f"{v:g}{unit}")
 
 
-def _format_company_data(snap: dict, nws: dict, peers: dict | None = None) -> str:
+def _value_verdict(snap: dict) -> str | None:
+    """Collapse the four-tools scoreboard into a single 便宜/合理/贵 for the value×cycle
+    overlay. ≥2 cheap votes → 便宜; ≥2 tools calling it 偏贵 → 贵; else 合理."""
+    vs = (snap or {}).get("valuation_signals") or {}
+    tools = vs.get("tools") or []
+    if not tools:
+        return None
+    if vs.get("cheap_count", 0) >= 2:
+        return "便宜"
+    if sum(1 for t in tools if "贵" in (t.get("verdict") or "")) >= 2:
+        return "贵"
+    return "合理"
+
+
+def _format_cycle_card(cyc: dict | None, snap: dict) -> list:
+    """Top-down market-cycle lines for the data card, incl. the value×cycle overlay."""
+    comp = (cyc or {}).get("composite") or {}
+    if not comp.get("position"):
+        return []
+    lines = [f"市场周期定位（{cyc.get('market', '美股')}·自上而下）：【{comp.get('position')}】"
+             f"对风险资产为【{comp.get('tailwind')}】（综合分 {comp.get('score')}）"]
+    used = [l for l in (cyc.get("lenses") or []) if l.get("score") is not None]
+    if used:
+        lines.append("  周期透镜：" + "；".join(f"{l['title']}·{l['label']}({l['score']:+d})" for l in used))
+    miss = comp.get("lenses_missing") or []
+    if miss:
+        lines.append(f"  （未接入透镜：{'/'.join(miss)}——当前以利率/估值/波动为主）")
+    cf = cyc.get("cape_flag") or {}
+    if cf.get("on"):
+        lines.append(f"  ★估值天花板：{cf.get('note')}")
+    tilt = cyc.get("asset_tilt") or {}
+    fav = [k for k, v in tilt.items() if v == "✓"]
+    avoid = [k for k, v in tilt.items() if v == "✕"]
+    if fav or avoid:
+        lines.append(f"  当前 regime 资产倾向：占优={'/'.join(fav) or '—'}；回避={'/'.join(avoid) or '—'}")
+    ov = _cyc.value_cycle_overlay(_value_verdict(snap), comp.get("tailwind"))
+    if ov:
+        lines.append(f"  ★价值×周期叠加：本股估值【{ov['value']}】×周期【{ov['tailwind']}】→ {ov['stance']}（{ov['note']}）")
+    return lines
+
+
+def _format_company_data(snap: dict, nws: dict, peers: dict | None = None, cycle: dict | None = None) -> str:
     """Compact real-data card injected into the prompt so hermes reasons on actual
     numbers (no fabrication). Missing fields are stated as 数据缺失, never guessed."""
     if not snap:
@@ -1066,6 +1109,8 @@ def _format_company_data(snap: dict, nws: dict, peers: dict | None = None) -> st
     if ms.get("note"):
         sens = ms.get("sensitivity") or {}
         lines.append(f"宏观资金传导：利率敏感度【{sens.get('score', '数据不足')}】——{ms['note']}")
+    # top-down market cycle (周期罗盘) + value×cycle overlay
+    lines.extend(_format_cycle_card(cycle, snap))
     # valuation consensus (four-tools scoreboard + reverse DCF) — the consensus anchor
     vs = snap.get("valuation_signals") or {}
     if vs.get("tools"):
@@ -1129,7 +1174,7 @@ def _format_company_data(snap: dict, nws: dict, peers: dict | None = None) -> st
     return "\n".join(lines)
 
 
-def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, nws: dict | None = None, peers: dict | None = None) -> str:
+def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, nws: dict | None = None, peers: dict | None = None, cycle: dict | None = None) -> str:
     p = _build_learner_profile(user)
     if p["stage"] == "novice":
         stance = "用户是新手（一手内容读得还少）。多解释*为什么*，每用一个术语就一句话点明定义；强调先验证再深研；不要假设他懂反向 DCF / Owner Earnings。"
@@ -1139,7 +1184,7 @@ def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, 
         stance = "用户是进阶者。术语直接用、不解释；拔高到组合层面与 thesis 可证伪性，犀利、省略基础。"
     mastered = "、".join(p["mastered_terms"][:30]) or "（暂无）"
     recent_ctx = (("\n" + p["recent_context"]) if p.get("recent_context") else "")
-    data_card = _format_company_data(snap or {}, nws or {}, peers or {})
+    data_card = _format_company_data(snap or {}, nws or {}, peers or {}, cycle or {})
     return (
         f"{METHODOLOGY_CONTEXT}\n\n"
         f"【用户学习画像】阶段={p['stage']} 已读一手内容={p['canon_read']} 已掌握术语：{mastered}{recent_ctx}\n\n"
@@ -1166,6 +1211,8 @@ def compose_analysis_prompt(user: str, company: dict, snap: dict | None = None, 
         "- **可证伪触发点**：哪个具体、可观测的事件发生就证明你看错。\n"
         "- **价值陷阱红旗核对**（用数据卡里的红旗：含金量不足 / 应收>营收增速 / 商誉过高 / 派息>盈利 / 增量ROIC衰减 / 低P/E但结构衰退）。\n"
         "- 我还需要去原文核对/补充哪些验证。\n\n"
+        "## 六、周期定位与下注框架（价值×周期）\n"
+        "用【市场周期定位】说明当前自上而下处于什么 regime、对风险资产是顺风/中性/逆风；若【估值天花板】旗标亮起，明确点出『即便周期顺风，远期回报也被压低』。然后把**上文单股价值判断 × 当前周期**叠加（参考数据卡里的『价值×周期叠加』）：说明这会如何调整**该有的安全边际、持有期、仓位轻重、以及更契合当前 regime 的风格/资产倾向**——直接回应『判断对、但若处在差周期回报也有限』。这是**框架与风险定位，不替用户做买卖决定、不给目标价**。若周期数据缺失就说明缺失。\n\n"
         "硬约束：\n"
         "- **篇幅精炼**：每节 3–6 句，非共识只给**最强的 1–2 条**；重质不重量，不要冗长堆砌（这也是为了快速生成）。\n"
         "- 只基于【真实数据卡】里的数字推理，**引用具体数值**；数据卡没有的写「数据缺失 / 需去原文核对」，**绝不编造任何数字**。\n"
@@ -1198,13 +1245,17 @@ def _run_analysis_job(analysis_id: int, user: str, ticker: str, name: str, marke
                 _cache_put(ticker, market, "peers", peers)
             except Exception:  # noqa: BLE001
                 peers = {}
-        prompt = compose_analysis_prompt(user, {"ticker": ticker, "name": name, "market": market}, snap, nws, peers)
+        try:
+            cyc = _cycle_snapshot(market)   # top-down market cycle (cached daily, US only)
+        except Exception:  # noqa: BLE001
+            cyc = {}
+        prompt = compose_analysis_prompt(user, {"ticker": ticker, "name": name, "market": market}, snap, nws, peers, cyc)
         report = run_hermes(prompt)
         # keep the exact data this report was generated from (reproducible / 排查)
-        data_snap = json.dumps({"snapshot": snap, "peers": peers,
+        data_snap = json.dumps({"snapshot": snap, "peers": peers, "cycle": cyc,
                                 "news": {"filings": len((nws or {}).get("filings") or []),
                                          "news": len((nws or {}).get("news") or [])},
-                                "data_card": _format_company_data(snap or {}, nws or {}, peers or {})})
+                                "data_card": _format_company_data(snap or {}, nws or {}, peers or {}, cyc)})
         with _db() as c, c.cursor() as cur:
             cur.execute("UPDATE company_analyses SET status='done', report=%s, data_snap=%s, generated_at=now() WHERE id=%s",
                         (report, data_snap, analysis_id))
@@ -1286,7 +1337,8 @@ def get_analysis(aid):
 # Cached in company_data_cache (public data, shared across users). TTL by kind;
 # ?fresh=1 forces a refetch.
 
-_CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600, "peers": 12 * 3600}
+_CACHE_TTL = {"snapshot": 12 * 3600, "news": 3600, "peers": 12 * 3600, "cycle": 12 * 3600}
+_CYCLE_KEY = "__US_MARKET__"   # market-level cycle compass uses a synthetic ticker
 
 
 def _cache_get(ticker: str, market: str, kind: str):
@@ -1357,6 +1409,32 @@ def company_peers():
     # separate endpoint (fetched in parallel by the frontend) — peer .info calls are
     # slow, so we don't let them block the main snapshot/dashboard.
     return _company_data("peers", lambda tk, mk: _md.peer_comparison(tk, mk))
+
+
+def _cycle_snapshot(market: str = "美股", fresh: bool = False) -> dict:
+    """Market-level cycle compass (cached daily + archived). US only for now;
+    auto-refetches when the cached payload predates the current CYCLE_SCHEMA."""
+    if not _md._is_us(market):
+        return {"market": market, "lenses": [], "composite": {},
+                "warnings": ["周期罗盘目前仅支持美股；A股周期建设中"]}
+    if not fresh:
+        cached = _cache_get(_CYCLE_KEY, "美股", "cycle")
+        if cached is not None and cached.get("_schema") == _mc.CYCLE_SCHEMA:
+            return cached
+    data = _mc.us_cycle()
+    try:
+        _cache_put(_CYCLE_KEY, "美股", "cycle", data)
+    except Exception:  # noqa: BLE001 — cache failure must not break the response
+        pass
+    return data
+
+
+@app.get("/api/market/cycle")
+def market_cycle_view():
+    if not _current_user():
+        return {"error": "未登录"}, 401
+    market = (request.args.get("market") or "美股")[:16]
+    return jsonify(_cycle_snapshot(market, fresh=request.args.get("fresh") == "1"))
 
 
 @app.get("/api/companies/archive")

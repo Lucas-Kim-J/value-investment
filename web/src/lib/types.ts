@@ -274,3 +274,31 @@ export interface Signal {
 export interface SignalDetail extends Signal {
   transcript?: string | null;
 }
+
+export interface CycleLens {
+  key: string;
+  title: string;
+  score: number | null;
+  label: string;
+  detail: string;
+}
+
+export interface MarketCycle {
+  _schema?: number;
+  market: string;
+  composite: {
+    score: number | null;
+    level: number;
+    position: string;
+    tailwind: string;
+    sahm_breaker: boolean;
+    lenses_used: string[];
+    lenses_missing: string[];
+  };
+  lenses: CycleLens[];
+  asset_tilt: Record<string, string>;
+  cape_flag: { on: boolean; note: string };
+  recession_prob: number | null;
+  fred_enabled: boolean;
+  warnings: string[];
+}
