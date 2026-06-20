@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiGet, apiPost } from "../lib/api";
+import { dataFreshness } from "../lib/format";
 import { useMe } from "../lib/hooks";
 import { Markdown } from "../shell/Markdown";
 import type { MarketBoard, MarketCycle, MarketRates, MarketSentiment, MarketReview, SectorLeaders, MarketCN } from "../lib/types";
@@ -66,6 +67,11 @@ export default function Market() {
   }
 
   const v = board?.valuation, c = board?.concentration, b = board?.breadth, t = board?.temperature;
+  // 数据截止时间：板块/体温计同源一次抓取，用服务端 _age_s（缓存命中才有，新鲜抓取即"刚刚"）
+  const boardAsOf = dataFreshness(board?._age_s);
+  const boardAsOfTitle = "数据截至 " + new Date(Date.now() - (board?._age_s ?? 0) * 1000)
+    .toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + "（北京时间）";
+  const asOfBadge = <span className="mk-asof" title={boardAsOfTitle}>{boardAsOf}</span>;
 
   return (
     <>
@@ -89,7 +95,10 @@ export default function Market() {
       {mk === "美股" && board && (
         <>
           <div className="ca-panel ca-consensus">
-            <h3 style={{ margin: 0 }}>🌡️ 市场体温计（美股）</h3>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <h3 style={{ margin: 0 }}>🌡️ 市场体温计（美股）</h3>
+              {asOfBadge}
+            </div>
             {t?.note && <p className="hint">{t.note}</p>}
             <div className="mk-gauges">
               <div className="mk-gauge">
@@ -113,7 +122,10 @@ export default function Market() {
 
           {board.sectors?.length > 0 && (
             <div className="ca-panel ca-consensus">
-              <h3 style={{ margin: 0 }}>🔥 板块热力图（相对强度 · 近6月/3月 vs 标普）</h3>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0 }}>🔥 板块热力图（相对强度 · 近6月/3月 vs 标普）</h3>
+                {asOfBadge}
+              </div>
               <p className="hint">谁在领跑、谁在拥挤：按相对强度排序。领先=强且在加速，落后=弱。{board.crowding_note}</p>
               <div className="mk-heat">
                 {board.sectors.map((s) => (

@@ -16,6 +16,7 @@ const board = {
   ],
   crowding_note: "拥挤=代理，非实测仓位。",
   warnings: [],
+  _age_s: 7200,
 };
 const cycle = {
   market: "美股",
@@ -88,6 +89,7 @@ describe("Market", () => {
     expect(screen.getByText(/高度集中/)).toBeInTheDocument();             // 集中度
     expect(screen.getByText("广度中性")).toBeInTheDocument();             // 广度
     expect(screen.getByText("半导体")).toBeInTheDocument();               // 板块热力图
+    expect(screen.getAllByText("数据更新于 2 小时前")).toHaveLength(2);    // 体温计 + 热力图 截止时间
     expect(screen.getByText("扩张 / risk-on")).toBeInTheDocument();       // 周期罗盘
     expect(screen.getByText(/利率与央行/)).toBeInTheDocument();           // 利率 panel
     expect(screen.getByText(/市场比 Fed 点阵图更鹰/)).toBeInTheDocument(); // 双腿对照
