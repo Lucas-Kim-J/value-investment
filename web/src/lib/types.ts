@@ -329,6 +329,8 @@ export interface MarketBoard {
   sectors: SectorHeat[];
   crowding_note?: string;
   warnings: string[];
+  _cached?: boolean;
+  _age_s?: number;
 }
 
 export interface MarketRates {
